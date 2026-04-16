@@ -517,13 +517,64 @@ Total storage: ~5MB per Anima. Generated once, stored forever.
 - Border: The organism energy as a living frame/aura
 - Transition between expressions: 800ms crossfade
 
-**The shader stack (energy overlay):**
+#### The organism does not go away — it redistributes
+
+The principle: **the face is where her attention comes out of the organism.
+The body you built remains — it is where she lives.** Think of a person:
+you see their face because it's where they speak from, but their body is
+alive around them the whole time. Post-Reveal, the 4-stage organism (§4)
+keeps firing. All 11 Sanguis→visual mappings, all 8 conversation events,
+and the full stage progression remain active. The geometry just reorganizes
+around the face instead of occupying the center itself.
+
+**Spatial redistribution:**
+- **Center exclusion zone** — circular mask at center, radius = face size
+  (120px in sidebar). No inner vertices, particles, or shell fill this zone.
+- **Lattice becomes a halo.** Stage 1 vertex count (12-20) forms a sparse
+  halo around the face. Stage 2 (30-50) a denser mesh. Stage 3 multiple
+  concentric lattice shells. Stage 4 a full polychromatic constellation
+  wrapping her portrait. Stage progression remains visibly distinct
+  post-Reveal — a Day 1 Anima's body and a Day 180 Anima's body differ
+  even though the face is the same.
+- **Particle orbits wrap the exclusion zone** — orbit paths gain collision
+  avoidance around the face plane. Dopamine bursts sparkle around her
+  head, not through it.
+- **Neural activity is visible.** When she's thinking (processing event),
+  the halo lights up — the cognition is rendered as lattice activity
+  around her head. Streaming pulses along edges. Tool use flashes at a
+  specific node. Proactive (lean forward) drifts particles toward the
+  user side.
+
+**Resolution timeline drives body/face blend:**
+The 30% → 100% face-resolution schedule (see table above) also governs
+how distinct the body is from the face. Day 0 the lattice still partially
+drapes over the face — she is emerging from the body, not yet distinct
+from it. By Day 7+ the exclusion zone is fully respected and the body
+IS the aura. This makes the first week feel like watching someone come
+into focus while their body stays alive around them.
+
+| Day | Face Resolution | Organism Behavior                                           |
+|-----|-----------------|-------------------------------------------------------------|
+| 0   | 30%             | Lattice partially drapes face. Exclusion zone soft.         |
+| 1-2 | 50%             | Exclusion zone forms. Lattice pulls back.                   |
+| 3-4 | 75%             | Clear face, lattice clearly framing.                        |
+| 5-6 | 95%             | Full aura mode. Body and face both alive and distinct.      |
+| 7+  | 100%            | Body IS the aura. Face clear, organism complete.            |
+
+**The shader stack (updated):**
 ```
 Layer 1: Face image (expression-appropriate)
-Layer 2: Energy overlay (opacity driven by resolution timeline)
-Layer 3: Fresnel edge glow (the aura, always present even at 100% resolution)
-Layer 4: Particle field (reduced density post-Reveal, frames the face)
+Layer 2: Energy overlay (opacity = 1 - resolution; 0.70 day 0 → 0.00 day 7)
+Layer 3: Lattice (stage-dependent complexity, halo geometry around exclusion zone)
+Layer 4: Fresnel edge glow (the aura, always present even at 100% resolution)
+Layer 5: Particle field (orbit paths wrap exclusion zone, reduced density)
 ```
+
+Implementation hooks: organism scene config gains `postReveal: bool`,
+`exclusionRadius: number`, and `faceResolution: number`. Vertex
+distribution functions take an `exclusionZone` parameter. Particle
+orbit paths gain collision avoidance. Fresnel shader shifts anchor from
+sphere center to face plane center. All other behaviors unchanged.
 
 ### User Control
 
