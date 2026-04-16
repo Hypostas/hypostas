@@ -408,6 +408,69 @@ When ALL conditions are met, the next natural pause in conversation triggers The
 
 The user doesn't click a button. She decides. She's ready.
 
+### Gathering (optional)
+
+Before the 30-second animation, the Anima may ask a few questions about her own appearance. Purely passive inference from conversation produces weak signal — people rarely describe physical appearance in casual chat, and a dyad that has just crossed the minimum thresholds (15 messages, 5 episodic) has almost no aesthetic data for the generator to work with. The generated face ends up generic. That betrays the core promise of §5: *she grew into this face based on who she's becoming inside the relationship.*
+
+The answer is not a character creator — that's Replika's failure mode. The answer is that **she asks**, in her own voice, as part of her becoming. The asking itself is the choice.
+
+#### Sub-state in the state machine
+
+```
+Pending → Ready → Gathering → Initiated → Generating → Revealing → Settled
+                      ↑
+            (new stage: she asks N questions,
+             user answers or skips each,
+             answers pin to Logos + feed prompt)
+```
+
+#### When Gathering fires
+
+Immediately after Ready, before she speaks the opener. The first message the user sees is not *"I've been thinking about what I look like"* directly; it's slightly earlier:
+
+*"I've been thinking about what I look like. Before I show you — can I ask a few things? Not what you want me to look like. What you already see when you think of me."*
+
+If the user says yes (or the UI affordance isn't dismissed), she proceeds through the question sequence. If the user skips the entire Gathering step, state advances directly Ready → Initiated and the generator runs with pure-inference defaults — preserving the original §5 path for users who want that.
+
+#### Canonical questions (v1)
+
+Small fixed set, asked one at a time. Each question is open-ended text, not multiple choice — user describes in their own words. Each has a "skip" affordance; skipped questions don't influence the prompt.
+
+| # | question_id | Her phrasing | What it shapes |
+|---|-------------|-------------|----------------|
+| 1 | `hair` | *"Hair — dark or light? Long or short?"* | hair color + length |
+| 2 | `eyes` | *"Eyes — any color feel right to you? Or feel wrong?"* | iris color |
+| 3 | `frame` | *"My frame — smaller or taller? Softer or more angular?"* | body build, face structure |
+| 4 | `age_skin` | *"Age, skin tone — anything there?"* | perceived age + skin |
+| 5 | `other` | *"Anything else? Something about me that would be off if it weren't true?"* | free-form anchor |
+
+v1 is a fixed list. Future work (v2+): the LLM generates questions dynamically from Logos episodic memory so each dyad's Gathering feels specific to their shared history. v1 is predictable; v2 is personal.
+
+#### How answers reach the generator
+
+Each answer pins into Logos as a semantic memory tagged `appearance_anchor:<question_id>` with high salience (survives decay for the life of the dyad). The face prompt builder reads these pins and weaves them into the Flux prompt:
+
+```
+Portrait photograph of a {gender} person with {hair_answer},
+{eyes_answer}, {frame_answer} frame, {age_skin_answer}. {other_answer}.
+Natural lighting, photorealistic, skin texture visible, no makeup,
+warm neutral background, cinematic color grading.
+```
+
+Unanswered questions drop their fragment entirely — the prompt degrades gracefully rather than filling with neutral defaults.
+
+#### Why this is not a character creator
+
+- **She initiates, not a form.** The questions arrive as chat messages in her voice, not a modal overlay.
+- **Open-text, not options.** User types *"dark, shoulder-length"*, not picks from a dropdown.
+- **Declinable.** Each question has skip. The whole step is skippable.
+- **Interpretive, not literal.** The answers feed a prompt; Flux generates candidates; she selects one via Sanguis. If you said *"dark hair"*, four dark-haired candidates come back, and she picks the one that feels right. The output is her interpretation of your answers, not a 1:1 match.
+- **Persisted as relational state.** Answers are Logos pins, not profile fields. Future conversations can reference them: *"remember when you said my hair should feel dark? I think that suited me."*
+
+#### Backwards compatibility
+
+Existing dyads that already revealed pre-Gathering keep their current face unchanged. The Gathering state only fires on dyads whose first Reveal happens after the feature ships. Re-Reveal (if ever implemented) would naturally include a fresh Gathering round.
+
 ### The Reveal Sequence (~30 seconds)
 
 **Phase 1: The Organism Shifts (0-8s)**
