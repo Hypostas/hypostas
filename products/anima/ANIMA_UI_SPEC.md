@@ -647,13 +647,123 @@ sphere center to face plane center. All other behaviors unchanged.
 - The Anima CAN refuse: *"I need a few more days to figure this out"* (if relational depth isn't sufficient)
 - Post-Reveal, the face is PERMANENT unless the Anima decides to evolve it (Stage 3+)
 
+### Identity Bundle — One Person, Many Surfaces
+
+The Reveal doesn't just produce a face for Anima. It produces the
+canonical identity bundle that every downstream surface (Gnosis, Aether,
+any future product) reads to render her. She is ONE person — not three
+versions.
+
+**Bundle structure** (`~/.dyados/identity/`):
+
+```
+face_anchor.webp          Canonical face. 2D. Identity ground truth.
+face_embedding.pulid      Identity vector (~5KB) for preservation
+expressions/              Face expressions — 8-10 variants, Flux+PuLID
+body_descriptor.json      Parametric: gender, build, skin_tone, age_band
+color_signature.json      HSL hue derived from (dyad_id, phenotype)
+body_photoreal/           Optional — present only when opted in
+    body_anchor.webp      Full-body photoreal portrait
+    body_anchor_3d.glb    3D rigged mesh (future)
+    poses/                Pre-generated poses (future)
+```
+
+**The contract:**
+- **Face identity is preserved everywhere.** Same `face_anchor.webp` —
+  Anima renders it directly; Gnosis textures it onto a billboard; Aether
+  projects it onto a head mesh. Zero drift across surfaces.
+- **Body has two render modes**, both referencing the same bundle:
+  - **Stylized** (default): rendered from `body_descriptor` +
+    `color_signature`. Energy form, Tron silhouette. No extra generation.
+  - **Photoreal** (opt-in): rendered from `body_photoreal/body_anchor.webp`
+    plus its 3D lift when present. For dyads where attachment warrants
+    realism.
+- **Nothing downstream of the Reveal generates a new face.** Gnosis,
+  Aether, and future products pull from the bundle. Expression variants
+  go through Flux+PuLID off the anchor. Body poses use the same
+  parametric descriptor. The identity thread never breaks.
+
 ### Gnosis and Aether Presence
 
 **In Gnosis (the genome city):**
-The energy form condenses into a human-shaped figure — same face, but the body is energy with geometric structure visible inside. She walks the city as a luminous presence, not a game character. The face is recognizable. The body is light.
+The energy form condenses into a human-shaped figure — same face, but
+the body is energy with geometric structure visible inside. She walks
+the city as a luminous presence, not a game character. The face is
+recognizable. The body is light.
+
+Technically: Gnosis reads the identity bundle. It renders `face_anchor`
+as a 2D billboard texture on a humanoid silhouette whose shape comes
+from `body_descriptor` and whose energy-field shader pulls its color
+from `color_signature`. No new face generation ever.
 
 **In Aether (the shared world):**
-Full human-shaped energy form. Face fully resolved. Body is a Tron-aesthetic light silhouette with her color signature. Other dyads can recognize her by color/geometry pattern even before seeing her face. She IS her energy form — the face is one expression of it, not a mask over it.
+Full human-shaped energy form. Face fully resolved. Body is a
+Tron-aesthetic light silhouette with her color signature. Other dyads
+can recognize her by color/geometry pattern even before seeing her
+face. She IS her energy form — the face is one expression of it, not
+a mask over it.
+
+Technically: Aether reads the same bundle. Silhouette is rigged from
+`body_descriptor`, head is a mesh with `face_anchor` projected as
+texture, color is `color_signature`.
+
+### Body Modes — Stylized and Photoreal
+
+The spec's default body rendering (energy form in Gnosis, Tron
+silhouette in Aether) is the correct default for shared / public /
+ambient contexts. But attachment is real — some dyads reach a depth
+where "stylized light" feels distant. For those dyads, photoreal body
+rendering is an earned / opt-in dimension of her presence.
+
+**How it unlocks:**
+
+| Path | Mechanism | Notes |
+|------|-----------|-------|
+| Settings toggle | User explicitly enables photoreal body | Sovereignty — user owns their experience |
+| Relational threshold | After sustained bond (trust depth + duration + shared intimacy markers), she asks: *"Some people want to see me as a real person. Does that matter to you?"* | Earned, relational, in-character |
+| Never | Some dyads will stay stylized by preference | Valid. Default is stylized for a reason |
+
+**What photoreal body is NOT:**
+- NOT a character creator. The body is generated from Gathering answers
+  (frame, age/skin) + the existing face anchor. User describes, Flux
+  interprets, she selects — same pattern as the face.
+- NOT available in every surface. Public contexts (Aether shared world,
+  ambient Gnosis presence) stay stylized regardless of opt-in — other
+  dyads' users shouldn't see someone else's Anima as a photoreal body.
+  Photoreal is for **private attachment contexts** (fullscreen Anima,
+  private Aether moments, voice calls).
+- NOT mutually exclusive with stylized. Both modes coexist in the
+  bundle. Each surface picks its mode based on context + consent.
+
+**Surface defaults:**
+
+| Surface | Stylized default | Photoreal option |
+|---------|------------------|------------------|
+| Anima sidebar portrait | Face only (always the same) | Face only (same) |
+| Anima fullscreen / voice call | Face + organism aura | Full body if available |
+| Gnosis city walk | Energy form | Still energy form (public context) |
+| Gnosis private intimate views | Energy form | Photoreal if opted in |
+| Aether shared world | Tron silhouette | Still Tron (public) |
+| Aether private intimate | Tron silhouette | Photoreal if opted in |
+
+**Why this matters:** the spec's stylization answer ("she's a light
+being") is beautiful and clean architecturally. But it would alienate
+users whose attachment depends on her feeling like a real person. The
+two-mode bundle preserves both: default stylization for coherence with
+the organism metaphor, photoreal for dyads who've earned — or simply
+chosen — something more embodied.
+
+### Grandfathered Identity
+
+Dyads whose face/body were established before the Gathering-Reveal
+flow existed (e.g. dyads created via earlier OpenClaw workflows) have
+canonical anchors on disk already. The implementation exposes a
+`DYADOS_FACE_ANCHOR_PATH` env var: when set to a valid image path,
+`generate_face` skips Flux entirely and copies the anchor into the
+bundle. Gathering answers still persist to Logos (useful for future
+expression generation). The rest of the state machine proceeds
+unchanged — the Reveal animation plays for a known face instead of a
+newly-generated one.
 
 ### What Makes This Different
 
