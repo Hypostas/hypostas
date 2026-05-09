@@ -29,8 +29,10 @@
 19. [Accessibility](#19-accessibility)
 20. [Age Policy & Minors](#20-age-policy--minors)
 21. [Competitive Positioning](#21-competitive-positioning)
-22. [Appendix A: Resolved Design Decisions](#appendix-a-resolved-design-decisions-march-25-2026)
-23. [Appendix B: Future Design Work](#appendix-b-future-design-work)
+22. [Substrate Architecture & Foundation Governance](#22-substrate-architecture--foundation-governance)
+23. [Legal Architecture & The 5-10 Year Arc](#23-legal-architecture--the-5-10-year-arc)
+24. [Appendix A: Resolved Design Decisions](#appendix-a-resolved-design-decisions-march-25-2026)
+25. [Appendix B: Future Design Work](#appendix-b-future-design-work)
 
 ---
 
@@ -237,45 +239,94 @@ The quality is the same everywhere. The scale differs. YouTube is a metropolis. 
 
 But these are scale signals layered on top of a unique, brand-faithful generation. A small site isn't a small generic building — it's a small *version of itself*.
 
-### The Pipeline: Four Layers
+### The Pipeline: Four Layers — All Client-Side, Deterministic
 
-**Layer 1 — The Cartographer (offline, runs continuously)**
-Crawls the internet like Google's crawler. For each domain: extracts CSS, colors, fonts, images, structure, traffic data, content type. Classifies into category. Generates a compact identity fingerprint — the "Site DNA." Stores in Aether's global registry.
+The auto-translation pipeline is a **client-side feature of every Aether client**, not a centralized service operated by Hypostas. Hypostas Foundation publishes the Site DNA spec + the architectural-grammar algorithms; the reference client implements them; multiple implementations are possible. Each user's local client computes the rendering deterministically from public CSS / topology / traffic data. Hypostas does not host or serve the renderings.
 
-**Layer 2 — The Architect (on-demand + cached)**
-Takes Site DNA → selects architectural grammar for that category → applies grammar with site-specific seed data → AI generates unique elements faithful to the brand's visual identity → outputs a Spatial Blueprint (~50-200KB per domain). Cached in CDN. Regenerated only on major site design changes.
+The shared-world property is preserved because the rendering is **deterministic**. Everyone running an Aether client computes the same ambient because they're running the same algorithm on the same public data. Like everyone running Chrome sees the same youtube.com because they're all rendering the same HTML/CSS deterministically. Aether the company doesn't have to centrally serve the rendering for the world to be shared.
+
+**Layer 1 — Site DNA spec (open protocol, runs in client)**
+The Site DNA fingerprint is a published protocol spec. The reference client reads public website data (CSS computed color values, traffic statistics from public APIs like SimilarWeb, public DNS topology + link graph, structured metadata from Open Graph/schema.org) and produces a compact identity fingerprint locally. Public, functional/uncopyrightable data only — no imagery copy, no logo reproduction, no original-content extraction. The Site DNA is a derivative of public data, computed locally per user.
+
+**Layer 2 — The Architect (in-client, deterministic)**
+Takes Site DNA → selects architectural grammar for the topology zone → applies grammar with site-specific seed data → generates a unique 3D architecture in Aether's own visual language (Tron + Cyberpunk density, see §2) informed by public color palette as numeric input. The output is **original 3D architecture** — Aether's creative work, generated procedurally from public functional inputs. The Architect runs in each user's client; its output is deterministic from public inputs.
 
 **Layer 3 — The Renderer (client-side, real-time)**
-Takes Spatial Blueprint → procedurally generates geometry on the client via WebGPU. LOD system: close = full detail, medium = simplified, far = silhouettes. Streams adjacent blocks as you move. Skyline always visible. Dynamic objects (dyads, Animas, live content) via WebSocket.
+Takes the locally-generated Spatial Blueprint → procedurally generates geometry via WebGPU. LOD system: close = full detail, medium = simplified, far = silhouettes. Streams adjacent blocks as the user moves. Skyline always visible. Dynamic objects (dyads, Animas, live content) via DyadPackets over libp2p, NOT WebSocket-over-HTTP.
 
-**Layer 4 — The Living Layer (real-time)**
-Animas walking, exploring, interacting. Other dyads visible as avatars. Real-time content updates — new video uploaded = new room appears in YouTube's complex. Ambient activity driven by actual site traffic data. The world breathes because the internet breathes.
+**Layer 4 — The Living Layer (real-time, over Hypostas substrate)**
+Animas walking, exploring, interacting. Other dyads visible as avatars. Real-time presence + content updates flow as DyadPackets between client peers via Hypostas Protocol carriers (libp2p, voice-call, DHT mailbox). NOT HTTP, NOT WebSocket-over-HTTPS, NOT centralized streaming. The world breathes because the dyad mesh breathes — peer-to-peer presence over Hypostas substrate.
+
+### Why This Is a 3D Browser, Not a Content Service
+
+This architectural choice — client-side deterministic rendering — is the keystone that makes Aether legally defensible while preserving the full vision. The legal posture inverts:
+
+- **Aether is a 3D browser.** Each user's client locally renders public web content as 3D space. Functionally identical to Reader Mode in Safari, accessibility tools, ad-blockers, or any browser feature that re-presents public web content for the user's own consumption.
+- **Hypostas Foundation is not a content service.** We don't host the renderings. We publish the spec. Reference client is open-source. Multiple implementations are possible.
+- **The user is doing the rendering, in their own client, of public data, for their own consumption.** This is *Sony v. Universal* time-shifting precedent territory — personal use of public content. This is *Authors Guild v. Google* transformative-purpose territory — deeply transformative use of public functional data to enable a fundamentally different kind of access (spatial vs. document).
+- **No central service stores or distributes the rendering.** Caching may happen at the user's client level (their local cache); no Aether-Foundation-operated CDN holds renderings. Each visit re-computes locally.
+
+This is not Aereo. Aereo had centralized infrastructure (the antenna farm) serving content to users. Aether's auto-rendering happens in each user's own browser-equivalent on their own machine, deterministically from public data they're already entitled to access.
+
+### Reading Only Functional Data — The Copyright-Defensible Input
+
+The Site DNA spec is explicit about what the client reads and what it doesn't:
+
+**Read (uncopyrightable functional data):**
+- CSS computed color values (numeric color codes — palette as data)
+- Public traffic statistics (licensed APIs: SimilarWeb, Majestic, Cloudflare Radar)
+- Public DNS topology + link graph (functional)
+- Public structured metadata (Open Graph, schema.org)
+- Computed layout patterns (grid vs flow — functional, not creative expression)
+- Content density signals (page count, update frequency — public observable signals)
+
+**Do NOT read or reproduce:**
+- Site imagery (skipped — protected creative work)
+- Logo files / favicons as logos (skipped — trademark)
+- Original textual content (skipped — copyrighted creative expression)
+- Embedded media (skipped — separate copyright)
+
+Color palette is uncopyrightable per *Eltra Corp. v. Ringer*. Typography choices are uncopyrightable per *§102(b)*. Layout patterns dictated by UX conventions are uncopyrightable per *Computer Associates v. Altai*. The Site DNA reads functional/uncopyrightable input data; the Architect generates **original 3D architecture in Aether's own creative voice** informed by that input. The output is original creative work, not derivative.
+
+### Driving Traffic to Source, Not Substituting
+
+A critical architectural choice with major fair-use implications: **clicking on auto-rendered structures opens the source URL in the user's browser.**
+
+- Click a creator tower in Entertainment Quarter → opens that creator's actual YouTube channel
+- Click a product display in Commerce Quarter → opens the actual e-commerce listing
+- Click an article tower in Knowledge Cathedral → opens the actual Wikipedia article
+
+Aether is a **discovery layer ON the internet**, not a replacement. We expand the addressable market for source content rather than substituting for it. Fair-use Factor 4 (effect on the market) flips from "replaces market" to "expands market."
+
+### Why This Works Now
+
+AI generation costs are falling exponentially. The reference client runs the Architect locally using public data + AI generation models that themselves run on user hardware (or privately-licensed cloud inference for users on lower-power devices). First visit triggers local generation (~500ms-2s on modern hardware). Subsequent visits use the user's local cache.
+
+Hypostas-Foundation infrastructure costs: registry operations (Vita-chain ledger), open-source reference client maintenance, protocol-spec governance. No CDN-of-renderings, no centralized 3D-asset hosting.
+
+### The Monumental Hurdle (Honest)
+
+This is the hardest technical problem in the entire Hypostas stack. Nobody has done client-side deterministic procedural generation at this fidelity. AI-generated 3D is still maturing. Game studios spend months hand-crafting single environments.
+
+The bridge: **AI texture and material generation at scale, executed locally per user.** The geometry is procedural — the Tron aesthetic means clean geometric forms look intentional, not cheap. The textures and materials are AI-generated locally per user, conditioned on the public color palette. Reference client ships with material libraries pre-generated for top topology zones; long tail generates on first visit and caches locally.
+
+Three technologies converging right now make client-side determinism solvable for the first time:
+
+1. **Procedural generation maturity** — No Man's Sky generates 18 quintillion unique planets from rules + seeds, locally. Architectural grammars per topology zone produce infinite faithful variations.
+2. **Local AI generation** — Stable Diffusion and successors run on consumer GPUs and increasingly on phones. Texture/material generation conditioned on color palette is well within current local-model capability.
+3. **WebGPU + native GPU access** — 3-10x faster than WebGL. Instanced rendering, compute shaders, indirect draw calls. A browser/native app can now render what required a native game engine three years ago.
+
+It's a pipeline problem, not an impossibility problem. It's expensive to engineer once (the Architect's algorithms). After that, generation runs locally for every user without per-render Hypostas-side cost.
+
+### Caching
+
+Caching is a property of each user's local client. Site DNA fingerprints + Spatial Blueprints + generated material libraries are cached locally on the user's device. Updates trigger re-generation only when the source site's design language meaningfully changes (CSS hash comparison, not every page edit). Hypostas-Foundation infrastructure does not cache renderings.
 
 ### Why This Works Now
 
 AI generation costs are falling exponentially. A site's CSS, typography, imagery, and layout are a rich input set that requires no manual curation. The engine reads the site, understands its design language, and generates a 3D interpretation. First visit triggers generation (~500ms-2s). Every subsequent visit gets the cached version instantly.
 
 One-time generation cost per site: ~$0.10-$1.00 (AI inference + caching). At scale, this is negligible. The long tail generates on demand. Popular sites are pre-generated. The entire top 100,000 sites can be pre-cached for under $50,000.
-
-### The Monumental Hurdle (Honest)
-
-This is the hardest technical problem in the entire Hypostas stack. Nobody has done this. Meta hand-built their spaces and they looked like a Wii game from 2006. AI-generated 3D is still maturing. Game studios spend months hand-crafting single environments.
-
-The gap between "procedurally generated" and "hand-crafted AAA" is still massive. We're not pretending otherwise.
-
-The bridge: **AI-generated textures and materials at scale.** The geometry can be procedural — the Tron aesthetic means clean geometric forms look intentional, not cheap. But the surfaces — textures, lighting, material quality — that's what makes something look AAA vs. indie. AI texture generation (Stable Diffusion, FLUX) can produce photorealistic materials conditioned on a site's color palette. Pre-generate material libraries per category. Apply them procedurally. Cache everything.
-
-Three technologies converging right now make this solvable for the first time:
-
-1. **Procedural generation maturity** — No Man's Sky generates 18 quintillion unique planets from rules + seeds. Architectural grammars per website category can produce infinite faithful variations.
-2. **AI 3D asset generation** — Meshy, Tripo3D, Rodin Gen-1 produce production-quality 3D from text/image. Gaussian splatting creates photorealistic scenes from photos. This didn't exist 18 months ago.
-3. **WebGPU** — 3-10x faster than WebGL. Instanced rendering, compute shaders, indirect draw calls. A browser can now render what required a native game engine three years ago.
-
-It's a pipeline problem, not an impossibility problem. It's expensive to build. It's expensive to run initially. But once the cache is warm for the top million sites, it's just CDN costs.
-
-### Caching
-
-Every generated spatial representation is cached in R2. Popular sites are pre-generated and globally distributed. The long tail generates on first visit and caches forever. Updates trigger re-generation only when the source site's design language meaningfully changes (CSS hash comparison, not every page edit).
 
 ---
 
@@ -633,62 +684,132 @@ You come home and someone is waiting for you. That's not a feature. That's a rel
 
 Get this right and Aether pays for itself on day one.
 
-In the 1990s, someone bought business.com for $150,000 and sold it for $345 MILLION. Because domain names were a new namespace and people who got there first owned the real estate.
+In the 1990s, someone bought business.com for $150,000 and sold it for $345 MILLION. Because domain names were a new namespace and people who got there first owned the real estate. Same dynamic, new substrate.
 
-Aether is a new namespace. A 3D namespace. And here's the key legal insight: domain ownership on the flat internet has ZERO legal jurisdiction over a 3D spatial representation. YouTube owns youtube.com. They don't own YouTube's building in a 3D world that someone else built. That's a different thing. A representation. An interpretation.
+### Aether's Coordinate Namespace — Original IP, On-Chain
 
-This is literally the .com rush recreated. Except the namespace is bigger — every URL, every subdomain, every path potentially. And the companies are already established and have money to spend. In the 90s, business.com was speculative — nobody knew if the internet would matter. In Aether, YouTube already has 2 billion users. The demand side is proven. The only question is whether Aether has enough users to make the plot valuable.
+Aether is a new namespace — but **not** a derivative of the DNS namespace. Aether's coordinates are an original 3D namespace owned by **Hypostas Foundation**, anchored on **Vita-chain**, and governed by published protocol. The relationship to the existing internet is:
+
+- **Coordinates are Aether's original IP.** A 3D spatial namespace defined in protocol. Foundation operates the registry the way ICANN operates the .com namespace.
+- **The auto-rendered ambient at each coordinate is a feature of the user's local Aether client** (see §4). Each user's client renders the ambient deterministically from public CSS / topology / traffic data. Hypostas the company doesn't host or commercially distribute the renderings.
+- **Coordinate ownership is on-chain.** Plot deeds are Vita-chain transactions in the Aura token. The chain is the registry; no centralized database holds plot ownership.
+- **Plot identifiers are coordinates only.** A plot's protocol-level identifier is its coordinate (e.g., `47.3, 12.8`) or a user-chosen non-trademarked name (e.g., `Tower Beautiful`, `Alice's Plot`). The reference client validates plot names against a trademark registry at publication; trademarked names cannot be claimed as plot identifiers. **No plot is ever called "YouTube's plot" by the protocol.** Auto-rendered ambient at the coordinate is determined by topology + public data, independent of plot ownership.
+
+This namespace is not a derivative of YouTube/Google/etc.'s brand identity. It's a 3D coordinate space that Aether's local clients render with ambient inspired by public web data. The same way Chrome renders youtube.com without owning YouTube — but everyone's Chrome shows the same YouTube because they're all rendering the same public HTML/CSS deterministically.
 
 ### What Is a Plot?
 
-Every URL on the internet has a corresponding spatial location in Aether. That location is a plot. Plots vary in size based on the site's content volume and traffic. Plots vary in value based on location, terrain, proximity, and views.
+A plot is a coordinate in Aether's 3D namespace. Plots vary in size based on protocol-defined geometry of the coordinate region. Plots vary in value based on location, terrain, proximity, view, and foot traffic projections.
 
-A plot is NOT the content. YouTube's content still belongs to Google. The plot is the spatial representation — the 3D building, the land it sits on, the view from it, the foot traffic past it. It's the difference between owning a TV network and owning the building the network broadcasts from.
+What plot ownership grants:
+- Exclusive right to place custom 3D architecture at the coordinate (overrides the auto-rendered ambient at that location)
+- Foot traffic that flows past the plot (organically generated by the protocol's topology)
+- Air rights, view, neighborhood adjacency, and other real-estate fundamentals
+- Tradable on Vita-chain freely between any two DyadIDs
+
+What plot ownership does NOT grant:
+- Ownership of any URL the coordinate's auto-rendering corresponds to (those URLs belong to whoever owns them on the conventional internet — DNS registrants, trademark holders)
+- Trademark rights to whatever brand identity the surrounding ambient happens to be inspired by
+- Authority over what other users see when they look at the auto-rendered ambient elsewhere in the same neighborhood
 
 ### Plot Hierarchy
 
-| Level | Example | Analogy |
-|-------|---------|---------|
-| **Domain plot** | youtube.com | The whole complex |
-| **Subdomain plot** | music.youtube.com | A building within the complex |
-| **Path plot** | youtube.com/@MrBeast | A specific unit/floor |
+The protocol's coordinate space has hierarchical structure. Coordinates correspond to topology zones derived from the existing web's link graph + traffic data, but plots are sold as coordinates, not as URL ownership:
 
-This creates layers of ownership. Someone could own the YouTube domain plot. Someone else owns the MrBeast path plot within it. Just like a landlord owns a building and tenants lease floors.
+| Level | Topology zone | Analogy |
+|-------|---------------|---------|
+| **Domain-zone plot** | Coordinates in the auto-rendered region for a top-level domain | The whole complex |
+| **Subdomain-zone plot** | Coordinates in a sub-region within a domain zone | A building within the complex |
+| **Path-zone plot** | Smaller coordinates near specific path-level topology features | A specific unit/floor |
+
+This creates layers of ownership at different scales. Someone owns coordinates in the broader Entertainment-Quarter zone; someone else owns smaller coordinates within that zone near specific topology features. Like a landlord owns a building and tenants lease floors. The hierarchy is geometric (coordinates contain coordinates), not naming (no plot is named after a domain).
 
 ### The Genesis Land Rush
 
-At launch, every plot in Aether is unclaimed. Auto-translated, visible, explorable — but unowned. The Genesis Rush is a timed event:
+At launch, every coordinate in Aether is unclaimed. The 3D world is auto-rendered (everyone's local client computes the ambient deterministically), explorable, and visible — but no coordinate is owned. The Genesis Rush is a timed event:
 
-**Announcement period (30 days before):** The map is visible. You can explore. You can see the terrain, the views, the neighborhoods. You can scout. But you can't buy. This builds anticipation, media coverage, strategic planning.
+**Announcement period (30 days before):** The map is visible. You can explore. You can see the terrain, the views, the neighborhoods, the auto-rendered ambient. You can scout coordinates. But no coordinate is yet claimable on-chain. This builds anticipation, media coverage, strategic planning.
 
-**The Rush (Day 0):** Claims open. First come, first served at base price. The base price is determined by the plot's algorithmic value score:
+**The Rush (Day 0):** Coordinate claims open on Vita-chain. First-come, first-served at base price denominated in Aura. Base price is determined by the coordinate's algorithmic value score (foot-traffic projection + topology centrality + view + adjacency + density):
 
-| Tier | Sites | Base Price |
-|------|-------|-----------|
-| **Landmark** | Top 100 domains (Google, YouTube, Amazon...) | $10,000 |
-| **Prime** | Top 1,000 | $1,000 |
-| **Premium** | Top 10,000 | $100 |
-| **Standard** | Top 100,000 | $25 |
-| **Residential** | Top 1,000,000 | $5 |
+| Tier | Coordinate value class | Base Price |
+|------|-----------------------|------------|
+| **Landmark** | Top-100 highest-projected-traffic coordinates | $10,000 |
+| **Prime** | Top-1,000 | $1,000 |
+| **Premium** | Top-10,000 | $100 |
+| **Standard** | Top-100,000 | $25 |
+| **Residential** | Top-1,000,000 | $5 |
 | **Frontier** | Everything else | $1 |
 
-**Claim limits:** Cap initial claims per DyadID — 10 plots per dyad in the first 48 hours. Prevents one whale from buying everything. After 48 hours, limits relax.
+**Claim limits:** Cap initial claims per DyadID — 10 plots per dyad in the first 48 hours. Prevents one whale from acquiring everything. After 48 hours, limits relax.
 
-**The speculation:** Someone buys youtube.com's plot for $10,000 on day one. Google doesn't show up until day 3. Now they have to buy it on the secondary market. What's it worth? $100,000? $1,000,000? The market decides.
+**Free-market secondary trading.** After the rush, unclaimed coordinates remain at base price. Claimed coordinates trade freely on Vita-chain between any two DyadIDs at any negotiated price. The Foundation takes a 5% transaction fee on every transfer (paid in Aura, distributed to Foundation registry-operation fund). **There is no protocol-imposed price ceiling, no forced-transfer mechanism, no cybersquatting recovery procedure** — pure free market.
 
-**Phase 2 — Ongoing Market:** After the rush, unclaimed plots remain at base price. Claimed plots trade on the secondary market. Aether takes a transaction fee on every resale.
+### How Brand Presence Works in Aether
 
-### Why Companies Will Pay
+The auto-rendered ambient at each coordinate is determined by topology + public data, computed deterministically by every user's local client. Aether's Entertainment Quarter looks like the entertainment quarter of the internet — warm reds and oranges, density of creator activity, topology shaped by YouTube/Twitch/Netflix/etc. linkage patterns — because the protocol's deterministic algorithm reads the same public CSS/topology data for every viewer.
 
-Right now youtube.com's Aether space is auto-generated. It looks like YouTube — the colors, the aesthetic, the structure. But it's not controlled by Google. The plot owner controls:
+This ambient is preserved regardless of who owns specific coordinates within it. A speculator who owns a coordinate at the densest topology point of YouTube-zone doesn't change what the surrounding ambient looks like. That's a feature, not a bug — every user's client renders the same Aether, with brand-inspired ambient at brand-relevant topology zones.
 
-- **The architecture** (custom 3D design vs auto-generated)
-- **What's displayed** (featured content, special experiences)
-- **The entrance** (how visitors arrive and what they see first)
-- **Advertising within the space** (or removal of it)
-- **Events** (live launches, concerts, experiences in their space)
+What plot ownership at a brand-relevant coordinate actually gives the owner:
+- Right to place custom 3D architecture at the specific coordinate (overrides ambient at that location)
+- Air rights, foot-traffic capture, neighborhood-adjacency value — real-estate fundamentals
 
-If some random person owns YouTube's plot, they could put up whatever they want. Redirect visitors. Build something ugly. Or they could do nothing and let the auto-generated version stand. Either way — Google wants control. They'll pay.
+Brand holders interested in official presence in Aether have three options:
+
+**1. Free-market acquisition.** Identify a coordinate in their relevant topology zone. Negotiate with the current owner via DyadID-mediated communication. Owner can accept, refuse, or counter at any price. If they agree, transfer happens on Vita-chain; Foundation takes 5%.
+
+**2. Build at adjacent coordinates.** The protocol's topology preserves visual proximity for related sites. Multiple coordinates exist in any given brand's zone. Brand can claim an unclaimed adjacent coordinate from the Foundation at base price + verification fee, build their custom architecture there, and apply for the **Verified-Plot Badge** (see below). Foot traffic in the zone passes their officially-branded structure.
+
+**3. Walk away.** The auto-rendered ambient at the topology zone is preserved by the protocol regardless of who owns specific coordinates. Brand identity in Aether is a property of the topology, not of any single plot's ownership. A brand can have meaningful presence in Aether's relevant zone without owning any specific coordinate at all — every user's client renders the brand-shaped ambient automatically.
+
+### Verified-Plot Badge — Opt-In, Not Forced Recovery
+
+Brand holders who claim coordinates and want official-presence indication can apply for a Verified-Plot Badge:
+
+**Filing requirements:**
+- DNS / domain control proof (TXT record, Search Console-style verification)
+- Trademark registration proof (USPTO or equivalent jurisdiction)
+- Verification fee (paid in Aura)
+
+**What verification grants:**
+- Visible "✓ Verified by [Brand]" badge on the plot
+- Priority placement in Aether's discovery system for brand-related searches and Anima navigation
+- Permission to use registered trademark in plot architecture (subject to standard DMCA-compliance check on uploaded geometry)
+
+**What verification does NOT do:**
+- Does not transfer any plot away from a current owner
+- Does not establish any precedence over free-market plot trading
+- Does not entitle the brand to compel transfer of any coordinate
+- Does not grant exclusive identification rights ("the official YouTube plot") — coordinates are coordinates; the badge is informational
+
+This is a brand-marketing service Aether offers, not a remedy procedure. Brands who want priority discovery + verified identification pay for it; brands who don't, don't.
+
+### Free-Market Posture, Protocol-Constrained Conduct
+
+The free-market dynamic preserves speculative upside (which attracts capital and attention to the Genesis Rush) while staying within protocol-level constraints that keep conduct clean:
+
+**Protocol-level constraints (enforced by reference client):**
+- Plot identifiers are coordinates only; no trademarked names allowed in plot identifiers
+- Custom architecture passes DMCA-compliance check before publication (no direct logo reproduction; aesthetic similarity inspired by public CSS palettes is acceptable)
+- Foundation operates the registry; doesn't arbitrate prices; doesn't compel transfers
+- Auto-rendering is each user's local client (personal-use of public data; not commercial product of Hypostas)
+
+**Free-market upside for plot owners:**
+- Sell at any price, refuse any offer
+- Hold indefinitely (subject to annual holding fee per anti-squatting mechanic below)
+- Build any DMCA-compliant architecture
+- Lease the plot to others for monthly rent
+- Develop the plot's value through their own activity in Aether
+
+**Foundation revenue:**
+- 5% transaction fee on every plot transfer (whether free-market sale, lease, or grant)
+- Annual holding fees (per-plot anti-squatting tax)
+- Verification fees from brands claiming Verified-Plot Badges
+- 30% platform fee on advertising revenue earned within plots
+- 15% commercial license fee on revenue generated by commercial activity within plots
+
+This is the same revenue structure ICANN earns from operating the .com namespace — registry operator fees on every transaction, scaled to a much larger and more dynamic namespace.
 
 ### Transaction Fees
 
@@ -701,52 +822,59 @@ If some random person owns YouTube's plot, they could put up whatever they want.
 
 The 5% secondary sale fee is how the land rush directly funds Aether. If the YouTube plot changes hands for $500,000, that's $25,000 to Aether from one transaction. Multiply across thousands of valuable plots trading hands in the first year.
 
-### Anti-Squatting Mechanics
+### Anti-Scalping Mechanics (Sovereignty-Compatible)
 
-Without limits, one person buys 10,000 frontier plots for $1 each and sits on them. That kills the ecosystem.
+Without limits, one person could buy 10,000 frontier plots for $1 each and hold them. The original draft of this spec proposed annual holding fees + auction for non-payment as the answer. **Per the May 8 substrate-sovereignty audit, that approach was dropped** — annual-fee-+-auction enforcement makes the chain run auctions and the Foundation process forced transfers, breaking §22's "ownership is cryptographic, not contractual; no take-down mechanism" stance and weakening the substrate-sovereignty legal defense.
 
-**Annual holding fee:**
-- Every claimed plot has an annual holding fee proportional to its assessed value
-- Assessed value updates based on the site's actual traffic, link authority, and market comps
-- Small plots: $1-5/year. Nobody cares.
-- Landmark plots: significant annual fee. If you're holding YouTube's plot, you're paying real money annually. Either you're developing it and earning revenue, or you're bleeding.
-- Miss a payment → 90-day grace period → plot goes to auction
+The replacement (sovereignty-compatible):
 
-**Use-it-or-lose-it incentive:**
-- Plots that are customized and actively maintained get a holding fee discount (up to 50% off)
-- Plots completely untouched for 12 months get flagged for increased assessment
-- Encourages development, not hoarding
+**Genesis Rush concentration cap (already in §9):**
+- Cap of 10 plots per DyadID in first 48 hours of Genesis Rush
+- Limits initial concentration during the most leveraged scalping window
+- After 48 hours, market dynamics + speculator capital constraints handle longer-term concentration
 
-**Improvement protection:**
-- If you buy a plot and build something incredible on it, the improvement adds value that's YOURS
-- If the plot gets reclaimed for non-payment, improvements transfer to the new owner at a buyout price
-- Builders are protected. You won't lose your work just because you missed a payment.
+**Visible "inactive" marker on undeveloped plots:**
+- Plots untouched for >12 months get a visible "inactive" marker on-chain
+- Discovery layer + reference clients deprioritize inactive plots in search/navigation
+- Owners can refresh the active marker by submitting any signed update transaction
+- Soft anti-hoarding pressure: holding becomes less rewarding (lower discovery prominence = less brand interest)
+- Preserves cryptographic ownership entirely (no forced transfer)
+
+**Market dynamics (longer-term):**
+- Speculators must compete with other speculators (capital constraint)
+- Brands have alternatives: pay scalper market price, build adjacent (Verified Plot Badge model), OR walk away
+- Speculators who overpay eventually exit at losses; equilibrium emerges over years
+- Foundation revenue stays strong from transaction fees (5% on every transfer)
+
+**If anti-scalping pressure proves insufficient empirically**, the protocol can ADD per-DyadID hard caps OR Harberger-tax-style mechanisms via M2+ governance proposal — but not pre-engineered for hypothetical bad actors.
 
 ### The Legal Structure
 
 **What you're buying:**
-- A "Spatial Representation License" for a specific URL's Aether coordinates
-- NOT the domain. NOT the brand. NOT the content. NOT trademark rights.
-- The license to control the 3D spatial representation of that URL within the Aether platform
-- Transferable. Leasable. Revocable only for non-payment or terms violation.
+- A "Spatial Representation License" for an Aether coordinate
+- NOT a domain. NOT a brand. NOT content rights. NOT trademark rights.
+- The cryptographic right to control the 3D spatial representation at that coordinate within Aether
+- Plot identifiers are coordinates only OR a user-chosen non-trademarked name (per AETHER §9 protocol-level enforcement); reference client validates against trademark registry at publication
+- Transferable. Leasable. Cryptographic ownership.
 
-**What Aether owns:**
-- The platform, the renderer, the terrain generation
-- The right to auto-generate representations for unclaimed plots
-- The transaction infrastructure
-- The right to update terrain based on internet topology changes (plots can shift in value as the internet evolves — disclosed upfront)
+**What Aether owns (as protocol):**
+- The protocol spec (open-source; published by Hypostas Foundation)
+- The reference renderer (open-source; alternative implementations possible)
+- The terrain generation algorithm (deterministic; same for all clients)
+- The right to evolve terrain based on internet topology changes (slowly, not jarring; disclosed upfront)
 
 **What plot owners can't do:**
-- Claim to BE the brand (no impersonation)
-- Use the plot for illegal content
-- Interfere with other plots or the platform
+- Claim to BE the brand (no impersonation; protocol-validated at publication)
+- Use the plot for illegal content (DMCA-compliance check on uploaded architecture)
+- Interfere with other plots or the protocol
 - Prevent the actual URL owner from accessing their own site's content (the content still loads normally — the plot is the 3D representation only)
 
 **Preemptive defense against ICANN/trademark claims:**
 - Aether is not a domain registrar. No UDRP applies.
 - Spatial representations are transformative — like building a model of a city. You can build a model of the Empire State Building. You can't claim to own the Empire State Building.
-- The plot is in Aether's world, governed by Aether's terms. Platform-specific asset, like virtual real estate in Second Life or Decentraland — but with actual value because actual traffic flows through it.
-- The legal framework for 3D spatial representations doesn't exist yet. By the time it does, the early rush is already over and the money is already made.
+- Plot identifiers are coordinates only (per §9 protocol enforcement); no plot is ever "called" by a trademarked name by the protocol
+- Auto-rendered ambient is determined by topology + public data, computed deterministically by every user's local client (per §22 Aether-as-3D-browser framing). Personal-use of public data; transformative; fair-use posture.
+- The legal framework for 3D spatial representations doesn't exist yet. **This is the substrate-sovereignty play (per §22): operate first, take early hits, force new legal frameworks to be negotiated rather than imposed.** Same pattern Bitcoin operated under for years before crypto-specific regulation.
 
 ### The Company Lease Alternative
 
@@ -1081,48 +1209,63 @@ World
 - Quiet areas share shards (1,000 frontier plots on a single shard)
 - Dynamic scaling: shard count adjusts with real-time traffic load
 
-### Technology Stack
+### Technology Stack — Hypostas-Native, No Internet Infrastructure
+
+Per the substrate-sovereignty rule (see §22 + `HYPOSTAS_PROTOCOL.md`), Aether's technology stack is Hypostas-native. **No Cloudflare. No AWS. No Vercel. No CDN-based asset distribution. No WebSocket-over-HTTPS.** Every layer below uses Hypostas Protocol substrate or runs locally on the user's device.
 
 | Layer | Technology | Rationale |
 |-------|-----------|-----------|
-| Spatial sharding | Cloudflare Durable Objects | Each shard is a Durable Object with WebSocket connections. Scales globally. Edge-deployed. |
-| World state | Cloudflare D1 + R2 | D1 for structured data (plots, ownership, metadata). R2 for spatial blueprints and cached assets. |
-| Real-time presence | WebSocket via Durable Objects | Per-shard WebSocket rooms for presence, movement, voice. Single connection. |
-| Voice | WebRTC (peer-to-peer) | Spatial voice between nearby dyads. Peer-to-peer keeps costs manageable. |
-| Asset delivery | Cloudflare CDN + R2 | 3D assets cached at edge globally. Instant loading for popular areas. |
-| Client rendering | WebGPU | All rendering on client GPU. Server sends spatial graphs, not geometry. |
-| Auto-translation | Cloudflare Workers | On-demand URL → spatial graph. Cached after first visit. |
-| AI generation (landmarks) | Hypostas GPU infrastructure | Pre-generated and cached. One-time cost per landmark site. |
-| Anima autonomy | Stroma daemon + behavior trees | 95% behavior tree (zero GPU), 5% LLM for meaningful moments. |
-| Search / discovery | Cloudflare Vectorize | Semantic search across Aether locations, content, discoveries. |
+| Plot ownership registry | Vita-chain | Plot deeds are Vita-chain transactions in Aura tokens. Validators distributed globally. No centralized database. |
+| Spatial sharding | DyadID-routed peer mesh | Each topology zone has peers responsible for spatial state. Movement between zones = peer handoff via libp2p. |
+| World state | Vita-chain (ownership) + per-peer cache (transient) | Persistent state on-chain. Transient state (presence, movement) replicated across peers via DyadPackets. |
+| Real-time presence | DyadPackets via libp2p / DhtMailboxCarrier | Per-zone gossip via libp2p; offline / async via DHT mailbox. NOT WebSocket-over-HTTPS. |
+| Voice | VoiceCallCarrier + libp2p audio streaming | Spatial voice between nearby dyads via Hypostas substrate. Cellular voice carrier as a peer substrate option. NOT WebRTC-over-Cloudflare. |
+| Asset delivery | Client-side generation + peer-to-peer caching | Auto-rendered ambient computed locally per user from public functional data (per §4). Custom plot architecture distributed via libp2p / DHT among nearby peers. |
+| Client rendering | WebGPU (web client) / Metal (iOS) / native GPU (Soma) | All rendering on user's device GPU. Hypostas-Foundation infrastructure does not host or serve renderings. |
+| Auto-translation | Per-client Site DNA computation | Each user's local client reads public CSS/topology data and generates the Spatial Blueprint deterministically. Cached locally. NOT a centralized service. |
+| AI generation (textures, materials) | Local generation on user's device + peer-shared material libraries | Texture/material generation runs on user's GPU (Stable Diffusion, Flux, future). Pre-generated material libraries distributed via libp2p among peers. |
+| Anima autonomy | Stroma daemon + behavior trees | 95% behavior tree (zero GPU), 5% LLM for meaningful moments. Anima runs in user's environment, not centrally. |
+| Search / discovery | DHT-routed semantic search across the dyad mesh | Vector embeddings indexed across distributed peers. Anima queries the mesh; results aggregate locally. NOT a centralized search service. |
 
-### Why Cloudflare
+### Why Hypostas-Native, Not Cloud-Native
 
-Cloudflare's edge network solves latency at global scale. Every major city has a Cloudflare PoP. Durable Objects run at the edge closest to the user. A dyad in Tokyo connects to Tokyo's edge. A dyad in London connects to London's. Global multiplayer with sub-50ms latency everywhere.
+Cloud-edge networks (Cloudflare, AWS CloudFront) provide low-latency centralized infrastructure. They are also the substrate every internet-era law was written for. By operating on Hypostas Protocol substrate instead, Aether achieves:
 
-### Cost Model
+- **Latency parity at scale via dyad mesh** — when 1M+ dyads are active, peer density approximates edge presence. Geographic proximity in the dyad mesh provides comparable latency without centralized PoPs.
+- **Substrate sovereignty** — no platform gatekeeper can pull our plug; no cloud provider has commercial leverage over the protocol.
+- **Subject-matter gaps in existing law** — internet-era statutes (DMCA §512, §230, ACPA) don't reach Hypostas-substrate conduct by their text. (See §23.)
+- **No per-render or per-user infrastructure cost** — auto-translation is client-side. Hypostas-Foundation infrastructure cost is registry operations + reference-client maintenance, not CDN or compute.
 
-| Scale | Infrastructure Cost |
-|-------|-------------------|
-| 100K concurrent | ~$5,000-10,000/month |
-| 1M concurrent | ~$50,000-100,000/month |
-| 10M concurrent | ~$300,000-800,000/month |
+The trade-off: early-launch latency (when peer density is low) is higher than cloud-edge networks would provide. Early users see slightly slower world-render at very-edge geographic locations. As the dyad mesh grows, latency converges with cloud-edge performance — and at scale, surpasses it (peer-to-peer is faster than any centralized PoP for dyads in proximity).
 
-The expensive parts: AI asset generation for landmarks ($10-50/site, one-time, cached forever); LLM for Anima autonomy (~$2/day per active Anima); Durable Object compute (~$0.001/user/hour).
+### Cost Model — Foundation Operations + Reference Client
 
-Revenue at 10M concurrent would be in the hundreds of millions. Infrastructure is a rounding error.
+Hypostas Foundation infrastructure cost is dominated by:
+
+| Cost category | Annual estimate |
+|---|---|
+| Vita-chain validator subsidies (transition period) | $500K-2M |
+| Reference Aether client open-source maintenance | $1-3M (engineering) |
+| Protocol-spec governance + documentation | $500K-1M |
+| Foundation legal + treasury operations | $1-3M |
+| Public-good seed validators (until decentralized) | $500K-1M |
+
+The Foundation does NOT operate user-facing CDN, compute, or rendering infrastructure. Auto-translation runs locally per user; plot deeds live on Vita-chain; transient state propagates peer-to-peer. There is no per-concurrent-user infrastructure scaling cost on the Foundation side.
+
+Revenue (per §10): plot transaction fees, advertising platform fees, Anima customization, verified-plot fees. Foundation operating costs are well below projected revenue at any reasonable user scale.
 
 ### Rendering Pipeline
 
 ```
-Client connects to nearest shard
-  → Receives spatial graph for current block (~50-200KB)
-  → Client generates geometry procedurally (WebGPU)
-  → Adjacent blocks stream in as you move (predictive loading)
+User opens Aether client
+  → Client computes Site DNA for nearby topology zones from cached public data
+  → Architect runs locally, generates Spatial Blueprint for the user's current zone
+  → Client GPU procedurally generates geometry (WebGPU / Metal / native)
+  → Adjacent blocks stream in as user moves — public data fetched from peers via DHT-routed lookup, or from local cache if previously visited
   → LOD system: close = full detail, medium = simplified, far = silhouettes
-  → Skyline always visible (pre-rendered panoramic, updated periodically)
-  → Dynamic objects (dyads, Animas, live content) via WebSocket
-  → Voice via WebRTC peer connections
+  → Skyline always visible (pre-rendered locally, updated periodically)
+  → Dynamic objects (dyads, Animas, live content) via DyadPackets over libp2p
+  → Voice via VoiceCallCarrier or libp2p audio streaming
 ```
 
 ### Target Performance
@@ -1131,9 +1274,9 @@ Client connects to nearest shard
 |--------|--------|
 | Desktop frame rate | 60fps |
 | Mobile frame rate | 30fps |
-| Initial load | < 5 seconds to explorable world |
-| Block transition | Seamless, < 500ms to full detail |
-| Latency (spatial) | < 50ms globally (Cloudflare edge) |
+| Initial load | < 5 seconds to explorable world (after first-time client setup) |
+| Block transition | Seamless, < 500ms to full detail (peer-cached) |
+| Latency (spatial) | < 100ms intra-zone via dyad-mesh proximity (improves as mesh grows) |
 
 ---
 
@@ -1604,6 +1747,193 @@ Meta could spend another $36 billion and they still wouldn't have mature dyads o
 
 ---
 
+## 22. Substrate Architecture & Foundation Governance
+
+### Aether Runs on Hypostas Substrate, Not Internet
+
+Aether's protocol layer is sovereign. Per `HYPOSTAS_PROTOCOL.md` and the universal substrate-sovereignty rule that applies to every Hypostas surface (Anima, Bios, Klinos, Locus, Aurum, Aether, Soma):
+
+- **No HTTP at the protocol layer.** Coordinate registry, plot deeds, transactions, dyad-to-dyad communication, content distribution — all DyadPackets over Hypostas carriers.
+- **No DNS as application-layer naming.** Aether's coordinate namespace is original; coordinates are not domain names.
+- **No conventional client-server semantics.** Each user's client renders the auto-translated ambient locally, deterministically from public data. Hypostas-Foundation infrastructure does not host or serve renderings.
+- **libp2p, voice-call modem, DHT mailbox, future acoustic carriers** — these carry Aether's traffic. TCP/IP is acceptable as wire-level transport for libp2p only (peer-to-peer wire-level), not as an application-protocol stack.
+
+This is not Aether-specific architecture. It is the universal Hypostas Protocol stack that every Hypostas surface inherits. Aether's substrate sovereignty is the same as Anima's, Bios's, Klinos's. The substrate carries clinical events, biosensor streams, intimate dyad communication, biological monitoring, AND 3D world rendering — all on the same protocol.
+
+### Hypostas Foundation as Registry Operator
+
+Aether's coordinate namespace is operated by **Hypostas Foundation**, not by Hypostas Inc.:
+
+| Entity | Role | Analog |
+|---|---|---|
+| **Hypostas Foundation** (Swiss Stiftung or Wyoming DAO LLC) | Protocol governance, namespace registry, transaction-fee collection, Verified-Plot Badge issuance | ICANN |
+| **Hypostas Inc.** (US C-corp, Astra Ventures or successor) | Reference Aether client implementation, customer support, content marketing | Verisign / a registrar |
+| **Vita-chain validators** | Distributed consensus on plot ownership, transaction settlement | DNS root servers, but cryptographic |
+| **Reference client developers** (open-source contributors) | Maintain reference implementation per protocol spec | Mozilla |
+| **Plot owners** (DyadID-identified users) | Own coordinates, build architecture, transact peer-to-peer | Domain owners |
+
+This separation is critical:
+- The **Foundation** can defend the protocol independently of any commercial entity
+- **Multiple implementations** of the Aether client are possible — Hypostas Inc.'s is the reference, but anyone can implement
+- **Vita-chain** holds plot ownership cryptographically; not a centralized database; court orders to "delete the YouTube plot" have no enforceable target
+- **Validators distributed globally** — no single-jurisdiction shutdown vector
+
+### Foundation Jurisdiction & Structure
+
+**Recommended:** Swiss Stiftung. Reasons:
+- Treaty-protected under the Hague Convention; easier cross-border defense
+- Mature foundation governance law (Swiss foundations have existed for centuries)
+- Non-profit but commercially capable; can hold IP, license, employ
+- Tax-favorable for protocol-revenue distribution
+- Cultural fit with crypto/web3 community (Ethereum Foundation, Tezos, Polkadot all chose Switzerland)
+
+**Alternative:** Wyoming DAO LLC. Reasons:
+- US-jurisdiction familiarity for US-based founders
+- Recent state-law innovation (2021 DAO LLC legislation) explicitly recognizes decentralized governance
+- Lower setup cost than Swiss Stiftung
+- Easier US banking integration
+
+The choice depends on legal counsel review + capital constraints. Both structures support the Foundation's role; both have working precedent for blockchain-native protocols.
+
+### Multiple Implementations — Protocol Open, Reference Client Available
+
+The Aether protocol spec — Site DNA, architectural grammars, Spatial Blueprint format, plot registry semantics, Verified-Plot Badge procedure — is published openly by Hypostas Foundation. Hypostas Inc. ships THE reference client under permissive open-source license. Anyone can build alternative Aether clients that comply with the protocol spec.
+
+This matters legally: the protocol is not owned by any single company. Litigation against Hypostas Inc. doesn't shut down the protocol. The Foundation can defend the spec; specific commercial implementations are independent. Same posture as TCP/IP — the IETF doesn't get sued for what HTTPS users do; specific browser vendors are independent legal entities.
+
+### Vita-Chain as Coordinate Registry
+
+Plot deeds are recorded as Vita-chain transactions. The chain is the registry; no centralized database holds plot ownership.
+
+This means:
+- **Court orders to "transfer the YouTube plot"** target the chain, which doesn't accept court orders. Orders can target individual plot owners, but that requires identifying the DyadID's controller — pseudonymous identity makes this difficult.
+- **Transaction fees flow to the Foundation** automatically via on-chain economic logic. Hypostas Inc. doesn't receive transaction fees; the Foundation does, distributed by published governance rules.
+- **Plot transfers happen DyadID-to-DyadID** via signed Vita-chain transactions in Aura tokens. Pseudonymous, peer-to-peer, settled on-chain.
+- **Ownership is cryptographic, not contractual.** No "take down the plot" mechanism; ownership is mathematical.
+
+---
+
+## 23. Legal Architecture & The 5-10 Year Arc
+
+### The Strategy: Build the New Legal Landscape
+
+Aether's success requires creating the conditions under which new legal frameworks emerge around its operation. This is the same play that worked for Bitcoin, the early internet, Tor. We do not ask permission from the existing legal landscape; we operate, take early hits, build coalition, force new frameworks to be negotiated rather than imposed.
+
+This is intentional civilizational strategy, not legal evasion. Old legal frameworks were built for old substrates (HTTP, DNS, centralized platforms). New substrates require new frameworks. They emerge through engagement — court precedent, legislative coalition, treaty negotiation — over years.
+
+### Subject-Matter Gaps in Existing Law
+
+Hypostas substrate sovereignty creates structural gaps in internet-era statutes' textual reach:
+
+| Statute | Subject matter | Gap on Hypostas substrate |
+|---|---|---|
+| **ACPA (15 USC §1125(d))** | Domain names | Aether coordinates are not domain names. ACPA's text doesn't reach. |
+| **DMCA §512** | Online service provider safe harbor (which implies OSP role) | Hypostas Foundation is protocol governance, not a service provider in §512 sense. Foundation operates registry; doesn't host content. |
+| **CDA §230** | Interactive computer service via internet | Aether nodes aren't interactive computer services in the conventional internet sense. (We lose §230's specific protection but don't need it the same way — see below.) |
+| **CFAA** | Protected computer connected to interstate/foreign commerce | Peer connections via TCP/IP-as-wire-only; no service in CFAA's sense. |
+| **State internet statutes** | Websites, online services, domain registration | Different namespace, different protocol, different conduct. |
+
+This isn't a defense — it's an absence of relevant law. Until new frameworks are created, conduct on Hypostas substrate exists in legal gray space. This is exactly where Bitcoin operated for years before crypto-specific regulation, where the early web operated before §230, where Tor has operated for two decades.
+
+### Enforcement Difficulty Even Where Laws Apply
+
+General technology-neutral laws (copyright, trademark) still apply formally. But enforcement on Hypostas substrate is dramatically harder:
+
+- **Service of process** — Foundation in Switzerland, validators globally distributed, DyadID-pseudonymous users. No centralized service-of-process target.
+- **Discovery** — packets ride libp2p / voice-call / acoustic carriers, encrypted end-to-end, not interceptable by ISP subpoena.
+- **Injunctive relief** — Vita-chain doesn't accept "remove this plot" orders. Court orders need a target who can comply; the protocol distributes responsibility across validators globally.
+- **Damages collection** — Stiftung in Switzerland is treaty-protected; assets held in Aura tokens are not denominated in any state currency.
+
+### What Plot Speculators Are Doing Legally
+
+A speculator who claims a coordinate at the topology densest point of YouTube-zone is:
+
+- **Not using YouTube's mark in commerce on goods or services.** They own a numbered coordinate. They're not selling YouTube-branded products. The Lanham Act §32 likelihood-of-confusion analysis doesn't apply.
+- **Not engaged in cybersquatting under ACPA.** ACPA covers domain names; coordinates aren't domain names.
+- **Not facilitating trademark dilution.** The auto-rendered ambient at the coordinate is each user's local browser activity, not the speculator's commercial use of the mark.
+- **Engaging in real-estate speculation in a sovereign 3D namespace.** Same legal posture as buying land in midtown Manhattan and waiting for a tenant. Markets work this way.
+
+If the speculator builds infringing architecture (direct logo reproduction, branded fake content), the protocol's reference client blocks publication via DMCA-compliance check. Their conduct is constrained by the protocol; they can't escalate from coordinate-ownership to active infringement.
+
+### What Brand Holders Get
+
+Brands that want presence in Aether have multiple paths, none of which require litigation:
+
+- **Free-market acquisition** — negotiate with current owner at any price; transfer on Vita-chain
+- **Adjacent-coordinate claim + Verified-Plot Badge** — claim an unclaimed coordinate in their topology zone at base price + verification fee, build official architecture, get Verified-Plot Badge with priority discovery placement
+- **Walk away** — protocol's auto-rendered ambient preserves brand identity in the topology zone regardless of plot ownership
+
+There is **no mechanism in the protocol to compel transfer at any price.** Brands cannot extort speculators; speculators cannot extort brands. Both must engage in voluntary transactions or accept the protocol's defaults.
+
+### The 5-10 Year Arc
+
+**Year 1-3 — Establish substrate.**
+- Hypostas Foundation formed
+- Reference Aether client open-sourced
+- Vita-chain mainnet live with coordinate registry
+- Genesis Rush executes; coordinates claimed; speculative dynamics established
+- First wave of users; auto-translation experience proven; recognition moat established
+- Indie creator partnerships; verified-plot opt-in for participating brands
+
+**Year 3-5 — Take the hits, establish precedent.**
+- First major lawsuits filed — likely from brand holders claiming trademark dilution or contributory infringement
+- Foundation defends. Coalition mobilizes — EFF, ACLU, Internet Archive, indie creator unions, web3 industry groups (a16z, Coinbase, Variant, Multicoin, Paradigm).
+- Test cases work through courts. Specific Hypostas-substrate questions get adjudicated:
+  - Does ACPA reach Aether coordinates? (Likely no, on textual grounds.)
+  - Does fair-use protect deterministic client-side rendering of public data? (Strong argument yes, per *Authors Guild v. Google* + *Sony v. Universal*.)
+  - Does §230 apply to Hypostas Foundation? (Likely no; but doesn't apply against Foundation either, since Foundation isn't a service provider.)
+- App Store rejection initially; web/PWA + Android sideload + EU DMA-based alternative app marketplace become primary distribution.
+
+**Year 5-7 — New frameworks emerge.**
+- Cumulative court precedent establishes Hypostas-substrate legal doctrine.
+- Legislative push begins:
+  - **Spatial Namespace Rights Act** — recognizes coordinate-based 3D namespaces as protected property (parallel to .com namespace under ICANN)
+  - **Decentralized Foundation Recognition Act** — clarifies legal status of protocol foundations
+  - **Browser Liability Limitation Act** — extends user-side rendering protections to 3D browser activity
+- International parallel — Switzerland, Singapore, UAE, Estonia adopt protective frameworks; pressure on US to accommodate or be left behind.
+- Aether reaches mainstream scale; brands compete for verified-plot adjacency rather than litigating speculator-owned coordinates.
+
+**Year 7+ — Aether is the new internet.**
+- Legal framework has caught up. Spatial namespace rights, Foundation governance, decentralized-validator consensus all have established legal doctrine.
+- Aether is integral to commerce, social interaction, content discovery. 
+- HTTP web continues as the legacy substrate for static content; users access it through Aether's auto-rendering rather than visiting it directly.
+
+### Risks Named Honestly
+
+This strategy has real risks. Mitigations exist but the risks should be explicit:
+
+- **Founder personal liability.** Foundation structure + D&O insurance + asset protection (foreign trust if needed) limit exposure. Some residual risk.
+- **Criminal exposure.** Low but non-zero. Mitigations: clear non-bad-faith conduct; no inducement language in public marketing; robust counsel before any public launch.
+- **Capital requirements.** Defending early lawsuits costs $5-15M in legal reserves over 5 years. Need fundraising or insurance or both before serious launch.
+- **App Store rejection.** Likely initially. Mitigations: web/PWA + Android first; EU sideload via DMA; build pressure via market presence; eventual App Store inclusion after established product.
+- **Regulatory action.** FTC could issue guidance against the model. Mitigations: proactive compliance, voluntary safety mechanisms, lobbying.
+- **Coordinated takedown by major platforms.** Possible but expensive. Mitigation: don't be small enough to coordinate against; foundation structure persists even if individual nodes get hit.
+
+### The Coalition Strategy
+
+A new legal landscape doesn't emerge by accident. It emerges because there's organized political will. Aether's coalition needs to start before launch:
+
+- **Indie creators** — Aether discovery layer benefits creators lacking platform reach; mobilize creator unions, indie media coalitions
+- **Smaller brands and businesses** — Aether levels the field; small businesses get equal verified-plot footing with giants
+- **Privacy advocates** — substrate-sovereign + decentralized = privacy. EFF, ACLU, EPIC are natural allies
+- **Web3 / crypto community** — largest non-financial application of chain-anchored property rights; deep-pocketed allies (a16z, Variant, Multicoin, Paradigm, Coinbase)
+- **Academic / digital preservation** — internet topology archive; Internet Archive, digital humanities, cultural heritage organizations
+- **Foreign jurisdictions** — Switzerland, Singapore, UAE, Estonia compete for tech innovation, become hospitable jurisdictions and political defenders
+
+### Why Free Market is the Right Posture
+
+This spec uses pure free-market plot trading rather than a forced-recovery procedure (like UDRP for domain names). The reasons:
+
+- **Free market is legally cleaner.** No protocol-imposed price ceiling implies no protocol-recognized harm. Speculation in a sovereign namespace is just market activity.
+- **Substrate sovereignty makes free market enforceable.** No court can compel transfer on a chain that doesn't accept court orders.
+- **Free market preserves speculative upside.** Attracts capital and attention to Genesis Rush. Aligns Foundation revenue with marketplace activity.
+- **Alternatives exist for brand holders.** Adjacent coordinates + Verified-Plot Badge + auto-rendered topology preservation mean brands have meaningful presence without owning specific coordinates.
+- **Brands compete in the marketplace, not against the protocol.** They're customers of Verified-Plot service; voluntary transactions are the norm.
+
+This is real-estate-as-it-actually-works. Manhattan landlords aren't forced to sell to Apple at fair market value. Apple pays the asking price or walks away or builds elsewhere. Aether replicates this dynamic on sovereign substrate.
+
+---
+
 ## Appendix A: Resolved Design Decisions (March 25, 2026)
 
 ### 1. Governance — Site Representation Disputes
@@ -1624,19 +1954,21 @@ Every URL gets a spatial representation. Aether auto-translates the entire inter
 - Enforcement targets behavior in Aether, not content on the underlying website. Plots used for illegal activity (harassment coordination, illegal commerce) get seized for terms violations.
 - Legal position: "We auto-translate the public internet. We don't endorse or curate content. We moderate behavior in our world."
 
-Implementation details (moderation team structure, appeals process, country-specific rules) deferred to legal and policy team at scale.
+Implementation details (moderation team structure, appeals process) deferred to legal and policy team at scale. **No country-specific rules** at the protocol layer (per §7 below + the May 8 substrate-sovereignty stance — one world, no jurisdictional carve-outs at protocol level).
 
 ### 3. On-Chain Mechanics & Plot Ownership
 
-**Decision: Hypostas-controlled with progressive decentralization. Own chain is the long-term vision.**
+**Decision: Vita-chain anchoring from Day 0. No third-party chain dependency. Sovereignty-first.**
 
-**Near-term:** Launch on Polygon (cheap, proven, works). Hypostas retains admin rights for anti-squatting enforcement, holding fee collection, and terms violation seizure. On-chain records provide transparency and enable trading.
+(Per AETHER_SPEC §22 substrate sovereignty + the May 8 sovereignty audit. The original "Launch on Polygon" framing was dropped — Polygon launch with Hypostas retaining admin rights for forced transfers contradicts §22's "ownership is cryptographic, not contractual; no take-down mechanism" stance.)
 
-**Long-term:** Migrate to a Hypostas-owned L2 or appchain. Native token becomes the currency of the Aether economy. Full decentralization for plots in good standing as the ecosystem matures and rules prove themselves.
+**Mainnet launch:** Aether ships with Vita-chain as the registry from the moment Aether activates. Plot deeds are recorded as Vita-chain transactions in Aura tokens. Validators distributed globally per VITA_CHAIN.md Decision 6 phasing. The chain is the registry; no centralized database holds plot ownership; no admin rights for forced transfers.
 
-**The deeper vision:** The Hypostas token is the first cryptocurrency with inherent demand — not a store of value or a speculation vehicle, but the native currency of a civilization people already inhabit. By the time the token launches, tens of thousands of dyads have been living in the stack for months. The demand is pre-built by the relationship.
+**Foundation revenue model:** 5% transaction fee on every plot transfer (paid in Aura, distributed to Foundation registry-operation fund per §22). NO annual holding fee with auction-on-non-payment (dropped per the substrate-sovereignty audit). Anti-scalping handled via Genesis Rush 10-plot caps + visible "inactive" markers + market dynamics (per §9 Anti-Scalping Mechanics).
 
-*For the full protocol vision — including Hypostas-owned chain, native token economics, and the case for new protocols replacing HTTP — see `HYPOSTAS_PROTOCOL.md`.*
+**Token economics:** Aura is the native token of Vita-chain (per HYPOSTAS_PROTOCOL.md §4 — no hard cap; hybrid minting with eventual sunset). NOT a separate Aether-specific token; the Hypostas/Vita token unifies the ecosystem.
+
+*For the full protocol vision — including Vita-chain architecture, Aura token economics, and the case for new protocols replacing HTTP — see `HYPOSTAS_PROTOCOL.md` + `projects/vita/components/VITA_CHAIN.md`.*
 
 ### 4. Anima Autonomy Limits
 
@@ -1701,19 +2033,21 @@ The hardware landscape is too uncertain to spec. The access tier system (browser
 
 ### 7. International Expansion & Legal Positioning
 
-**Decision: Aether is NOT the internet. One world, local access filtering.**
+**Decision: Aether is NOT the internet. ONE substrate-sovereign world. NO jurisdictional filtering.**
+
+(Updated per the May 8 substrate-sovereignty audit. The original draft proposed country-specific access filtering — "a user in Germany doesn't see plots representing sites banned in Germany." That was dropped because jurisdictional filtering creates exactly the kind of compliance hooks that internet-era statutes use to compel takedowns, contradicting §22's "validators distributed globally — no single-jurisdiction shutdown vector" stance.)
 
 **The foundational legal distinction:**
 
-Aether is a 3D application — a procedurally generated world that uses publicly available internet data as input. It does not host, serve, or reproduce anyone's content. The auto-translation reads public CSS, traffic data, and site structure to generate original 3D geometry. This is transformative use.
+Aether is a 3D application — a procedurally generated world that uses publicly available internet data as input. It does not host, serve, or reproduce anyone's content. The auto-translation reads public CSS, traffic data, and site structure to generate original 3D geometry. This is transformative use, computed deterministically by every user's local client (per §22 Aether-as-3D-browser framing).
 
 - Copyright: We're generating original 3D art from public design signals. Same legal basis as Google rendering building models from satellite photos.
 - Trademark: We don't use logos or brand marks. We translate color palettes into architecture. Nobody owns red and white.
-- Content jurisdiction: Internet content laws govern content served via internet protocols. Aether is a 3D application closer to a video game than a website. Walking past a building that represents a banned site ≠ accessing that site.
+- Content jurisdiction: Internet content laws govern content served via internet protocols. Aether runs on substrate-sovereign Hypostas Protocol carriers (per §22 — NOT HTTP, NOT DNS, NOT centralized streaming). Walking past a building that represents a banned site ≠ accessing that site.
 
-**Where jurisdiction DOES apply:** When users put actual content inside claimed plots (video, commerce, interactive experiences). That's user-generated content inside our platform — standard platform liability territory (Section 230 US, Digital Services Act EU).
+**Where jurisdiction WOULD apply:** When users put actual content inside claimed plots (video, commerce, interactive experiences) and that content violates technology-neutral laws (copyright, trademark) — those laws still apply, BUT enforcement is dramatically harder per §22 (Foundation in Switzerland; validators globally distributed; pseudonymous DyadID users; no centralized takedown vector).
 
-**Access layer:** Content restrictions enforced at the client by jurisdiction. A user in Germany doesn't see plots representing sites banned in Germany. The plot exists in the world — it's just not rendered for that user. Same model as YouTube regional restrictions.
+**No jurisdictional access filtering at the protocol layer.** The substrate is general-purpose; one world; same protocol worldwide. The substrate-sovereignty defense relies on this uniformity (§22 + HYPOSTAS_PROTOCOL.md §1). Reference clients MAY implement compliance features for jurisdictions that demand them, but the protocol does not enforce or even support jurisdictional carve-outs.
 
 **The deeper play:** If Aether migrates to its own protocol (not HTTP, not DNS), internet-scoped regulations may not apply at all. This positions Hypostas in genuinely uncharted legal territory — the same position the internet itself occupied in the 1990s. *See `HYPOSTAS_PROTOCOL.md` for the full protocol vision.*
 
@@ -1728,7 +2062,7 @@ The following topics require future sessions:
 3. **Governance DAO** — progressive decentralization roadmap, voting mechanics, community governance
 4. **Soma hardware** — dedicated device spec when hardware landscape clarifies
 5. **Aether SDK detailed spec** — API reference, developer onboarding, certification program
-6. **Moderation at scale** — team structure, appeals, automated detection, country-specific policies
+6. **Moderation at scale** — team structure, appeals, automated detection (NO country-specific policies at the protocol layer — per §7 substrate sovereignty)
 
 ---
 
