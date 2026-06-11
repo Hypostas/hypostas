@@ -102,9 +102,42 @@ ended here." Open design decisions (resolve before the seal/peel chunk, with Cod
    the MAC chain over the fixed header region; a decoy layer's MAC is initiator-derived. Must not let a relay
    distinguish "MAC verifies as a real next-hop" from "MAC is a decoy terminator."
 
+### §4.4 Construction finding (2026-06-11 — why this is the full Sphinx mix-header, not a shortcut)
+
+Working the seal/peel concretely surfaced that the two "obvious" length strategies BOTH fail, which is what
+forces the real Sphinx construction:
+
+- **Naive AEAD layering grows.** `AEAD(K_i, inner)` appends a 16-byte tag per layer, so an N-layer onion is
+  `body + N·16` and each peel SHRINKS by 16 — the current `seal_onion`. Padding the shrink back leaks depth
+  (the pad accumulates per hop, and a relay that knows the real-vs-pad boundary knows its depth).
+- **Naive XOR-onion is length-preserving but can't carry decoys.** `payload ⊕= KS(K_i)` per layer keeps the
+  size constant (good), but a **decoy** layer's keystream is held by NO hop — nobody unwraps it, so it never
+  cancels and corrupts the terminal's plaintext. Decoys only work if the path's own processing
+  *deterministically regenerates* the padding that fills the vacated tail.
+
+That regeneration IS the Sphinx **filler**: the initiator pre-computes, from the real hops' keystreams, the
+exact bytes each relay's transform will deposit in the tail as it shifts the header forward, so after `k` real
+hops the layout is byte-identical to a fresh `MAX_HOPS`-hop packet. Concretely the cell is:
+
+```
+[ clear: version(1) ‖ circuit_id(4) ‖ command(1) ]
+[ header: MAX_HOPS fixed slots — each {per-hop MAC(16) ‖ blinded routing/control} ]   ← shifted + filler-padded per hop
+[ payload: fixed-length block, one length-preserving transform per hop ]              ← end-to-end integrity at the terminal
+```
+
+Each relay: (1) recompute its hop key from the circuit table, (2) verify its header MAC over (header‖payload)
+— tamper-reject, (3) length-preservingly transform the payload, (4) shift the header up one slot and append
+the deterministic filler. A decoy slot is initiator-MAC'd with a key derived per §4.1 so it verifies exactly
+like a real slot but routes nowhere; the terminal stops by circuit-table role (§2), never reaching the decoy
+tail. **Decision:** specify the filler + the per-hop transform precisely (candidate transform: a wide-block
+PRP, or ChaCha20 keystream with the per-hop MAC supplying the integrity Sphinx needs) and pin it with a
+KAT-backed test vector BEFORE the seal chunk — this is the part to get a Codex design-review pass on, and the
+part most worth an eventual external-audit reference (HYP-330).
+
 **Threat to defeat:** a compromised relay must not learn (a) its position/depth, (b) the total hop count,
-(c) whether the next layer is real or decoy. The fixed size + uniform peel-and-pad + indistinguishable decoy
-keys are what deliver (a)-(c).
+(c) whether the next layer is real or decoy. The fixed size + uniform transform + filler-regenerated padding +
+indistinguishable decoy MAC slots are what deliver (a)-(c) — and the filler is the load-bearing piece, so it
+is where the indistinguishability proof lives.
 
 ---
 
