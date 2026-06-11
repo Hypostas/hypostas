@@ -305,6 +305,59 @@ resolve divergence — don't hand-wave).
 
 ---
 
+## §12 The Outfox construction, extracted (2026-06-11, from arXiv 2412.19937v2 §3.2.2)
+
+Read the paper. The packet is `(header h_0, payload ep_0)`. Building blocks: a KEM, a KDF, an AEAD (with
+associated data), and a length-preserving block cipher `SE` (its **ciphertext space = message space** — this
+is what makes the payload constant-size). Route `rt = ⟨(N_i, pk_{N_i}, R_i)⟩` for `i ∈ [0,k]` (k+1 layers).
+
+**Per-layer keys.** `(shk_i, c_i) ← KEM.Enc(pk_{N_i})`; then `(s^h_i, s^p_i) ← KDF(shk_i, ℓ_i, ctx_i)` — a
+header key + a payload key per layer.
+
+**Header (nested AEAD, grows inward).** Innermost `(β_k,γ_k) ← AEAD.Enc(s^h_k, R_k)`, `h_k = c_k‖β_k‖γ_k`;
+then for `i = k-1..0`: `(β_i,γ_i) ← AEAD.Enc(s^h_i, R_i ‖ h_{i+1})`, `h_i = c_i‖β_i‖γ_i`. Each hop carries
+its KEM ct `c_i` + an AEAD of (its routing info ‖ the next header). Provides per-hop header integrity.
+
+**Payload (nested length-preserving SE — the part we want).** `m ← 0^k‖0^s‖m` (pad), `ep_k ← SE.Enc(s^p_k, m)`;
+then for `i = k-1..0`: `ep_i ← SE.Enc(s^p_i, ep_{i+1})`. **`|ep_i|` is constant for every `i`** → the payload
+never grows/shrinks across hops → hop count is invisible from the payload. `PacketProcess` reverses one
+layer: `shk_i ← KEM.Dec(c_i, sk)`, `AEAD.Dec` the header (integrity), `ep_{i+1} ← SE.Dec(s^p_i, ep_i)`.
+
+### §12.1 Our Option-C adaptation (the concrete chunk-2 spec)
+
+| Outfox (stateless) | Ours (circuit-amortized) |
+|---|---|
+| `(shk_i,c_i) ← KEM.Enc(pk_{N_i})` **per packet**, ship `c_i` in the header | **Reuse the circuit's per-hop shared secret** from the existing PQ-hybrid handshake; no per-packet KEM, no `c_i` on the wire — `s^p_i ← KDF(circuit_layer_key_i, ℓ, ctx)`. This IS the §21.2 amortization. |
+| Nested-AEAD routing header (`R_i` = next-hop address) | We route by `circuit_id` (circuit table), so **no routing header needed**. Keep ONLY a per-hop integrity tag if we want relay-side tamper-reject; else rely on the terminal's end-to-end AEAD (decide in 2c — Outfox's UC proof uses per-layer header AEAD, so leaning keep-a-tag to stay proof-faithful). |
+| Payload: nested `SE.Enc` (length-preserving) | **Adopt verbatim** — `ep_i = SE.Enc(s^p_i, ep_{i+1})`, the fixed-size onion. |
+| `SE` = length-preserving IND-CCA wide-block PRP | **LIONESS** (Anderson–Biham), as Nym's `sphinx-packet` + Katzenpost use. **Adopt a crate — do NOT hand-roll the PRP** (CLAUDE.md; audit it per the dep rule). This is the chunk-2a gate item. |
+
+**Fixed-length / decoy reconciliation:** because `SE` is length-preserving, a k<MAX_HOPS route is made
+indistinguishable by **always running MAX_HOPS `SE` layers** — the `(MAX_HOPS-k)` extra layers keyed by
+INITIATOR-derived decoy keys (`KDF(circuit_secret, "decoy"‖i)`, §4.1). No relay holds a decoy key, but no
+relay needs to: each relay applies exactly ONE `SE.Dec` with its own circuit layer key, and the constant size
++ the initiator pre-composing the decoy layers means the wire is byte-identical to a full-length packet. The
+terminal stops by circuit-table role. (This is the §4.4 filler concern resolved: with circuit routing there is
+no header to filler-pad — only the length-preserving payload, which the nested-SE handles natively.)
+
+### §12.2 Chunk-2 sub-decomposition (each Codex-gated, rule #27)
+
+- **2a — SE primitive.** Evaluate + adopt an audited/maintained LIONESS crate (or Nym's, vendored); thin
+  `protocol-core` wrapper `se_encrypt`/`se_decrypt` (length-preserving) + KAT vectors. The dep decision +
+  audit note is the gate item. NO hand-rolled PRP.
+- **2b — nested payload onion.** `seal_payload_fixed` (nested `SE.Enc`, MAX_HOPS layers incl. decoys) +
+  `open_payload_layer` (one `SE.Dec`); fixed-size + length-preserving tests; decoy indistinguishability test
+  (a relay's `SE.Dec` output is byte-uniform whether the next layer is real or decoy).
+- **2c — circuit-key wiring + integrity.** `s^p_i ← KDF(circuit_layer_key_i,…)`; the per-hop integrity
+  decision (tag vs terminal-AEAD); replace `seal_onion`/`peel_relay_layer` call sites.
+- **2d — integration.** Forward DATA across a real 5-hop circuit, fixed-size end-to-end (rule #27); then the
+  reverse symmetric pass (removes the reply S-cap). Lift `MAX_HOPS_PER_CIRCUIT` to the live path.
+
+**Chunk-2a starts the build.** Prereq satisfied: construction extracted (this §12); SE-crate decision is the
+first gate.
+
+---
+
 *v0.1 — 2026-06-11 — Iris. Design foundation for HYP-318. §1-§10 are the construction design; §11 is the
 adoption analysis (audited-crate research → the per-packet-vs-circuit tension → recommend implementing the
 UC-proven Outfox payload on audited primitives keyed by our circuit handshake). The implementation (chunks
