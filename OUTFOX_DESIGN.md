@@ -332,13 +332,16 @@ layer: `shk_i ← KEM.Dec(c_i, sk)`, `AEAD.Dec` the header (integrity), `ep_{i+1
 | Payload: nested `SE.Enc` (length-preserving) | **Adopt verbatim** — `ep_i = SE.Enc(s^p_i, ep_{i+1})`, the fixed-size onion. |
 | `SE` = length-preserving IND-CCA wide-block PRP | **LIONESS** (Anderson–Biham), as Nym's `sphinx-packet` + Katzenpost use. **Adopt a crate — do NOT hand-roll the PRP** (CLAUDE.md; audit it per the dep rule). This is the chunk-2a gate item. |
 
-**Fixed-length / decoy reconciliation:** because `SE` is length-preserving, a k<MAX_HOPS route is made
-indistinguishable by **always running MAX_HOPS `SE` layers** — the `(MAX_HOPS-k)` extra layers keyed by
-INITIATOR-derived decoy keys (`KDF(circuit_secret, "decoy"‖i)`, §4.1). No relay holds a decoy key, but no
-relay needs to: each relay applies exactly ONE `SE.Dec` with its own circuit layer key, and the constant size
-+ the initiator pre-composing the decoy layers means the wire is byte-identical to a full-length packet. The
-terminal stops by circuit-table role. (This is the §4.4 filler concern resolved: with circuit routing there is
-no header to filler-pad — only the length-preserving payload, which the nested-SE handles natively.)
+**Fixed-length / decoy reconciliation (CORRECTED 2026-06-11, chunk 2b):** no decoy layers are needed. The
+length-preserving `SE` alone delivers hop-count privacy: a k-layer onion is byte-identical in SIZE to a
+MAX_HOPS-layer onion (every layer is the same length), and each relay's `SE.Dec` output is PRP-random, so a
+relay learns neither its depth nor the total hop count from the payload. There is simply no wire signal that
+counts the layers. Decoys/filler exist in Sphinx to hide its variable-length *header*; **circuit routing has
+no such header** (we route by `circuit_id`), so the payload onion is exactly the real k+1 layers — nested
+`SE.Enc` terminal-inward, peeled one per hop by circuit-table role. (This supersedes the earlier §4.4/§12.1
+"always run MAX_HOPS decoy layers" sketch, which mis-imported the Sphinx-header model AND was unimplementable —
+no hop holds a decoy key to unwrap it. Path-length privacy against a global observer is cover traffic's job,
+THREAT_MODEL §6.2, not the onion's.) Implemented as `protocol-core::payload_onion`.
 
 ### §12.2 Chunk-2 sub-decomposition (each Codex-gated, rule #27)
 
