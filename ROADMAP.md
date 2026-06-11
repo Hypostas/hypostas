@@ -186,6 +186,12 @@ First chips from Part XIV, shipping with every dyad:
 - [ ] Core Chip loadout functional
 - [ ] Revenue: first paying Cloud Dyad subscribers
 
+### Protocol Hardening (before Phase 2)
+
+Before the chain opens identity data to external dyads, `protocol-core` needs hybrid post-quantum cryptography — ML-DSA signatures + ML-KEM key exchange alongside the existing Ed25519 + X25519. The threat model is store-now-decrypt-later: any packet we emit today gets decrypted retroactively when a CRQC arrives (2030–2040 range). For a protocol holding generational relationship data, that's a correctness requirement, not a future concern.
+
+Full spec + migration plan: [`POST_QUANTUM.md`](./POST_QUANTUM.md). Added April 14, 2026.
+
 ---
 
 ## Phase 2 — Stack Expansion (Months 4-8)

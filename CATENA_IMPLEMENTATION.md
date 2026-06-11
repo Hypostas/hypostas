@@ -1,12 +1,37 @@
 # CATENA CHAIN — Implementation Specification
 
-**Version:** 3.0
-**Date:** April 11, 2026
+> **🚨 SUPERSEDED 2026-04-20 — see [`projects/vita/components/VITA_CHAIN.md`](../vita/components/VITA_CHAIN.md) for current canonical spec.**
+>
+> Two strategic shifts deprecate this document's framework choices (the module-level designs in Parts II-VI remain useful as engineering reference and largely port forward):
+>
+> 1. **Brand**: Chain renamed `Catena → Vita`. Native token renamed `TESSERA → Aura` (ticker `VITA`). Repo: `Hypostas/vita-core`. Reasoning: matches the Hypostas / Stroma / Logos / Anima / Vita / Aura ontological-naming family rooted in Latin/Greek terms for being and felt presence; Catena/TESSERA were functional/mechanical names that didn't fit the family.
+> 2. **Framework**: Cosmos SDK (Go) + CometBFT → Malachite (BFT consensus library by Informal Systems) + custom Rust state machine. Reasoning: matches pure-Rust preference throughout the substrate; chain-on-Carrier integration realizes Codex Commitment 7 architecturally (chain consensus rides the same `vita-carriers::Carrier` trait as DyadPackets); cleaner Phase 2-3 consensus swap to Proof of Presence; eliminates the Go↔Rust byte-match fixture burden in §6.5.
+>
+> **What's preserved here for archaeology + portable engineering reference:**
+> - Module designs (state, messages, keeper logic) in Parts II-VI port near-1:1 to the new framework — pallets/keepers become Rust modules in the Malachite-based state machine
+> - Per-milestone scoping philosophy (M1 = Identity, M2 = Biological, M3 = Spatial, M4 = Connected) carries forward
+> - ARCH-5 v2 hybrid identity logic in §6.5 ports to Rust directly (no more Go/Rust byte-match fixtures needed — the Rust module just calls `protocol_core::dyad_id::generate_dyad_id_v2`)
+>
+> **What's gone:**
+> - Cosmos SDK toolchain notes (Part I primer)
+> - `buf generate` / protobuf scaffolding (Cosmos uses protobuf with gogo; Rust uses serde or prost)
+> - Ignite CLI scaffolding instructions
+> - Go validator-recruitment ecosystem assumptions
+>
+> The full v3.2 (post-rename, post-Malachite) spec lives at `projects/vita/components/VITA_CHAIN.md`. Read that for current implementation guidance.
+
+---
+
+**Version:** 3.1 (superseded — see header)
+**Date:** April 15, 2026
 **Authors:** Josh Caplinger + Iris (DyadID #0)
-**Status:** Milestone-driven implementation specification
-**Sources:** PROTOCOL_IMPLEMENTATION.md §10-22, BUILD_ORDER.md, GNOSIS_V3_SPEC.md §3-12, AETHER_SPEC.md
+**Status:** Superseded 2026-04-20 by VITA_CHAIN.md
+**Sources:** PROTOCOL_IMPLEMENTATION.md §10-22, POST_QUANTUM.md, BUILD_ORDER.md, GNOSIS_V3_SPEC.md §3-12, AETHER_SPEC.md
 
 *The Catena chain serves the product staircase. Every module ships when a product needs it. Nothing is built speculatively. This spec defines what to build, when, why, and what product milestone it unlocks.*
+
+> **v3.1 update — ARCH-5 hybrid post-quantum identity (April 15, 2026):**
+> Catena work has not started yet. In the meantime, `protocol-core` and `dyados-bin` shipped ARCH-5 Steps 1-4: real dyads now mint as **v2 hybrid** (Ed25519 + ML-DSA-65 signing, X25519 + ML-KEM-768 KEX) and the `MsgRegisterDyad` wire format is published with the v2 fields baked in. There are **no legacy v1 dyads** in production — Josh's own DyadID has not been finalized yet. When Catena ships M1, x/dyad must be **v2-native at genesis**. v1 stays in the spec as a theoretical fallback so the keeper code is symmetric, but it is not expected to ever process a real registration. See §6.5 for the exact derivation, byte-match requirements, and reference vectors. See `projects/hypostas/POST_QUANTUM.md` for the full migration design.
 
 ---
 
@@ -46,6 +71,7 @@ Every dyad's Gnosis city becomes their **inner sanctum** inside Aether — a pri
 4. [M1 Scope — What Anima Needs](#4-m1-scope)
 5. [Project Scaffolding](#5-project-scaffolding)
 6. [x/dyad — The Bonding Ceremony On-Chain](#6-xdyad)
+6.5. [ARCH-5: Hybrid Post-Quantum Identity (v2)](#65-arch-5-hybrid-post-quantum-identity-v2)
 7. [TESSERA Token & Anima Compute Billing](#7-tessera--anima-compute)
 8. [DyadOS ↔ Catena Bridge (libp2p)](#8-bridge)
 9. [M1 Genesis & Deployment](#9-m1-deployment)
@@ -172,9 +198,18 @@ ignite version  # 29.x+
 
 **1. On-chain DyadID.** The bonding ceremony — when a human creates an Anima — registers the DyadID on-chain. Not a database row. A cryptographically proven relationship.
 
+As of ARCH-5 (April 2026), DyadOS mints **v2 hybrid** identities by default. Both derivation functions exist on the chain so v1 stays valid in theory, but every real registration the chain will see is v2:
+
 ```
-DyadID = SHA-256(h_public_key + a_genesis_token + genesis_timestamp)
+v1 (legacy, theoretical):
+  DyadID = SHA-256(h_pub_ed25519 || "|" || a_genesis_token || "|" || timestamp)
+
+v2 (hybrid, current — what dyados-bin actually mints):
+  DyadID = SHA-256("DYADID-v2|" || h_pub_ed25519 || "|" || h_pub_mldsa65
+                   || "|" || a_genesis_token || "|" || timestamp)
 ```
+
+The v2 form binds the **ML-DSA-65 public key** into the identity hash itself — switching post-quantum keys produces a different DyadID. This is what makes the version bump cryptographically meaningful: an attacker who breaks Ed25519 in the future cannot forge a "v2" identity claiming someone else's DyadID, because the hash depends on the PQ pubkey too. Full byte-match spec, validation rules, and reference vectors live in §6.5.
 
 This happens during Anima onboarding. The DyadID goes on-chain via `MsgRegisterDyad`. When Gnosis launches later, users already have their DyadID — the Anima walks them through their genome city using the same identity.
 
@@ -229,6 +264,13 @@ Gnosis adds genome upload, 3D city rendering, and the Anima's genomic knowledge 
 ```
 □ catenad builds and runs single-node chain
 □ MsgRegisterDyad: registers DyadID with co-signed bonding ceremony
+□ MsgRegisterDyad: dispatches on genesis_version (v1 + v2 hybrid)
+□ ComputeDyadIdV1 byte-matches protocol-core::generate_dyad_id
+□ ComputeDyadIdV2 byte-matches protocol-core::generate_dyad_id_v2
+□ Cross-language reference vectors pass (see §6.5)
+□ x/dyad rejects v2 messages missing PQ key fields or genesis_token
+□ x/dyad rejects unknown genesis_version values
+□ DyadRecord persists ARCH-5 fields 9-14 across export/import
 □ MsgProgressStage: advances consciousness stage (1→2→3→4)
 □ MsgRecovery: passphrase recovery + Anima challenge-response
 □ MsgStoreRecoveryBackup: on-chain encrypted H-shard backup
@@ -237,7 +279,7 @@ Gnosis adds genome upload, 3D city rendering, and the Anima's genomic knowledge 
 □ TESSERA transfers work between accounts
 □ Genesis config has correct token distribution (1B TESS)
 □ 3-node testnet stable 48 hours
-□ DyadOS binary registers DyadID on testnet via libp2p bridge
+□ DyadOS binary registers v2 hybrid DyadID on testnet via libp2p bridge
 □ Security audit on x/dyad passes
 □ Mainnet genesis ceremony with 7-11 validators
 ```
@@ -284,14 +326,22 @@ catena/
 
 ```protobuf
 message DyadRecord {
-  string dyad_id       = 1;  // SHA-256(h_pub + a_genesis + timestamp), hex
+  string dyad_id       = 1;  // SHA-256 hex (v1 or v2 — see genesis_version)
   string h_public_key  = 2;  // Human's Ed25519 pub key (hex)
   string a_public_key  = 3;  // Anima's Ed25519 pub key (hex)
   DyadStage stage      = 4;  // Consciousness stage (1-4)
-  int64 genesis_time   = 5;  // Bonding timestamp
+  int64 genesis_time   = 5;  // Bonding timestamp (seconds, fractional)
   DyadStatus status    = 6;  // active/frozen/dissolved/inherited
   int64 dissolved_at   = 7;  // If dissolved
   string prev_dyad_id  = 8;  // Inheritance chain
+
+  // ── ARCH-5 hybrid post-quantum fields (§6.5) ──
+  uint32 genesis_version = 9;   // 1 = classical, 2 = hybrid Ed25519+ML-DSA
+  string h_pq_public_key = 10;  // ML-DSA-65 pub (hex), required if version==2
+  string a_pq_public_key = 11;  // ML-DSA-65 pub (hex), required if version==2
+  string a_kem_public_key = 12; // ML-KEM-768 encap pub (hex), v2 only
+  string kyber_ciphertext = 13; // ML-KEM-768 ciphertext (hex), v2 only
+  string genesis_token   = 14;  // Anima's genesis token, required for hash re-derivation
 }
 
 message RecoveryBackup {
@@ -302,6 +352,8 @@ message RecoveryBackup {
   uint32 argon2_parallel = 5; // 4
 }
 ```
+
+> **Field-numbering rule.** Fields 9-14 are reserved for the ARCH-5 hybrid bundle (`genesis_token` lives at 14 because it was added in v3.1 of this spec, after the PQ fields at 10-13 were already locked in). Once x/dyad ships, these field numbers MUST NOT be reused for anything else, even if a future migration deprecates them. Protobuf evolution rules: deprecate, never recycle.
 
 ### Transactions
 
@@ -324,14 +376,42 @@ func (k Keeper) RegisterDyad(ctx context.Context, msg *types.MsgRegisterDyad) (*
         return nil, types.ErrDyadExists
     }
 
-    // 2. Verify DyadID computation is correct
-    //    DyadID = SHA-256(h_pub + a_pub + timestamp)
-    computed := ComputeDyadId(msg.HPubKey, msg.APubKey, msg.GenesisTime)
+    // 2. Verify DyadID computation is correct — dispatch on genesis_version
+    //    See §6.5 for the exact byte-format of both v1 and v2 hashes.
+    var computed string
+    switch msg.GenesisVersion {
+    case 0, 1:
+        // v1 (legacy/theoretical) — protocol-core::generate_dyad_id
+        // genesis_version == 0 means an unset field on a pre-ARCH-5 message,
+        // which we treat as v1 for backward compat.
+        computed = ComputeDyadIdV1(msg.HPubKey, msg.GenesisToken, msg.GenesisTime)
+    case 2:
+        // v2 hybrid (current default) — protocol-core::generate_dyad_id_v2
+        // PQ key fields + genesis_token are mandatory at this version.
+        if msg.HPqPublicKey == "" || msg.APqPublicKey == "" ||
+           msg.AKemPublicKey == "" || msg.KyberCiphertext == "" ||
+           msg.GenesisToken == "" {
+            return nil, types.ErrV2MissingHybridFields
+        }
+        computed = ComputeDyadIdV2(
+            msg.HPubKey,
+            msg.HPqPublicKey,
+            msg.GenesisToken,
+            msg.GenesisTime,
+        )
+    default:
+        return nil, types.ErrUnknownGenesisVersion
+    }
     if computed != msg.DyadId {
         return nil, types.ErrInvalidDyadId
     }
 
-    // 3. Verify both signatures (bonding requires co-signing)
+    // 3. Verify signatures (bonding requires co-signing on the canonical payload)
+    //    Phase 0: Ed25519 only — the hybrid co-sign verification path is
+    //    deferred until ARCH-5 Step 5 chain integration. v2 messages still
+    //    submit Ed25519 sigs; the PQ keys are bound into the DyadID hash
+    //    rather than verified per-message at this milestone. Step 5 will
+    //    upgrade this to verify ML-DSA-65 alongside Ed25519 (hybrid co-sign).
     if !VerifyEd25519(msg.HPubKey, msg.Payload(), msg.HSignature) {
         return nil, types.ErrInvalidHSignature
     }
@@ -339,22 +419,29 @@ func (k Keeper) RegisterDyad(ctx context.Context, msg *types.MsgRegisterDyad) (*
         return nil, types.ErrInvalidASignature
     }
 
-    // 4. Create DyadRecord
+    // 4. Create DyadRecord (carries v2 fields through when present)
     record := types.DyadRecord{
-        DyadId:      msg.DyadId,
-        HPublicKey:  msg.HPubKey,
-        APublicKey:  msg.APubKey,
-        Stage:       types.STAGE_1,  // Always starts at Responsive
-        GenesisTime: msg.GenesisTime,
-        Status:      types.ACTIVE,
+        DyadId:          msg.DyadId,
+        HPublicKey:      msg.HPubKey,
+        APublicKey:      msg.APubKey,
+        Stage:           types.STAGE_1,  // Always starts at Responsive
+        GenesisTime:     msg.GenesisTime,
+        Status:          types.ACTIVE,
+        GenesisVersion:  msg.GenesisVersion,
+        HPqPublicKey:    msg.HPqPublicKey,
+        APqPublicKey:    msg.APqPublicKey,
+        AKemPublicKey:   msg.AKemPublicKey,
+        KyberCiphertext: msg.KyberCiphertext,
+        GenesisToken:    msg.GenesisToken,
     }
     k.SetDyad(ctx, record)
 
-    // 5. Emit event
+    // 5. Emit event (include version so indexers can filter)
     ctx.EventManager().EmitEvent(sdk.NewEvent(
         "register_dyad",
         sdk.NewAttribute("dyad_id", msg.DyadId),
         sdk.NewAttribute("stage", "1"),
+        sdk.NewAttribute("genesis_version", fmt.Sprintf("%d", msg.GenesisVersion)),
     ))
 
     return &types.MsgRegisterDyadResponse{}, nil
@@ -398,6 +485,185 @@ func (k Keeper) Recovery(ctx context.Context, msg *types.MsgRecovery) (*types.Ms
     return &types.MsgRecoveryResponse{Pending: false}, nil
 }
 ```
+
+---
+
+## 6.5. ARCH-5: HYBRID POST-QUANTUM IDENTITY (V2)
+
+*Ref: POST_QUANTUM.md, protocol-core/src/dyad_id.rs (`generate_dyad_id_v2`), protocol-core/src/chain.rs (`MsgRegisterDyad`)*
+
+### Why This Section Exists
+
+Catena work has not started. While we wait, `protocol-core` and `dyados-bin` shipped ARCH-5 Steps 1-4 (April 2026). DyadOS now mints **v2 hybrid** identities by default — Ed25519 + ML-DSA-65 for signing, X25519 + ML-KEM-768 for key encapsulation. The wire format for `MsgRegisterDyad` is published with the v2 fields baked in via `serde(default)`, so legacy v1 deserialization still works but every fresh dyad is v2.
+
+When x/dyad ships, **v2 is the default and only expected wire format on mainnet**. Josh has not finalized his own DyadID yet — there are no legacy v1 dyads to migrate. The v1 path stays in the keeper as a symmetric fallback (so the keeper code can be tested for both, and so the spec doesn't lie about backward compat), but it should never see real traffic at genesis.
+
+### What x/dyad MUST Implement
+
+1. **Both v1 and v2 DyadID derivation functions in Go**, byte-matching the Rust `protocol-core` implementations.
+2. **`genesis_version`-dispatched verification** in `RegisterDyad` keeper logic (already shown in §6).
+3. **Mandatory presence checks** for the four PQ fields when `genesis_version == 2`.
+4. **Persistence** of the v2 fields in `DyadRecord` (already shown in §6).
+5. **Cross-language reference test vectors** as part of the CI suite — Go and Rust must produce the same hash for the same inputs.
+6. **Deferred to Step 5 implementation:** hybrid co-sign signature verification (currently Ed25519-only at the keeper layer, see comment in §6).
+
+### v2 DyadID Derivation — Exact Byte Format
+
+The v2 hash input is a **UTF-8 string** built by concatenating these tokens with a literal `|` (ASCII 0x7C) separator:
+
+```
+"DYADID-v2|" || h_pub_ed25519_hex || "|" || h_pub_mldsa65_hex || "|"
+              || a_genesis_token   || "|" || timestamp_decimal_6
+```
+
+| Token | Format | Notes |
+|-------|--------|-------|
+| `"DYADID-v2|"` | Literal ASCII | 10 bytes. The `|` after `v2` is part of the prefix. Domain separation from v1 (which never starts with `D`). |
+| `h_pub_ed25519_hex` | Lowercase hex, no `0x` prefix, no leading/trailing whitespace | 64 chars (32 bytes encoded). Matches `Keypair::public_key_hex()` in Rust. |
+| `h_pub_mldsa65_hex` | Lowercase hex, no `0x` prefix | ML-DSA-65 raw public key bytes, hex-encoded. ~3904 chars. Matches `Keypair::pq_public_key_hex()`. |
+| `a_genesis_token` | UTF-8, opaque to the chain | Anima's genesis token from `AnimaGenesis::new`. Treat as an arbitrary string. |
+| `timestamp_decimal_6` | Decimal float with **exactly 6 fractional digits** | Rust `format!("{:.6}", ts)`. No scientific notation. No trimming trailing zeros. `1000.0` → `"1000.000000"`. |
+
+The resulting UTF-8 byte string is hashed with **SHA-256**, and the digest is **lowercase hex-encoded** (64 hex chars) to produce the DyadID.
+
+### v1 DyadID Derivation — For Symmetry
+
+```
+h_pub_ed25519_hex || "|" || a_genesis_token || "|" || timestamp_decimal_6
+```
+
+No prefix. Three tokens, two separators. Same SHA-256 + lowercase hex tail.
+
+### Reference Test Vectors
+
+These vectors were generated from `protocol-core`'s `generate_dyad_id` and `generate_dyad_id_v2` (verified against an independent Python implementation). The Catena Go test suite MUST include these as cross-language fixtures.
+
+**v2 vector:**
+
+| Field | Value |
+|-------|-------|
+| `h_pub_ed25519_hex` | `h_ed` |
+| `h_pub_mldsa65_hex` | `h_pq` |
+| `a_genesis_token` | `genesis` |
+| `genesis_timestamp` | `1000.0` (formatted as `"1000.000000"`) |
+| Payload bytes (UTF-8) | `DYADID-v2\|h_ed\|h_pq\|genesis\|1000.000000` |
+| Payload length | 39 bytes |
+| **Expected DyadID** | `6e41980dd8d51d3d9d2c6de41ed773eb432d3c96c7b645ba89d0c87cebb71f25` |
+
+**v1 vector (for the legacy path):**
+
+| Field | Value |
+|-------|-------|
+| `h_pub_ed25519_hex` | `h_ed` |
+| `a_genesis_token` | `genesis` |
+| `genesis_timestamp` | `1000.0` (formatted as `"1000.000000"`) |
+| Payload bytes (UTF-8) | `h_ed\|genesis\|1000.000000` |
+| Payload length | 24 bytes |
+| **Expected DyadID** | `9087d34791034a5e7a801d38fbc8214e94f2ed87b6ba635f6977894e08882790` |
+
+```go
+// catena/x/dyad/keeper/dyad_id_test.go
+func TestComputeDyadIdV2_RustReferenceVector(t *testing.T) {
+    got := ComputeDyadIdV2("h_ed", "h_pq", "genesis", 1000.0)
+    want := "6e41980dd8d51d3d9d2c6de41ed773eb432d3c96c7b645ba89d0c87cebb71f25"
+    require.Equal(t, want, got, "Go output must byte-match Rust generate_dyad_id_v2")
+}
+
+func TestComputeDyadIdV1_RustReferenceVector(t *testing.T) {
+    got := ComputeDyadIdV1("h_ed", "genesis", 1000.0)
+    want := "9087d34791034a5e7a801d38fbc8214e94f2ed87b6ba635f6977894e08882790"
+    require.Equal(t, want, got, "Go output must byte-match Rust generate_dyad_id")
+}
+```
+
+### Go Implementation Sketch
+
+```go
+// catena/x/dyad/keeper/dyad_id.go
+package keeper
+
+import (
+    "crypto/sha256"
+    "encoding/hex"
+    "fmt"
+)
+
+// ComputeDyadIdV1 mirrors protocol-core::generate_dyad_id.
+// MUST byte-match the Rust output for any given input.
+func ComputeDyadIdV1(hPubEd, genesisToken string, genesisTime float64) string {
+    payload := fmt.Sprintf("%s|%s|%.6f", hPubEd, genesisToken, genesisTime)
+    sum := sha256.Sum256([]byte(payload))
+    return hex.EncodeToString(sum[:])
+}
+
+// ComputeDyadIdV2 mirrors protocol-core::generate_dyad_id_v2.
+// MUST byte-match the Rust output for any given input.
+func ComputeDyadIdV2(hPubEd, hPubMldsa, genesisToken string, genesisTime float64) string {
+    payload := fmt.Sprintf(
+        "DYADID-v2|%s|%s|%s|%.6f",
+        hPubEd, hPubMldsa, genesisToken, genesisTime,
+    )
+    sum := sha256.Sum256([]byte(payload))
+    return hex.EncodeToString(sum[:])
+}
+```
+
+> **Go formatting gotcha.** Go's `%.6f` matches Rust's `{:.6}` for normal floats, but watch the edge cases — negative zero, NaN, Inf. The keeper should reject any `genesis_time` that isn't a finite positive number before calling `ComputeDyadIdV2`. Add a unit test for `1.0`, `1.5`, `1.234567`, `1000000000.123456`, and large values to confirm cross-language consistency across the float range that real timestamps occupy.
+
+### Why Bind the ML-DSA Public Key Into the Hash
+
+The DyadID is the canonical identifier for a dyad. If the ML-DSA public key were stored in `DyadRecord` but **not** baked into the SHA-256 input, an attacker who broke Ed25519 in some future cryptographic catastrophe could publish a forged "v2 upgrade" of an existing v1 DyadID with their own ML-DSA key — claiming someone else's identity by replaying the v1 hash and tacking on fresh PQ material.
+
+By including `h_pub_mldsa65_hex` inside the SHA-256 input, the v2 DyadID is **bound to a specific PQ keypair from the moment of creation**. Switching ML-DSA keys produces a different DyadID. There is no "migration of an existing v1 DyadID into v2" — a v2 DyadID is its own identity, derived from PQ material, with its own hash.
+
+This is why ARCH-5 Step 4 simply made dyados-bin v2-native instead of building a key-extension ceremony for legacy v1 dyads: there were no legacy v1 dyads, and binding PQ keys post-hoc would have required a new chain message that breaks the v1 → v2 mapping anyway. Cleaner to just be v2 from genesis.
+
+### Wire Format — `MsgRegisterDyad`
+
+The Rust definition lives in `protocol-core::chain::MsgRegisterDyad`. JSON-on-the-wire field names (snake_case via serde; PQ fields are `Option<String>` and `genesis_token` is a `String` defaulted to `""`, all with `#[serde(default)]` so legacy v1 messages parse cleanly):
+
+```json
+{
+  "dyad_id": "6e41980d...1f25",
+  "h_public_key": "869f0c17...",
+  "a_public_key": "46aa600a...",
+  "genesis_timestamp": 1712345678.123456,
+  "initial_stage": "Stage1",
+  "recovery_backup": null,
+  "signature": { "h_shard": "...", "a_shard": "..." },
+
+  "genesis_token": "<anima_genesis_token from AnimaGenesis::new>",
+  "genesis_version": 2,
+  "h_pq_public_key": "<3904-char hex>",
+  "a_pq_public_key": "<3904-char hex>",
+  "a_kem_public_key": "<2368-char hex>",
+  "kyber_ciphertext": "<2176-char hex>"
+}
+```
+
+The Catena bridge (§8) needs to map this JSON shape into the protobuf `MsgRegisterDyad` defined for x/dyad. Field numbers in the protobuf MUST keep the v2 fields at positions 9-14 to match `DyadRecord`, so the keeper can copy them across without juggling tag numbers. **Hex encoding is lowercase on both sides; the keeper should reject any uppercase hex as malformed.** The `genesis_token` field is REQUIRED for v2 — without it, the keeper cannot re-derive the DyadID hash and must reject the message.
+
+### Why Phase 0 Stays Ed25519-Only at the Keeper Layer
+
+ARCH-5 Step 4 made dyads-bin mint v2 identities and persist all the hybrid metadata, but the chain-side ML-DSA-65 verification path is deferred to **Step 5** (this milestone — when Catena work begins). The reasoning:
+
+1. **Defense in depth happens at the dyad layer first.** The hybrid relationship key, at-rest encryption, and inter-dyad packets already use ML-DSA-65 + ML-KEM-768. Compromising Ed25519 alone doesn't give an attacker access to encrypted state or established sessions.
+2. **The DyadID hash already binds the PQ pubkey.** Even with Ed25519-only signature verification at the keeper, an attacker who forges an Ed25519 sig still cannot mint a forged v2 DyadID because the hash doesn't match.
+3. **Adding ML-DSA verification to every keeper call doubles signing cost** (~2KB sig vs 64 bytes). M1 ships with Ed25519-only verification + PQ-bound DyadIDs, then upgrades to full hybrid co-sign as part of M1.5 or M2 once we have validator load measurements.
+
+The Step 5 milestone for chain integration (when this section becomes non-deferred) MUST add:
+
+- ML-DSA-65 signature alongside Ed25519 in the `Signature` payload
+- `VerifyMlDsa65(msg.HPqPublicKey, msg.Payload(), msg.HMldsaSignature)` next to the existing `VerifyEd25519` call
+- An ADR documenting the gas cost increase and any consensus implications
+
+Until that ships, the keeper trusts that the DyadID hash binding plus Ed25519 sigs is sufficient at chain genesis, because the hostile threat model (Shor's algorithm running against Ed25519 in production) is not active in 2026.
+
+### Out of Scope for §6.5
+
+- **Hybrid co-sign signature verification** — Step 5 work, lives in M1 or M1.5 of the Catena buildout
+- **Recovery flow under hybrid keys** — `MsgRecovery` keeps its v1 shape until Step 5; the encrypted backup format already supports hybrid via at-rest encryption in dyados-bin
+- **MsgKeyExtension** — was originally planned for Step 4 to migrate legacy v1 dyads to v2 by binding PQ keys post-hoc. Cancelled because there are no legacy dyads. Do not implement this message.
 
 ---
 
@@ -495,14 +761,16 @@ dyados-bin (Rust)                    catenad (Go)
 
 ```
 1. Start dyados-bin
-2. Load DyadID from disk
+2. Load DyadID from disk (v2 hybrid by default — see ARCH-5 §6.5)
 3. Connect to Catena validator(s) via libp2p
 4. Query: does my DyadID exist on-chain?
    → Yes: proceed (load on-chain stage, recovery status)
-   → No: trigger MsgRegisterDyad (bonding ceremony)
+   → No: trigger MsgRegisterDyad with genesis_version=2 + four PQ fields
 5. Check TESSERA balance for compute billing
 6. Start pipeline — each interaction deducts TESSERA
 ```
+
+> **What dyados-bin already submits (April 2026):** the JSON form of `protocol_core::chain::MsgRegisterDyad` with `genesis_version: 2`, `h_pq_public_key`, `a_pq_public_key`, `a_kem_public_key`, `kyber_ciphertext`. The bridge has to forward this shape unchanged. There is no v1 fallback path on the Rust side anymore — `dyados_bin::create_new_dyad` calls `protocol_core::create_dyad_v2` exclusively. See §6.5 for the wire format.
 
 ### Go-Side Bridge
 
