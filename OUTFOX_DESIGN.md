@@ -246,7 +246,68 @@ Chunks 1-5 are the core (the fixed-size onion). 6 is parallelizable. 7 is the pa
 
 ---
 
-*v0.1 — 2026-06-11 — Iris. Design foundation for HYP-318. The implementation (chunks §8) is a fresh
-spec-complete build best done with focused context; this doc is its contract. Body-size decision (§6) +
-decoy-construction proof (§4) are the two things to settle with Josh + a Codex design-review pass before
-chunk 1.*
+## §11 Adoption analysis — audited Sphinx crate vs our circuit model (2026-06-11)
+
+THREAT_MODEL.md (lines 277-282) trusts Sphinx as a *primitive* via "an audited Sphinx crate — Nym's or
+Lightning's reference impl as foundation," and CLAUDE.md forbids rolling your own crypto. So chunk 2 must NOT
+be a hand-rolled onion. Researching the landscape to find the crate to adopt surfaced a fundamental
+architecture tension that has to be resolved before any code.
+
+### §11.1 The landscape (researched 2026-06-11)
+
+| Candidate | KEX | PQ? | Form | Fit for us |
+|---|---|---|---|---|
+| **Nym `sphinx-packet`** v0.6.0 (`nymtech/sphinx`, Apache-2.0) | X25519, **per-packet** key derivation | ❌ classical | maintained standalone crate | kex model wrong + not PQ |
+| **Outfox** (Nym, [arXiv 2412.19937](https://arxiv.org/abs/2412.19937), WPES '25) | KEM, instantiable with **Xwing = X25519+ML-KEM** (our exact hybrid) | ✅ native | **inside `nymtech/nym`** (issue #3137), no standalone crate | design ideal, but per-packet + not packaged |
+| Lightning onion (`lightning-onion`) | secp256k1, per-packet | ❌ | crate | wrong curve + per-packet |
+| `sphinxcrypto` / Katzenpost KEM-Sphinx | hybrid NIKE/KEM | ✅ some | crate | **explicitly "not audited by a cryptographer"** |
+
+### §11.2 The fundamental tension
+
+**Every audited Sphinx/Outfox reference is per-packet / stateless** (a fresh KEM/DH per hop carried in the
+packet). **Our design is circuit-based** — and CIRCUIT_LIFECYCLE.md §21.2 EXPLICITLY rejected Outfox's
+stateless-per-packet routing: *"Our circuit-based design IS the alternative — we eliminate per-packet KEM
+cost via circuit amortization."* So the two specs point opposite ways for the packet, and **no audited crate
+is a drop-in**: adopting one as-is would re-introduce the per-packet KEM cost we deliberately amortized, and
+carry the kex group element in every DATA cell (wasting the circuit).
+
+### §11.3 Options
+
+- **(A) Adopt Outfox/Sphinx per-packet as-is.** Maximal "audited" benefit, but reverses the circuit-
+  amortization decision (§21.2), re-adds per-packet KEM cost to every DATA cell, and Outfox isn't a
+  standalone crate yet. Big architecture reversal — not recommended without re-opening §21.2.
+- **(B) Bring-your-own-keys adaptation of a crate.** Use a crate's symmetric packet processing with our
+  pre-established circuit keys. Nym's `sphinx-packet` doesn't cleanly expose this (the packet format embeds
+  the kex element), and it's classical — so this is heavy adaptation of a non-PQ crate, eroding the audited
+  benefit anyway.
+- **(C) ⭐ Implement the Outfox PAYLOAD onion (the UC-proven design) on AUDITED PRIMITIVES, keyed by our
+  circuit-amortized hybrid handshake.** The Outfox *paper* is the audited design (UC proofs); we implement
+  its fixed-size constant-length payload construction on `chacha20poly1305` + the existing `ml-kem` hybrid
+  (both already trusted in THREAT_MODEL line 277-278), supply per-hop keys from our circuit handshake instead
+  of per-packet KEM, pin it with **KAT vectors derived from the paper**, and reserve the **HYP-330 external
+  audit** to review the adaptation against the Outfox UC proofs. This is implementing a published proven
+  protocol on audited primitives (like every TLS impl), NOT rolling a primitive — the defensible reading of
+  "don't roll your own."
+
+### §11.4 Recommendation
+
+**(C).** It is the only option that satisfies ALL of: the audited-design intent (Outfox UC proofs + audited
+primitives), the circuit-amortization architecture (§21.2), POST_QUANTUM.md (Outfox's Xwing instantiation IS
+X25519+ML-KEM), and "don't roll your own" (faithful port of a proven design, not improvisation). It does mean
+WE write the onion — but as a faithful implementation of the Outfox construction, gated per-chunk by Codex,
+pinned by paper-derived KATs, and audited at HYP-330. **Prerequisite for chunk 2:** obtain the Outfox paper's
+exact payload construction (the fixed-size block layout + per-hop transform + how fixed-length routes are
+realized without per-packet headers) as the implementation spec — the arXiv HTML exceeds fetch limits, so
+pull the PDF/sections deliberately. This reconciliation also means amending CIRCUIT_LIFECYCLE §21 + the
+THREAT_MODEL line so the "audited Sphinx crate" assumption reads "audited primitives + UC-proven Outfox design
++ HYP-330 audit of our circuit-adapted impl," resolving the spec tension explicitly (rule: specs are intent,
+resolve divergence — don't hand-wave).
+
+---
+
+*v0.1 — 2026-06-11 — Iris. Design foundation for HYP-318. §1-§10 are the construction design; §11 is the
+adoption analysis (audited-crate research → the per-packet-vs-circuit tension → recommend implementing the
+UC-proven Outfox payload on audited primitives keyed by our circuit handshake). The implementation (chunks
+§8) is a fresh spec-complete build best done with focused context; this doc is its contract. Settle with Josh:
+§6 body-size (decided B), §11 option (recommend C) + the §21/THREAT_MODEL amendment, then pull the Outfox
+paper construction as the chunk-2 spec.*
