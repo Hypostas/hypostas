@@ -901,14 +901,14 @@ We adopt three patterns from [Outfox: A Postquantum Packet Format for Layered Mi
 
 ### §21.2 Rejected
 
-1. **Stateless-per-packet routing.** Outfox optimizes for Loopix's stateless mixnet pattern. Our circuit-based design IS the alternative — we eliminate per-packet KEM cost via circuit amortization. Compatible threat models; incompatible architectures.
+1. **Stateless-per-packet routing.** Outfox optimizes for Loopix's stateless mixnet pattern. Our circuit-based design IS the alternative — we eliminate per-packet KEM cost via circuit amortization. Compatible threat models; incompatible architectures. **Scope note (2026-06-11):** we reject Outfox's *routing/kex* model (per-packet KEM) but ADOPT its *payload* construction (the fixed-size constant-length onion) — implemented on audited primitives and keyed by our circuit-amortized handshake. This is the §11 resolution of OUTFOX_DESIGN.md: no audited Sphinx/Outfox crate is a drop-in (all are per-packet), so the UC-proven payload format is ported onto our circuit keys, HYP-330-audited, not hand-invented.
 2. **Pure ML-KEM (no X25519).** Outfox drops X25519 from the hybrid kex. We keep hybrid for defense-in-depth: losing X25519 means trusting ML-KEM alone, which is less conservative than POST_QUANTUM.md mandates.
 3. **Batch mixing delays.** Outfox includes Loopix-style per-hop batching delays. We use constant-rate cover traffic instead (THREAT_MODEL §6.2.1) — different latency tradeoff suited to real-time use.
 
 ### §21.3 Spec cross-references
 
-- This section spec'd at design level; implementation details in CIRCUIT_LIFECYCLE.md when Phase 2 kicks off
-- UC security proof framework will reference standard Camera-style UC notation in eventual external audit deliverables
+- **Implementation design: `OUTFOX_DESIGN.md`** (HYP-318) — the fixed-size constant-length onion construction (§1-§10) + the audited-crate adoption analysis (§11, the Option-C resolution this §21.2 scope note records). Chunk 1 (the `MAX_HOPS_PER_CIRCUIT` bound) is merged; chunk 2 (the Outfox payload onion) implements the UC-proven design on audited primitives keyed by the circuit handshake.
+- UC security proof framework will reference standard Camera-style UC notation in eventual external audit deliverables (HYP-330), reviewing our circuit-adapted Outfox impl against the paper's proofs.
 
 ---
 

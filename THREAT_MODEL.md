@@ -275,11 +275,11 @@ What Hypostas trusts. If these are wrong, the privacy guarantees collapse.
 | Assumption | What we trust | Consequence if wrong |
 |---|---|---|
 | **Cryptographic primitives** | Ed25519, X25519, ChaCha20-Poly1305, SHA-256, HKDF, AES-256-GCM, ML-DSA-65, ML-KEM-768, Sphinx | Defense collapses; everything captured today decryptable; identities forgeable |
-| **Implementation quality** | `ed25519-dalek`, `x25519-dalek`, `chacha20poly1305`, `ml-kem`, audited Sphinx crate | Side-channels, timing leaks, key extraction |
+| **Implementation quality** | `ed25519-dalek`, `x25519-dalek`, `chacha20poly1305`, `ml-kem` — and the Outfox payload onion built on those audited primitives (see the onion-format row), NOT a per-packet Sphinx crate | Side-channels, timing leaks, key extraction |
 | **Endpoint integrity** | The dyad's own hardware + OS | Endpoint compromise reveals all keys; protocol can't save |
 | **Vita Chain consensus** | Honest majority of validators, no genesis-block compromise | Intro records falsifiable; relay attestations gameable |
 | **Hash-based identity** | DyadId = SHA-256 of pubkey is collision-resistant | DyadId forgery |
-| **Audited Sphinx implementation** | We use Nym's or Lightning's reference impl as foundation | Replay attacks, hop-count fingerprinting, key-extraction |
+| **Onion packet format** | The UC-proven **Outfox** payload construction ([arXiv 2412.19937](https://arxiv.org/abs/2412.19937), Nym, WPES '25) implemented on our audited primitives and keyed by the circuit handshake — NOT a drop-in audited crate: every audited Sphinx/Outfox reference is per-packet/stateless, incompatible with our circuit-amortized design (CIRCUIT_LIFECYCLE §21.2). HYP-330 audits our circuit-adapted impl against Outfox's UC proofs; paper-derived KATs pin the format. See OUTFOX_DESIGN.md §11. | Replay attacks, hop-count fingerprinting, key-extraction |
 | **Random number generation** | OS CSPRNG (`getrandom`) is unpredictable | Predictable nonces → key recovery |
 | **Time source** | System clock is approximately correct (±60s for freshness window) | Replay-attack window opens |
 | **Memory safety** | Rust prevents UAF, double-free, buffer overflow in our code | Memory corruption → key extraction, RCE |
