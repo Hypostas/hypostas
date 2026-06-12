@@ -265,7 +265,13 @@ H+A-2-of-2-signed device structures are `DeviceCapabilityCert` + `RevokeDeviceRe
 device signing pubkey binds into a SIGNED cert, never the bundle.** `DeviceInfo` may carry a convenience copy, but
 verification trusts only the cert's copy (or cross-checks the two).
 
-### 8.3 Generalize `DeviceCapabilityCert` into the signed fleet device record
+### 8.3 ~~Generalize `DeviceCapabilityCert`~~ — SUPERSEDED by §8.7
+
+> **[SUPERSEDED 2026-06-12 by §8.7.](#87-codex-identity-consult-outcome-2026-06-12-run-b7enk0vl4--fleetdevicecert-not-cert-overload)**
+> The Codex identity-consult **rejected** overloading `DeviceCapabilityCert` (it's biosensor/transport-scoped,
+> the runtime ignores its version/sig/expiry on the hot path, and adding a required field breaks old certs before
+> verify). The resolution is a **separate `FleetDeviceCert`** — see §8.7. The original §8.3 text is retained below
+> as the audit trail of the rejected approach.
 
 Rather than a parallel structure, **generalize the existing H+A-co-signed cert**: add
 `device_signing_pk: Vec<u8>` (the hybrid pubkey bytes: Ed25519 32B ‖ ML-DSA pk) to its `canonical_signing_bytes`
@@ -314,5 +320,55 @@ prerequisite; nothing in `SesameSession` can run without it.
 - **Chunk 1c (if 1a/1b grow) — the join-flow generalization** §8.4 (subsequent fleet devices via the extended
   `build_accept`).
 
-Chunks 2–4 + the delivery seam are unchanged from §7.7. **8.1's intra-dyad-forgery justification + 8.3's
-version-branch backwards-compat are the two things chunk 1a's Codex gate must confirm.**
+Chunks 2–4 + the delivery seam are unchanged from §7.7. *(Chunk 1a's cert decision is revised by §8.7.)*
+
+### 8.7 Codex identity-consult outcome (2026-06-12, run `b7enk0vl4`) — `FleetDeviceCert`, not cert-overload
+
+Codex gpt-5.5/high read the real cert + ratchet + bootstrap code and ruled on §8's three open calls:
+
+- **Q1 (§8.1 — per-device signing key necessary): CONFIRMED.** No existing binding makes the signature redundant
+  — `RatchetManager` + circuit identity are both dyad-level (no device selector); `SenderKeyDistribution::verify`
+  binds `sender_device_id` only if the caller supplies that device's authenticated `HybridPubkey`. Without it a
+  compromised A2 can claim `sender_device_id = A1`. Use the hybrid device signature in chunk 1a. (A per-device-pair
+  MAC is a *later* optimization for strictly-pairwise records; it does NOT remove the cert need — the peer still
+  needs an authenticated source for A1's device keys.)
+
+- **Q2 (§8.3 — extend cert vs new record): OVERRIDES §8.3 → a separate `FleetDeviceCert`.** Do NOT overload
+  `DeviceCapabilityCert`:
+  - It is transport/biosensor-scoped — the runtime collapses it to a peer-id→`PacketType` allowlist and
+    **ignores version/signature/expiry on the hot path** (`inbound.rs:523`); the gate is Transport-only and circuit
+    packets bypass it (`inbound.rs:1487`). `build_accept` is hardwired to `iphone_peer_id` + `vec![Biosensor]`
+    (`pairing.rs:848,858`).
+  - Fleet identity needs *different* semantics: compact `DeviceId`, the device signing pubkey, Sesame PKE material,
+    membership/revocation — NOT a packet allowlist.
+  - **Backcompat trap:** adding a *required* `device_signing_pk` to the existing cert breaks old serialized certs
+    **before** `verify` runs; and bumping `PAIRING_PROTOCOL_VERSION` for a cert-schema change is rejected by
+    `PairingJoiner::from_ticket` + `decrypt_a_shard` (`pairing.rs:925,986`).
+  - **→ Add a purpose-built `FleetDeviceCert`** with its OWN cert-specific version, an H+A 2-of-2 hybrid signature,
+    and explicit Sesame fields (`dyad_id`, `DeviceId`, `device_peer_id`, `device_signing_pk`, the device PKE
+    pubkeys, `issued_at_ms` + optional expiry, `signature_field`). **Reuse the signing helper logic** (`sign_hybrid`
+    + the `DyadSignature` field shape), not the cert type. `DeviceCapabilityCert` stays byte-for-byte untouched.
+
+- **Q3 (§8.4 — genesis self-issue): CONFIRMED, with the timing constraint** already found: issue inside the genesis
+  bootstrap window where H+A are both loaded (`create_new_dyad` returns both, `bootstrap.rs:1913/1949`; H drops at
+  `:206`). No circularity — the founding device IS the genesis trust root.
+
+**Missed (fold in):**
+
+1. **NEW — sender-key MESSAGE authentication ≠ the distribution signature.** Signing only `SenderKeyDistribution`
+   does not authenticate every future Option-B *message*: any recipient that learns the sender chain key can derive
+   message keys and forge as the sender (the classic sender-keys receiver-forgery problem). **Each Option-B message
+   must also carry a per-message sender authentication** (the sender device signs the message, à la Signal's
+   `SenderKeyMessage`) — so the per-device signing key is used for BOTH the distribution AND every Option-B message.
+   This shapes the Option-B message format → **chunk-2 contract item.**
+2–3. Cert version separate from `PAIRING_PROTOCOL_VERSION` + old-cert *deserialization* tested (not just verify) —
+   both satisfied by the separate `FleetDeviceCert` (its own version; the shipped cert's wire shape is unchanged).
+4–6. Reaffirm §7.5.2 (recipient+peer-dyad binding), §7.5.5 (receive-state triple), §7.5.4 (Sesame revocation
+   independent of the raw-transport `CapabilityRegistry`) — all mandatory, unchanged.
+
+**Revised chunk 1a:** `FleetDeviceCert` (new struct + cert-specific version + canonical bytes + H+A hybrid
+sign/verify, reusing `sign_hybrid`) + device `Keypair` generation + the sealed `SesameDeviceRegistry` (§8.5) +
+genesis self-issue in the bootstrap window (§8.4). Integration test (rule #27): generate device keypair →
+self-issue `FleetDeviceCert` (H+A co-sign) → persist sealed → reload → verify the cert's H+A signature + the
+signing-key round-trip; plus a backcompat test that the shipped `DeviceCapabilityCert` wire shape is untouched. The
+gate must confirm §8.1 (forgery justification) + the `FleetDeviceCert` isolation from the biosensor cert.
