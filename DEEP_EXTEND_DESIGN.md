@@ -177,3 +177,48 @@ Is migrating the 1-hop EXTENDED to the Outfox reverse path (§D3) worth retiring
 **migrate** (one reverse-EXTENDED path is simpler + the old path's S-cap is a latent footgun if a 1-hop
 response ever grows), but the migration touches a working, heavily-gated path — confirm the cutover guard
 (the 1→2 regression test) is sufficient before retiring the old code.
+
+## 8. Codex DESIGN-review outcome (gpt-5.5/high, 2026-06-12) — core VALIDATED, chunk plan refined
+
+The review **validated the core mechanism** against the real code: the Outfox reverse keys are available
+exactly where §3 assumes — a relay wraps a reverse layer with `session_key_out` under `OUTFOX_REV_INFO`
+(circuit_manager `mod.rs:1533/1569`), the initiator peels with each hop's `layer_key_recv` and authenticates
+with the terminal hop's reverse key (`mod.rs:1602/1611`), `layer_key_recv == relay session_key_out` for
+reverse Outfox (`mod.rs:66`), and `finalize_extend` installs the new hop's reverse key as `layer_key_recv`
+(`mod.rs:1969`). For a 2→3 extend the sender circuit still has hops `[R1,R2]` while the EXTENDED is in flight,
+so `open_reply_outfox` peeling exactly those two reverse layers is the right shape. The `next_hop_circuit_id`
+that `try_reverse_forward_outfox` demuxes on is already provisioned by `try_forwarded_extend` from the signed
+next-hop response. KIND inside the terminal-sealed innermost layer preserves position-obliviousness (relays
+never decrypt the inner; they see only version + clear circuit_id + `CMD_DATA` + size class). **6 refinements
+fold into the chunk plan (§5 is amended by these):**
+
+- **R1 — Chunk 1 is a VERTICAL reverse-DATA slice, not "no transport change."** Changing `open_reply_outfox`
+  to return `(kind, body, peer, replay_tag)` means the reverse-DATA receive (`on_data_outfox`, which today
+  hands `message` straight to `DeliveredData.inner`, `circuit_transport.rs:1639/1651`) must STRIP the kind
+  byte, and `reply()`'s size-class selection (`circuit_transport.rs:771`) must account for the extra byte.
+  Chunk 1 = seal `KIND_DATA` + open/strip it + reject/record unknown KIND + keep every existing reverse-DATA
+  test green.
+- **R2 — Chunk 2 needs a dedicated broker-bypass seal, NOT `seal_reply_outfox`.** `seal_reply_outfox` rejects
+  a terminal leg with `extend_in_flight` (`mod.rs:1527`), but the broker leg IS reserved
+  `extend_in_flight=true` by `on_extend` (`circuit_transport.rs:1292`, `mod.rs:1229`). Add a scoped
+  `seal_extended_reply_outfox` allowed specifically for the reserved EXTEND-broker state (mirrors how the old
+  `try_forwarded_extend` bypasses by `seal_cell`-ing directly with `leg.session_key_out`); ordinary app
+  `reply()` stays blocked during `extend_in_flight`. Route the cell via `deliver_forwarded` (raw
+  version-demuxed frame, `circuit_transport.rs:791`), NOT the old `deliver_cell` path.
+- **R3 — Chunk 3 preserves the `on_extended` security ordering.** Replay-check BEFORE finalize, restore the
+  pending initiator-extend on `finalize_extend` failure (mirror `on_extended` at `circuit_transport.rs:1394`),
+  and TEST malformed/unknown KIND so authenticated junk is neither delivered as DATA nor consumes a pending
+  EXTEND.
+- **R4 — Chunk 4 adds `hops.len() < MAX_HOPS_PER_CIRCUIT` BEFORE `begin_extend`.** Removing the guard alone is
+  unsafe: `seal_extend` seals through the existing hops, so a 5-hop circuit could seal an EXTEND + then
+  `finalize_extend` would append a 6th hop. The explicit max-hop check replaces the 1-hop-only guard.
+- **R5 — Versioning = ATOMIC upgrade (resolved).** There is no deployed mixed-peer network (single repo,
+  pre-launch); all nodes upgrade together. The KIND byte is added UNIFORMLY to every reverse Outfox inner
+  payload — no legacy-fallback / version bump needed. (If a deployed network ever predates this, bump
+  `OUTFOX_CELL_VERSION` instead.) Stated so the assumption is explicit, not silent.
+- **§7 RESOLVED — migrate the 1-hop path to Outfox**, but retire `open_extended` + the `CMD_EXTENDED`
+  `on_extended` arm ONLY after the 1→2 telescope test passes through the new `on_data_outfox` KIND_EXTENDED
+  branch AND a grep confirms no producer still emits `CMD_EXTENDED`. Caveat the review added: the old 1-hop
+  path is NOT subject to the reverse S-cap (it's a single `CMD_EXTENDED` cell sized by `smallest_fitting`,
+  `circuit_transport.rs:1180`) — so migrate for UNIFORMITY + deep-path correctness, not because 1-hop shares
+  the S-cap bug. Two finalize/replay/error paths for one protocol event is the thing to avoid.
