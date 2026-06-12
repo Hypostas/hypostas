@@ -93,7 +93,35 @@ A pinned guard (§4) knows the sender's transport address. For most tiers that i
 - A compromised bridge learns only a sequence of unlinkable per-window tunnel IDs, never a stable sender identity, and (because the introduction was out-of-band on a different carrier) cannot correlate the tunnel's carrier traffic with the introduction.
 - Bridge tunnels are **Critical-tier only** — they cost an out-of-band introduction + extra handshake traffic, so chat-class circuits use the standard guard (§4) path.
 
-**Deferred to implementation kickoff:** the detailed pre-introduction protocol (~500–1000 LOC per HYP-168), the bridge-side rotating-ID table + its at-rest sealing, and the carrier-diversity enforcement (introduce-carrier ≠ tunnel-carrier).
+### §7.1 The pre-introduction protocol
+
+The pre-introduction establishes the sender↔bridge shared secret that the rotating tunnel id (`protocol_core::bridge_tunnel`, built) is derived from. It reuses existing primitives — **no new crypto**: the PQ-hybrid key agreement is the same X25519 + ML-KEM kex as a circuit handshake (`circuit_kex` / `hybrid_pke`), and the bridge's at-rest table seals with AES-256-GCM (`crypto.rs`), exactly as the circuit-identity + Sesame stores do.
+
+```
+Sender A                         out-of-band carrier C_intro          Bridge B
+────────                         (≠ the tunnel carrier C_tunnel)      ────────
+A: knows B's published RelayAttestation (§4) → B's static X25519 + ML-KEM keys
+A: ephemeral PQ kex to B's static keys (X25519 DH + ML-KEM encapsulate)
+A ── intro_request { eph_x_pk, ml_kem_ct, A's reachability hint } ──▶ B   (over C_intro)
+B: decapsulate + DH → shared_secret S = HKDF(dh ‖ ss_kem, "hyp-bridge-introduction-v1")
+B: store a BridgeTunnel { S (zeroizing), enrolled_at, valid_through };  NOT A's identity/address
+B ── intro_ack (authenticated under S) ──▶ A
+A: store BridgeTunnel { S, B's keys } for tunnel use
+```
+
+Both sides now hold `S`. Neither side ever puts A's *stable* identity on `C_tunnel`: A presents only `bridge_tunnel_id_for(S, B, today)` at tunnel-build time.
+
+### §7.2 Tunnel use + the bridge-side table
+
+- **Bridge table.** `BridgeTunnelTable: HashMap<[u8; 32] /*today's tunnel id*/, BridgeTunnel>`, rebuilt/extended each day: for every active `BridgeTunnel`, B computes `bridge_tunnel_id_for(S, self_dyad, date_for(now))` and indexes it. So a lookup is O(1) and B never needs A's identity to route. The table seals at rest with the dyad master key (AES-256-GCM, the `PersistedSchedulerState` / `SesameDeviceRegistry` pattern); `S` is the only secret + is zeroized on drop + sealed at rest.
+- **Build.** On a Critical circuit-build over `C_tunnel`, A presents `tunnel_id = bridge_tunnel_id_for(S, B, today)`. B looks it up → `BridgeTunnel` → forwards as the entry hop **without** the standard guard handshake that would bind A's transport address. The downstream hops are the normal §3 onion.
+- **Rotation.** The id rotates at the §16 routing-identity day boundary (`bridge_tunnel`'s `date_for`); B prunes the prior day's index entries, so a compromised B that logs ids sees only a sequence of unlinkable per-day ids, never one identity. B refuses an id outside `[enrolled_at, valid_through]`.
+
+### §7.3 Carrier-diversity invariant (enforced)
+
+`C_intro` MUST differ from `C_tunnel` (e.g. introduce over Bluetooth-Direct / mDNS-LAN, tunnel over the internet). This is the property that stops a compromised B from correlating the introduction's carrier traffic with the tunnel's: B sees A's address only on `C_intro` (the introduction) and only the rotating id on `C_tunnel` (the traffic), and the two carriers don't share an observer vantage. The implementation enforces it (refuse a tunnel build on the same carrier the introduction used).
+
+**Deferred to implementation:** the concrete `intro_request`/`intro_ack` wire frames (follow the `circuit_kex` handshake encoding), the `BridgeTunnelTable` daily-rebuild scheduler hook, and the §7.3 carrier-id plumbing (the carrier layer must expose "which carrier is this build on"). ~400–800 LOC; the rotating-id primitive (`bridge_tunnel`) is built.
 
 ## §8 Threat-model anchoring + scope
 
@@ -107,10 +135,11 @@ A pinned guard (§4) knows the sender's transport address. For most tiers that i
 
 **Out of scope (referenced, owned elsewhere):** the onion cell format (SEALED_ENVELOPE/OUTFOX), circuit construction/refresh (CIRCUIT_LIFECYCLE §3–§7), the deep-EXTEND telescoping construction (DEEP_EXTEND_DESIGN), guard pinning + rotation (CIRCUIT_LIFECYCLE §17), web-of-trust reputation + RelayAttestation (CIRCUIT_LIFECYCLE §20; built in `protocol_core::reputation`), per-dyad cover (COVER_TRAFFIC), SPRING sender anonymity (CIRCUIT_LIFECYCLE §18 / HYP-317).
 
-**Implementation status (2026-06-12):** §2–§5 are built (circuit_manager telescoping + the §17/§20 selection layer). §6 (relay padding) is HYP-321; §7 (bridge tunnels) is HYP-323. The empirical rate for §6 is gated on HYP-171.
+**Implementation status (2026-06-12):** §2–§5 are built (circuit_manager telescoping + the §17/§20 selection layer). §6 (relay padding) is HYP-321. §7 (bridge tunnels): the **rotating tunnel-id primitive is built** (`protocol_core::bridge_tunnel`, PR #438); the §7.1 pre-introduction + §7.2 bridge table + §7.3 carrier diversity are the rest of HYP-323. The empirical rate for §6 is gated on HYP-171.
 
 ---
 
 | Version | Author | Notes |
 |---|---|---|
+| 2026-06-12 v0.2 | Iris + Josh | Detailed §7 bridge tunnels into a concrete, implementable protocol over EXISTING primitives (§7.1 pre-introduction = circuit-kex-style X25519+ML-KEM agreement; §7.2 bridge table + `bridge_tunnel` rotating id, built; §7.3 enforced carrier diversity) — no new crypto; replaces the v0.1 "deferred to kickoff" stub. |
 | 2026-06-12 v0.1 | Iris + Josh | Phase 3 kickoff spec. Consolidates the relay layer (referencing CIRCUIT_LIFECYCLE/SEALED_ENVELOPE/OUTFOX/COVER_TRAFFIC) + specs the two new pieces it owns: relay-relayed cover (§6, HYP-321) + bridge tunnels (§7, HYP-323). Built on the just-completed §20 web-of-trust relay-reputation/attestation/selection layer. |
