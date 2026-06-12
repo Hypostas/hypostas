@@ -496,3 +496,62 @@ chunk 1b's runtime step must reload/hold it in `RuntimeState` before constructin
 - **3 — Option A** + tier gate + revocation (establish/send/receive enforcement + rotate-on-revoke).
 - **4 — §11.5 concurrent-send** (receive-state triple).
 - Delivery + §11.6 sync = `#[ignore]` seam → HYP-313. **Starting 1b-0.**
+
+---
+
+## 10. Option B (sender-key group messaging) — chunk 2 decomposition
+
+Option B (chat-class, §11.3): the sending device encrypts a message ONCE under a sender-key chain; every peer
+device holding the epoch decrypts it. The N×M cost is only the chain DISTRIBUTION (once per new device per epoch);
+steady-state sends are 1×. Composes the 159a sender-key primitives + the established per-device-pair ratchets (§9)
++ the device signing key (§8). The establishment layer (§8-9, 8 PRs) is merged; this is the messaging.
+
+### 10.1 The composition (grounded in the real 159a API)
+
+**Send** — `seal_option_b(plaintext, peer_dyad, peer_devices)`:
+1. `(n, mk) = sender_key_state.next_message_key()` — advance OUR outbound sender-key chain.
+2. Encrypt `plaintext` under `mk` (AEAD), binding `(our_dyad, our_device, peer_dyad, sender_key_id, n)` as AAD
+   (§9.6 missed-#2/#3 — recipient + peer-dyad binding).
+3. **Per-message device signature** (§8.7 / §9.6-Q4): sign the envelope (sender ids + sender_key_id + n +
+   ciphertext) with OUR device signing key. The ratchet AEAD authenticates the distribution CHANNEL, not every
+   sender-key message — without this, any epoch-holder could forge as `sender_device_id = us`. REQUIRED per message.
+4. For each peer device lacking the current epoch: `(chain_key, skid, counter) =
+   sender_key_state.distribution_secret()` → a signed `SenderKeyDistribution::build_signed(...)` → delivered to
+   that device (chunk 2b). Once per new device per epoch.
+5. Emit ONE envelope `{ sender_dyad, sender_device, sender_key_id, n, ciphertext, signature }`.
+
+**Receive** — `open_option_b(envelope, sender_cert)`:
+1. Demux by `(sender_dyad, sender_device, sender_key_id)` (§7.5.5 triple) → that sender device's `SenderKeyReceiveState`.
+2. Epoch absent → the `SenderKeyDistribution` must arrive first (2b): verify its signature vs the sender's
+   `FleetDeviceCert`, then `ingest_distribution`.
+3. `mk = receive_state.peek_message_key(skid, n)` (peek — don't consume).
+4. **Verify the per-message device signature** vs `sender_cert.signing_pubkey()` BEFORE decrypt (a forgery is
+   rejected without touching state).
+5. Decrypt under `mk` (checking the AAD), then `receive_state.commit(skid, n)` (consume on success only — the 159a
+   peek→authenticate→commit, forgery-burn-safe).
+
+### 10.2 Sub-chunk decomposition
+
+- **2a — the Option-B message envelope + per-message crypto** (protocol-core): a `SesameGroupMessage`
+  `{ sender_dyad, sender_device, sender_key_id, n, ciphertext, signature }` + `seal`/`open` over a SUPPLIED message
+  key `mk` (AEAD + the recipient/peer-dyad AAD + the device sign/verify against a `FleetDeviceCert`).
+  Self-contained — composes a sender-key message key + the device signature, no session state. Gateable like
+  `device_prekeys`.
+- **2b — sender-key distribution delivery**: seal a signed `SenderKeyDistribution` to a peer device via
+  `hybrid_pke::seal` to its cert PKE keys (the §11.4-step-2 primitive, already built); the receiver verifies the
+  distribution signature vs the device cert + `ingest_distribution`. (`hybrid_pke` is simpler + already exists vs.
+  riding the per-device-pair ratchet — the 2b call.)
+- **2c — `SesameSession::seal_option_b`/`open_option_b`**: the orchestration tying 2a + 2b + the sender-key state +
+  the per-device-pair ratchets — the §10.1 flow end to end. Integration: 2 dyads × 2 devices, one sealed chat
+  message decrypts on all peer devices; a late-added device gets the distribution + reads forward; a forged
+  `sender_device_id` is rejected by the per-message signature.
+
+### 10.3 Open questions for the chunk-2 consult
+
+1. Where does the sending device hold its outbound `SenderKeyState` — per-`(our_device, peer_dyad)` or
+   per-`(our_device)` global? §11.3 implies one sender-key per sending device per conversation (peer dyad). Pin
+   against the 159a `SenderKeyState` lifecycle + the §7.5.5 receive triple before 2c.
+2. Does the per-message signature (2a) make the `SenderKeyDistribution`'s OWN signature redundant, or do both stand
+   (distribution authenticity vs per-message authenticity)?
+3. AAD construction — exact byte layout binding `(our_dyad, our_device, peer_dyad, sender_key_id, n)` so a message
+   can't be replayed cross-conversation/-epoch.
