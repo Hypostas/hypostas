@@ -230,3 +230,89 @@ as its own issue (file a follow-up under HYP-301's epic per rule #29).
 
 **Chunk 1 is cleared to start** on this reframed basis: inner Sesame orchestration over a dyad-level circuit,
 device identity in the payload, multi-device *delivery* explicitly out of 159b's scope.
+
+---
+
+## 8. Sesame fleet device identity (resolves §7.5.1) — the fleet flow does NOT exist yet
+
+**Discovery (2026-06-12, pre-chunk-1 code read):** the entire Sesame *fleet* subsystem is unbuilt and unwired.
+`DeviceInfo` / `register_device` / `DyadDeviceBundle::new` have **zero** production constructors (only their own
+defs/docs); `sesame::` / `DyadDeviceBundle` / `SenderKeyState` are **not referenced in `dyados-runtime` at all**;
+`DeviceCapabilityCert` is issued **only** in the iPhone-biosensor pairing flow (`build_accept`,
+`authorised_packet_types: vec![Biosensor]`, `pairing.rs:858`). HYP-159a built the *primitives* (the structs +
+sender-key crypto); **nothing constructs, provisions, or wires them.** Therefore §7.5.1 is not "add a field to an
+existing flow" — there IS no fleet device-identity flow. 159b must **define it from scratch.** This section pins
+the identity model before chunk 1; the original DESIGN-review (§7) explicitly handed this as the open item
+("the design must specify where authenticated device signing pubkeys come from").
+
+### 8.1 The device hybrid signing key is necessary — intra-dyad forgery is in scope
+
+A dyad-level circuit/ratchet authenticates "*some* device of dyad A," not *which* device (the X25519+ML-KEM
+bundle is per-dyad, §7.1). So a compromised device A2 could forge a `SenderKeyDistribution` claiming
+`sender_device_id = A1` over the shared dyad ratchet keys — the AEAD alone can't stop it. The per-device hybrid
+signature (`SenderKeyDistribution::verify(&HybridPubkey)`) is precisely what binds the `sender_device_id` claim to
+a device-held key, giving **intra-dyad device authentication.** Since devices are individually compromisable AND
+revocable (the entire point of §11.2 membership + offboarding), this threat is in scope. **→ each fleet device
+MUST hold its own hybrid (Ed25519+ML-DSA) signing keypair.** "Drop the signature / rely on the ratchet AEAD" is
+rejected — it would let any dyad-mate device impersonate any other.
+
+### 8.2 The signing pubkey binds to a SIGNED structure (the bundle is unsigned)
+
+`DyadDeviceBundle` / `DeviceInfo` are **unsigned** — `RawDyadDeviceBundle`'s `TryFrom` validates *structure*
+(cap, id range, key lengths, uniqueness) but not *authenticity* (`sesame/mod.rs:163,312`); membership-change
+authentication is delegated to the caller via the separately-signed `RevokeDeviceRecord` (`mod.rs:228-230`). The
+H+A-2-of-2-signed device structures are `DeviceCapabilityCert` + `RevokeDeviceRecord`. **→ the authenticated
+device signing pubkey binds into a SIGNED cert, never the bundle.** `DeviceInfo` may carry a convenience copy, but
+verification trusts only the cert's copy (or cross-checks the two).
+
+### 8.3 Generalize `DeviceCapabilityCert` into the signed fleet device record
+
+Rather than a parallel structure, **generalize the existing H+A-co-signed cert**: add
+`device_signing_pk: Vec<u8>` (the hybrid pubkey bytes: Ed25519 32B ‖ ML-DSA pk) to its `canonical_signing_bytes`
+(`pairing.rs:295`) + bump `version`, and let `authorised_packet_types` carry the full message set for fleet
+devices (the field already exists for exactly this — its doc says "future Bios iOS app ships a richer set",
+`pairing.rs:274`). One signed device-authority structure, extended.
+
+- **Backwards-compat (rule "version everything crossing a boundary"):** existing biosensor certs (current
+  `PAIRING_PROTOCOL_VERSION`, no signing key, biosensor-only) keep their canonical layout + verify unchanged;
+  fleet certs use the bumped version and include `device_signing_pk` in the canonical bytes. Verifiers branch on
+  `version`: pre-bump certs have no signing key (and are not valid Sesame fleet members — they can't originate
+  `SenderKeyDistribution`s); post-bump certs do. **No shipped biosensor cert breaks.**
+- The Ed25519 half MAY equal the device's libp2p identity key (recoverable from `device_peer_id`) or be an
+  independent signing key carried in full — **carry both halves explicitly** in `device_signing_pk` so verify
+  needs no peer-id decoding and the classical/PQ pair is bound as a unit by the H+A signature. (Pin the exact
+  `HybridPubkey` byte layout against `crate::signing` in chunk 1a.)
+
+### 8.4 Genesis + join (where the cert comes from)
+
+- **Founding device (genesis):** holds H+A at dyad genesis → **self-issues** its own fleet cert (H+A co-sign,
+  reusing the `sign_hybrid` path at `pairing.rs:873-874`) binding its freshly-generated `device_signing_pk`.
+- **Subsequent fleet device (join):** generalize `IssuerSession::build_accept` beyond biosensor — the joining
+  device generates its hybrid signing keypair locally, sends the **pubkey** in its join request; the device that
+  holds H+A co-signs a fleet cert binding it (full packet allowlist + `device_signing_pk`). Reuses the entire
+  pairing handshake; the only new surface is the signing-key field + the non-biosensor allowlist. (Secret key
+  never leaves the joining device.)
+
+### 8.5 Secret-key custody — the local-device registry (the §7.4 prerequisite)
+
+The device's hybrid signing **secret** key is generated at registration and persisted **sealed**, exactly like
+`circuit_identity.sealed` (AES-256-GCM, key derived from DyadID + H-shard per CLAUDE.md "Security"). The registry
+(`SesameDeviceRegistry`, new) holds: local `DeviceId`, local hybrid **signing** secret + its cert, local Sesame
+**PKE** (X25519 + ML-KEM) secrets (for Option-A per-device decrypt + sender-key receipt), and the cached peer
+`DyadDeviceBundle` + peer fleet certs (the authenticated pubkey source for verify). This registry is the chunk-1
+prerequisite; nothing in `SesameSession` can run without it.
+
+### 8.6 Revised chunk 1 split (supersedes §7.7's chunk 1)
+
+- **Chunk 1a — fleet device crypto identity (focused crypto PR + Codex gate).** (i) `DeviceCapabilityCert`
+  signing-key extension §8.3 (field + canonical bytes + version branch + verify) with the backwards-compat test
+  (an old biosensor cert still verifies; a fleet cert round-trips). (ii) device hybrid-signing keypair generation.
+  (iii) the sealed `SesameDeviceRegistry` §8.5 + genesis self-issue §8.4. Integration test (rule #27): generate →
+  self-issue cert → persist sealed → reload → verify cert + signing-key round-trip.
+- **Chunk 1b — `SesameSession` skeleton + per-device-pair ratchet map** (inner state) + peer-cert-pubkey lookup
+  wired so a `SenderKeyDistribution` verifies against the §8.2 cert copy. Unit: per-device sub-chain independence.
+- **Chunk 1c (if 1a/1b grow) — the join-flow generalization** §8.4 (subsequent fleet devices via the extended
+  `build_accept`).
+
+Chunks 2–4 + the delivery seam are unchanged from §7.7. **8.1's intra-dyad-forgery justification + 8.3's
+version-branch backwards-compat are the two things chunk 1a's Codex gate must confirm.**
