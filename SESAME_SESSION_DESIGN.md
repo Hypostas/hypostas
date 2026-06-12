@@ -372,3 +372,75 @@ genesis self-issue in the bootstrap window (§8.4). Integration test (rule #27):
 self-issue `FleetDeviceCert` (H+A co-sign) → persist sealed → reload → verify the cert's H+A signature + the
 signing-key round-trip; plus a backcompat test that the shipped `DeviceCapabilityCert` wire shape is untouched. The
 gate must confirm §8.1 (forgery justification) + the `FleetDeviceCert` isolation from the biosensor cert.
+
+---
+
+## 9. The `SesameSession` orchestration (chunk 1b onward) — pinning the per-device-pair model
+
+**Status (2026-06-12):** the device-identity sub-layer (§8) is COMPLETE + merged (1a-i…1b-1, PRs #409-412).
+This §9 pins the *orchestration* — the `SesameSession` that ties the §8 identity + the 159a sender-key primitives
+into actual messaging — before chunk 1b code. It resolves the model questions that surfaced when grounding the
+real ratchet/prekey API (`RatchetState`, `RatchetManager`, `LocalPrekeys`/`PublishedPrekeys`). Pending a Codex
+DESIGN-consult (the §8 pattern) before chunk 1b.
+
+### 9.1 The per-device-pair ratchet map — keyed by the PEER device
+
+§8.6 wrote the map as `HashMap<(DeviceId, DeviceId), RatchetState>` (the conceptual full pair). But from THIS
+node's runtime view, *our* device is fixed (this node IS one specific device of dyad A), so the only varying axis
+is the peer. And a dyad talks to MANY peer dyads, each a fleet. So the live key is **`(peer_dyad_id,
+peer_device_id) → RatchetState`** — one independent Double Ratchet per peer device, across all peer dyads. This
+matches §7.5.5's receive-state triple (`sender_dyad_id, sender_device_id, …`). `SesameSession` is therefore a
+**per-device-pair `RatchetManager`** (the existing manager is keyed by `DyadId`; this one by the peer-device
+tuple), holding `Arc<SesameDeviceRegistry>` for our own identity.
+
+### 9.2 THE CRUX — a peer's *ratchet* prekeys are NOT in its `FleetDeviceCert`
+
+Establishing a per-device-pair ratchet uses the existing PQXDH: `establish_initiator(peer_published_prekeys)` →
+`pqxdh_initiate` → `RatchetState::init_initiator`. But `PublishedPrekeys` needs **four** public keys:
+`id_x_pk` + `id_kem_ek` (identity) **AND** `ratchet_x_pk` + `ratchet_kem_ek` (the initial ratchet prekey). The
+`FleetDeviceCert` attests only the device's **identity** PKE keys (`device_x25519_pk` / `device_ml_kem_pk` =
+`id_x_pk` / `id_kem_ek`). It does **not** carry a ratchet prekey. So: **where does a peer device publish its
+ratchet prekeys, authenticated?** Candidate resolutions for the consult:
+
+- **(P-a) A signed per-device prekey bundle.** Each device publishes a `DeviceLocalPrekeys`-style bundle
+  (identity = its cert keys, + a rotating `initial_ratchet`), **signed by the device's own `FleetDeviceCert`
+  signing key** (which §8 already gives every device). Authenticity chains: dyad H+A → fleet cert → device
+  signing key → signs the rotating ratchet prekey. This reuses the §8 signing identity for exactly the job the
+  per-dyad `LocalPrekeyManager` does today, but per-device. *(Leaning P-a — it's the direct per-device analogue of
+  the existing rotating-prekey design, and the cert signing key is purpose-built to authenticate this.)*
+- **(P-b) Carry an initial ratchet prekey IN the cert.** Add `ratchet_x_pk`/`ratchet_kem_ek` to `FleetDeviceCert`.
+  Rejected-leaning: the cert is long-term (no expiry), but ratchet prekeys ROTATE for forward secrecy — baking a
+  static ratchet prekey into a long-term cert defeats prekey rotation.
+- **(P-c) Bootstrap the per-device-pair ratchet from a sender-key distribution** instead of PQXDH. Doesn't fit —
+  Option A (Critical) needs a real per-device-pair ratchet independent of the group sender-key.
+
+### 9.3 The device's own Sesame prekeys
+
+Symmetrically, THIS device needs its own `LocalPrekeys` to respond: `identity` = the registry's PKE
+`ResponderKeypair` (the cert-attested keys), `initial_ratchet` = a fresh per-device rotating ratchet keypair. So
+the registry (or a companion per-device prekey manager) must also hold/rotate the device's ratchet prekey. Pin in
+chunk 1b whether this extends `SesameDeviceRegistry` or is a sibling `SesameDevicePrekeys` (leaning sibling — keep
+the long-term identity registry separate from the rotating prekey, mirroring how `circuit_identity` (long-term) is
+separate from `LocalPrekeyManager` (rotating)).
+
+### 9.4 Chunk-1b skeleton scope (after the crux is pinned)
+
+`SesameSession { registry: Arc<SesameDeviceRegistry>, sessions: HashMap<(PeerDyadId, PeerDeviceId), RatchetState> }`
++ `establish_initiator` / `establish_responder` per peer device (reusing PQXDH against the §9.2-resolved peer
+prekeys) + `encrypt` / `decrypt` routed by the peer-device key. **Unit (§11.5): per-device sub-chain independence**
+— establish two peer-device ratchets, encrypt on one, prove the other's chain is unaffected + no cross-decrypt.
+Option A/B + the per-message sender signature (§8.7 missed-#1) + the §11.6 delivery seam are chunks 2-4 (unchanged
+from §7.7). The bootstrap genesis call (1b-1) currently establishes + drops the registry; chunk 1b's
+runtime-integration step holds it (in `RuntimeState`) + builds the `SesameSession` over it.
+
+### 9.5 Open questions for the Codex DESIGN-consult (before chunk 1b)
+
+1. §9.2 — resolve **P-a vs P-b vs P-c** for the peer ratchet-prekey source, against the real PQXDH/`init_initiator`
+   requirements + the FS implications of a long-term cert. Is P-a (cert-signing-key-signed rotating per-device
+   prekey bundle) sound, and does anything in the existing `LocalPrekeyManager` / PQXDH preclude a per-device
+   instance?
+2. §9.1 — confirm the live key is `(peer_dyad_id, peer_device_id)`, and that one `SesameSession` spanning all peer
+   dyads (vs. one per peer dyad) is the right granularity.
+3. §9.3 — registry-extension vs sibling `SesameDevicePrekeys` for the device's own rotating ratchet prekey.
+4. Any missed invariant in modelling `SesameSession` as a per-device-pair `RatchetManager` (e.g. the §8.7
+   missed-#1 per-message signature interacting with the ratchet's own authentication).
