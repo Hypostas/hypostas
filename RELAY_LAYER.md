@@ -89,6 +89,11 @@ Per-dyad constant-rate cover (COVER_TRAFFIC, THREAT_MODEL §6.2.1) hides activit
 
 **Recommendation:** ship **(a)** for HYP-321 v1 (the threat property with zero protocol change, accepting the benign residual receiver-collision above), and track **(b)** as a follow-up optimization. **Decided + in progress:** the v1 cell primitive is built (PR #443); the *unauthenticated cover-drop* path needs no link key, so the cell IS a clean protocol-core primitive — it is the **authenticated `CMD_DROP` marker** (option b) that needs the absent link key + would give a *hard* drop guarantee (R+1 affirmatively recognizes padding), not the v1 cell. The remaining v1 driver is just the **random-id** emit loop (rate + budget + gating + sink) — there is no collision-free id step (it can't filter R+1's tables and isn't needed). *(The Linear issue for this finding is pending the MCP connector reconnect — see the build ledger.)*
 
+**The full driver + runtime wiring are BUILT, OFF BY DEFAULT (dyados PRs #449/#450/#452/#453):** `RelayPaddingDriver::tick` over `forwarding_next_hops`, a `route_pinned`-pinned `RelayPaddingSink`, the `spawn_relay_padding_driver` loop, and the bootstrap spawn held in `RuntimeState` (opt-in `false`). **Three activation preconditions MUST land before flipping the opt-in on** (gate-surfaced; tracked, all latent while off):
+1. **Size-distribution matching (P1).** v1 emits only `SizeClass::S`, but forwarded DATA is the smallest-FITTING class (a mix of `S`/`M`/`L`/`Xl`); an observer distinguishes the `S`-only padding stream by length. Padding must emit the actual forwarded size distribution per link.
+2. **Per-link multi-carrier coverage (P2-coverage).** v1 pins to ONE preferred carrier; a forwarding link reachable only via a fallback carrier is uncovered (never mis-covered — `route_pinned` fails + skips). Full coverage needs a padding stream per `(carrier, next-hop)`.
+3. **Shared per-carrier budget for CAPPED carriers (P2-budget/P3).** v1 restricts to truly-unbounded carriers (free Network, cap `u64::MAX`) so the budget is moot; a capped eligible carrier (free Radio) needs the SHARED budget (so padding yields to real forwarding + cover) + a local-midnight reset.
+
 ## §7 Bridge tunnels (HYP-323, Critical-tier only)
 
 > **The HYP-323 piece. Q2.11 Option C. Critical-tier only.**
