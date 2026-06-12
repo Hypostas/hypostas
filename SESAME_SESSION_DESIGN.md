@@ -444,3 +444,55 @@ runtime-integration step holds it (in `RuntimeState`) + builds the `SesameSessio
 3. §9.3 — registry-extension vs sibling `SesameDevicePrekeys` for the device's own rotating ratchet prekey.
 4. Any missed invariant in modelling `SesameSession` as a per-device-pair `RatchetManager` (e.g. the §8.7
    missed-#1 per-message signature interacting with the ratchet's own authentication).
+
+### 9.6 Codex design-consult outcome (2026-06-12) — orchestration model PINNED
+
+Codex gpt-5.5/high read the real PQXDH/ratchet/prekey code and ruled:
+
+- **Q1 → P-a.** A **`SesameDevicePrekeyBundle`** signed by the device's `FleetDeviceCert` signing key. The cert
+  supplies `id_x_pk`/`id_kem_ek`; the signed bundle supplies `ratchet_x_pk`/`ratchet_kem_ek` + freshness + `dyad_id`
+  + `device_id` + a cert/identity-key fingerprint. A caller builds `PublishedPrekeys` ONLY from a verified cert +
+  verified bundle (never a naked `PublishedPrekeys`). **Reject P-b** (a static ratchet key in the long-term
+  no-expiry cert defeats the rotation/grace FS model). **Reject P-c** (`SenderKeyDistribution` is itself encrypted
+  by the per-device-pair ratchet — sender-key can't bootstrap itself; Option A needs a real independent ratchet).
+  **Caveat:** do NOT reuse `LocalPrekeyManager` as-is — it rotates `LocalPrekeys::generate()` as a PAIR (identity +
+  ratchet); Sesame needs the identity FIXED to the registry PKE/cert, only the initial ratchet prekey rotating.
+- **Q2 → key by `(peer_dyad_id, peer_device_id)`** (`DeviceId` is unique only within a dyad). ONE `SesameSession`
+  spanning all peer dyads (mirrors the one shared `RatchetManager`). Don't reuse `RatchetManager` directly — its
+  map + at-rest key are dyad-only; Sesame persistence must bind peer-dyad AND peer-device.
+- **Q3 → a sibling `SesameDevicePrekeys`** rotating manager (NOT a registry extension) — different lifecycle/churn,
+  mirroring `circuit_identity` (long-term) vs `LocalPrekeyManager` (rotating). Holds current/previous initial-
+  ratchet secrets + rotation timestamps; at responder establishment builds
+  `LocalPrekeys { identity: from registry.pke_keypair(), initial_ratchet: current_or_previous }` using the same
+  **decrypt-driven current/previous fallback** as `establish_responder_rotating_and_decrypt` (ML-KEM implicit
+  rejection → a wrong prekey yields a garbage secret that only fails at first-message decrypt).
+- **Q4 → the per-message Option-B signature is still needed.** The ratchet AEAD authenticates the pairwise
+  *distribution channel*, not every future sender-key *message*; once a recipient knows the epoch it can derive
+  message keys, so receiver-forgery as `sender_device_id = A1` remains possible without a per-message device
+  signature. Rule: **Option-B messages MUST be device-signed**; Option-A channel authenticity comes from the
+  ratchet, but any Sesame format relying on `sender_device_id` for attribution must verify the device signature
+  against the `FleetDeviceCert`.
+
+**Missed (fold in):** (1) the `SesameDevicePrekeyBundle` is a real new primitive — build `PublishedPrekeys` only
+from verified cert + verified bundle; (2) bind the bundle to `dyad_id`/`device_id`/cert-fingerprint/prekey-id/
+pub-time/expiry/ratchet-keys; (3) bind establishment envelopes to sender+recipient dyad+device ids (`InitialMessage`
+has no device context); (4) persist Sesame ratchets under a key derived from peer-dyad AND peer-device (not the
+dyad-only ratchet store); (5) apply revocation on establish/send/receive — a revoked peer device → drop its pairwise
+ratchet + rotate the outbound sender-key before the next Option-B send; (6) bootstrap currently drops the registry —
+chunk 1b's runtime step must reload/hold it in `RuntimeState` before constructing `SesameSession`.
+
+### 9.7 Revised chunk plan (supersedes §8.6/§9.4 for the orchestration)
+
+- **1b-0 (NEW protocol-core prerequisite) — `SesameDevicePrekeyBundle` + `SesameDevicePrekeys`.** The signed
+  per-device ratchet-prekey bundle (binds §9.6-missed-#2 fields; signed by the device cert signing key; `verify`
+  against a `FleetDeviceCert`) + the sibling rotating-prekey manager (identity fixed to the registry PKE, only the
+  ratchet prekey rotating; current/previous + timestamps). Self-contained, gateable like `fleet_cert`.
+- **1b — `SesameSession` skeleton.** `{ registry, prekeys, sessions: HashMap<(PeerDyadId, PeerDeviceId),
+  RatchetState> }` + `establish_initiator`/`establish_responder` (build `PublishedPrekeys` from verified cert +
+  verified bundle; decrypt-driven fallback) + `encrypt`/`decrypt` routed by the peer-device key. Unit: per-device
+  sub-chain independence (§11.5). + the runtime step (hold the registry in `RuntimeState`).
+- **2 — Option B** (sender-key distribution via the per-device-pair ratchet + `hybrid_pke`; **per-message device
+  signature**; recipient/peer-dyad AAD).
+- **3 — Option A** + tier gate + revocation (establish/send/receive enforcement + rotate-on-revoke).
+- **4 — §11.5 concurrent-send** (receive-state triple).
+- Delivery + §11.6 sync = `#[ignore]` seam → HYP-313. **Starting 1b-0.**
