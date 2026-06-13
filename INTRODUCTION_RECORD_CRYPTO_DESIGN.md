@@ -98,11 +98,11 @@ These were verified against the primary literature this session (sources §10), 
 
 ### 4.3 Composition C2 + the property argument
 
-**Issue.** B (an attested introducer) gives D *both*: (i) an individual BBS issuer-hiding credential on D, and (ii) a `K_epoch` lattice blind signature on D's vouch token.
+**Issue.** B (an attested introducer) gives D an individual **BBS** issuer-hiding credential on D. The **lattice** half is authorized by the attested set through a **threshold** operation whose exact form is the §4.5 decision — either *C2-threshold* (a `t`-of-`n` coalition co-signs D's lattice token per vouch) or *C3* (the set threshold-**issues** B an individual epoch credential at join, which B later presents alone, cryptographically bound to the BBS half). **The eliminated single-introducer-shared-key flow — one B alone producing a shared-`K_epoch` signature — MUST NOT be implemented (§4.2, §4.5).**
 
-**Present.** `BlindedVouch = encode(version ‖ P_bbs ‖ σ_lattice)` — D's unlinkable BBS presentation plus the re-randomized lattice signature.
+**Present.** `BlindedVouch = encode(version ‖ P_bbs ‖ P_lattice)` — D's unlinkable BBS presentation plus the re-randomized lattice proof (realization per §4.5).
 
-**Verify.** V checks **both** against the `EpochAnchor`: the BBS issuer-hiding presentation (against the epoch attested-key policy) **AND** the lattice signature (against `K_epoch`). **Both must pass.**
+**Verify.** V checks **both** against the `EpochAnchor`: the BBS issuer-hiding presentation (against the epoch attested-key policy) **AND** the lattice proof (against the epoch lattice anchor — §5.2). **Both must pass.**
 
 **Property argument:**
 
@@ -158,15 +158,17 @@ BlindedVouch = VOUCH_VERSION (u16)
 
 **Self-delimiting, versioned, tagged encoding (Codex DESIGN-review P2)** — a raw concatenation is not unambiguously parseable (the BBS policy may be a full key-set *or* a root; revocation is optional), so the anchor is framed like `BlindedVouch`: a version, then a tag byte + length prefix per field. Verifiers reject unknown tags / trailing bytes.
 
+The tag set for the lattice field is **conditional on the §4.5 realization** (the anchor does not pre-freeze a C2-only format): C2-threshold publishes the shared epoch verification key (`tag=LATTICE_KEPOCH_PUBLIC`); C3 publishes the epoch issuer key / accumulator for the individual threshold-issued credentials (`tag=LATTICE_EPOCH_ISSUER`). A verifier selects its lattice check by the present tag.
+
 ```
 EpochAnchor.bytes = ANCHOR_VERSION (u16)
-                  ‖ field{ tag=BBS_POLICY_KEYSET | BBS_POLICY_ROOT, len(u32), bytes }
-                  ‖ field{ tag=K_EPOCH_PUBLIC,                       len(u32), bytes }
-                  ‖ field{ tag=REVOCATION_ROOT (OPTIONAL),           len(u32), bytes }   // absent ⇒ field omitted, not zero-length-ambiguous
+                  ‖ field{ tag=BBS_POLICY_KEYSET | BBS_POLICY_ROOT,            len(u32), bytes }
+                  ‖ field{ tag=LATTICE_KEPOCH_PUBLIC | LATTICE_EPOCH_ISSUER,   len(u32), bytes }  // realization per §4.5
+                  ‖ field{ tag=REVOCATION_ROOT (OPTIONAL),                     len(u32), bytes }   // absent ⇒ field omitted, not zero-length-ambiguous
 ```
 
 - **BBS policy** (`tag` distinguishes keyset vs root) = the attested introducer BBS public keys for the epoch, or a Merkle/accumulator root over them; with randomizable-key public verification this is published and verification is public. Derived directly from the chain's attested set → no trusted setup.
-- **`K_epoch_public`** = the public key of the **threshold-held** epoch issuing key (§4.2), established by the attested set at epoch start via DKG. Derived from the attested set → no trusted setup.
+- **Lattice anchor** (`tag` distinguishes the §4.5 realization) = C2-threshold's shared epoch verification key, **or** C3's epoch issuer key/accumulator — both **threshold-established** by the attested set at epoch start via DKG (§4.2). Derived from the attested set → no trusted setup. The single-holder shared key is eliminated regardless of tag.
 - **Revocation** (⚠️ sign-off): present (a lattice accumulator root, Libert et al. / LaZer-style, over non-revoked introducers) or omitted (epoch-rotation-only) — the tag's presence/absence is unambiguous in the framing above.
 
 ### 5.3 Epoch model + churn (⚠️ sign-off — INTRODUCTION_RECORD brief Q5)
