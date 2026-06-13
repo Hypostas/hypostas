@@ -145,10 +145,10 @@ Four properties we want — and **the second compromise property (iv) is fundame
 
 **Updated lean (changed by the review):** C2-shared is eliminated. The real choice:
 - **C2-threshold** — the *only* option with cryptographic per-vouch member-compromise resistance (iv), bought by sacrificing one-introducer onboarding (every new dyad needs `t` co-vouchers). Clean crypto (no cross-domain binding).
-- **C3** — keeps one-introducer onboarding (i) + unconditional anonymity (ii) + phantom-mint resistance (iii); compromised-member abuse (iv) is revocation-bounded. Cost: the novel cross-domain binding proof.
+- **C3** — keeps one-introducer onboarding (i) + unconditional anonymity (ii) + phantom-mint resistance (iii); compromised-member abuse (iv) requires an added **per-epoch nullifier/rate-limit** (else unbounded until out-of-band detection — revocation alone can't bound it, since verifiers can't identify the introducer). Cost: the novel cross-domain binding proof **plus** the nullifier.
 - **C1** — simplest; gives up unconditional anonymity (ii).
 
-The pivot question is **product, not just crypto**: is one-introducer onboarding a hard requirement (→ C3, accept revocation-bounded member compromise), or is per-vouch `t`-of-`n` attestation acceptable/desirable for stronger Sybil resistance (→ C2-threshold)? My pre-review C2 lean is **withdrawn**; I now lean **C3 if one-introducer onboarding is required**, else **C2-threshold**. This is the reserved Fable 5 + Codex construction-choice call (INTRODUCTION_RECORD §5), to be made with the cryptographer's eye on whether the C3 cross-domain binding is buildable soundly in sovereign pure-Rust.
+The pivot question is **product, not just crypto**: is one-introducer onboarding a hard requirement (→ C3, with a per-epoch nullifier/rate-limit for member-compromise accountability), or is per-vouch `t`-of-`n` attestation acceptable/desirable for stronger Sybil resistance (→ C2-threshold, which needs no nullifier since t-of-n already bounds it)? My pre-review C2 lean is **withdrawn**; I now lean **C3 if one-introducer onboarding is required**, else **C2-threshold**. This is the reserved Fable 5 + Codex construction-choice call (INTRODUCTION_RECORD §5), to be made with the cryptographer's eye on whether the C3 cross-domain binding is buildable soundly in sovereign pure-Rust.
 
 ---
 
