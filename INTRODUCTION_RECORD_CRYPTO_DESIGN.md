@@ -10,7 +10,7 @@
 
 ## 0. The construction in one paragraph
 
-A `BlindedVouch` is a **dual credential**: a **classical BBS half** that carries *which-introducer* anonymity **unconditionally** (information-theoretic / everlasting — no adversary, quantum or otherwise, can ever strip it), and a **sovereign pure-Rust lattice half** that carries **post-quantum soundness** via a *shared per-epoch issuing key that encodes no individual-introducer identity*. A verifier checks **both** (`AND`). The result: **anonymity is unconditional** (the BBS half is the sole, unbreakable carrier; the lattice half is built so even a total break of it reveals "an attested party" but never *which*), and **soundness holds if *either* half is unforgeable** (forging a vouch requires forging both the q-SDH BBS credential *and* the lattice signature — so a quantum break of BBS *or* a bug in our young lattice port is each individually survived). This is **composition C2** of the three we evaluated (§4.3); the harder cross-scheme binding (C3) was rejected because BBS's unconditional anonymity already attains the ceiling C3 reaches, at far lower build/audit risk (§4.4).
+A `BlindedVouch` is a **dual credential**: a **classical BBS half** that carries *which-introducer* anonymity **unconditionally** (information-theoretic / everlasting — no adversary, quantum or otherwise, can ever strip it), and a **sovereign pure-Rust lattice half** that carries **post-quantum soundness** via a *shared per-epoch issuing key that encodes no individual-introducer identity*. A verifier checks **both** (`AND`). The result: **anonymity is unconditional** (the BBS half is the sole, unbreakable carrier; the lattice half is built so even a total break of it reveals "an attested party" but never *which*), and **soundness holds if *either* half is unforgeable** (forging a vouch requires forging both the q-SDH BBS credential *and* the lattice signature — so a quantum break of BBS *or* a bug in our young lattice port is each individually survived). This was **composition C2** of the three we evaluated — but the Codex DESIGN-review (P1) showed C2's shared-epoch-key realization has a soundness hole under a *compromised introducer*, which reopens the C2-vs-C3 choice (§4.4–§4.5). The dual-hybrid *shape* (BBS = unconditional anonymity, lattice = PQ soundness, AND-verify) stands; the precise lattice realization (C2-threshold vs C3) is now the central sign-off decision.
 
 ---
 
@@ -21,7 +21,8 @@ A `BlindedVouch` is a **dual credential**: a **classical BBS half** that carries
 | Construction family | (c) anonymous credential, **dual-credential hybrid** = lattice AC + classical BBS | locked (HYP-322 sign-off prep) |
 | Who verifies | validators verify; **public verification also available** (§3.4) — no secret verifier key strictly required | locked + upgraded by 2026 work |
 | Implementation | **sovereign pure-Rust** — NOT FFI to LaZer's C/AVX-512 core | locked |
-| Anonymity composition | **C2** — BBS = sole unconditional anonymity; lattice = soundness-only, no individual identity | locked (this session) |
+| Anonymity carrier | **BBS, unconditionally** — the lattice half must not be the anonymity carrier | locked (this session) |
+| Lattice realization | **C2-threshold vs C3** — REOPENED by Codex P1 (§4.5); shared-key C2 eliminated | open (sign-off) |
 | Build order | **both halves at once** — PQ-complete at first ship; the `StubVouchScheme` stays live until the full construction lands | locked (this session) |
 
 **The reframe (the spine of the whole design).** The two halves are not "future-proof lattice + throwaway classical." They are **complementary opposites**:
@@ -90,8 +91,8 @@ These were verified against the primary literature this session (sources §10), 
 
 - **The key design choice (what makes C2 work).** The lattice half is a **lattice blind signature under a *shared per-epoch issuing key* `K_epoch`** held by the attested introducer set — **not** a per-introducer key and **not** a membership proof over individual keys. Because `K_epoch` is shared, the signature encodes **no individual-introducer index**. So even a *total* break of the lattice half's anonymity/blindness reveals only "a `K_epoch` signature exists" = "an attested party authorized this" — **never which party.** This is precisely the property that lets BBS remain the sole (unconditional) anonymity carrier (§4.3).
 - **Scheme (standard-assumption base).** Beullens–Lyubashevsky–Nguyen–Seiler lattice blind signature, CCS 2023 ([2023/077]) — 20 KB, standard Module-SIS/LWE+NTRU, 2-round. The vouch token is **blind-signed** under `K_epoch` so B cannot link its signing to the published record (§4.1) and the published signature is re-randomized.
-- **`K_epoch` management.** Baseline: `K_epoch` distributed to attested introducers at epoch start. Hardened (recommended): `K_epoch` is **threshold-held** (no single introducer holds it in full) via a lattice threshold blind signature — Faller–Niot [2025/1566] — so a single compromised introducer cannot leak the epoch issuing power. ⚠️ Per-vouch authorization model (one introducer signs vs. t-of-n) is a sign-off param (§9).
-- **Why the shared-key soundness risk is acceptable.** A leak of `K_epoch` would let a Sybil forge the *lattice* half — but **AND-verify** (§4.3) means a full vouch *also* requires a valid **individual** BBS credential from an attested introducer. So `K_epoch` leakage alone cannot forge a vouch. The two halves cover each other's soundness weakness.
+- **`K_epoch` management — threshold holding is MANDATORY, not optional (Codex DESIGN-review P1).** The §6 adversary explicitly includes a *compromised introducer*. If `K_epoch` were a single shared key any introducer holds in full, that one compromised introducer could mint unlimited lattice halves — and **post-quantum, when BBS unforgeability is already gone, the lattice half is the *sole* soundness mechanism**, so the `if-either` hedge collapses entirely. (My earlier "AND-verify saves it" reasoning was wrong: post-quantum the BBS half is forgeable, so the AND provides no protection.) Therefore `K_epoch` MUST be **threshold-held** with an explicit compromise threshold `t` (no coalition smaller than `t` can wield the epoch issuing power) — lattice threshold construction per Faller–Niot [2025/1566].
+- **But mandatory threshold exposes a trilemma (§4.5) that reopens C2-vs-C3.** "Threshold-held `K_epoch`" can mean two different things, and they land on different constructions — this is now the central sign-off decision, not a tuning knob.
 - **Sovereign pure-Rust route.** LaZer (the reference lattice-ZK library) is **C / x86 / AVX-512 / Linux-amd64** — unusable on our ARM (Mac/iOS) targets and excluded by the sovereign-Rust lock. The path: **faithful transcription of the chosen scheme to pure Rust against published test vectors** (rule: never invented math), building where possible on the Rust lattice substrates `lattirust` / `Lazarus`. ⚠️ Test-vector availability + exact params at our security level are UNVERIFIED here and are sign-off + implementation items. This is **the highest-risk component in the arc** — a subtle sampling/rejection/constant-time bug = silent failure — which is why it gets the HYP-330 external audit.
 - **What it provides:** §4.4 post-quantum soundness; it deliberately provides **no** individual-introducer anonymity (none is needed of it — BBS owns anonymity).
 
@@ -117,7 +118,26 @@ These were verified against the primary literature this session (sources §10), 
 ### 4.4 Why C2, not C1 or C3 (the rejected alternatives)
 
 - **C1 (two per-introducer proofs, side-by-side) — rejected.** If the lattice half is a per-introducer membership proof, its hidden witness *is* "which introducer," and a classical cryptanalysis break or **a bug in our own lattice port** would deanonymize the graph *despite* BBS (side-by-side, record anonymity is capped at the **weaker** half). That is the exact "silent graph deanonymization" failure the issue names — unhedged for anonymity. C2 fixes this by giving the lattice half no individual identity to leak.
-- **C3 (cross-scheme binding — split the introducer witness across both halves) — rejected.** C3's goal is "anonymity unless *both* halves break." But **BBS anonymity is unconditional → "break both" is unachievable → C3's anonymity collapses to unconditional — the same ceiling C2 already reaches.** C3 buys *no* anonymity gain over C2 while requiring a **novel cross-domain ZK proof** (proving one hidden value across the elliptic-curve and module-lattice worlds — no off-the-shelf pattern, highest audit risk). C3 would only win if BBS anonymity were merely computational; the verification (§3) puts us in the better world. The right insurance against "is BBS really unconditional?" is to **confirm that well-studied property at sign-off**, not to take on a large novel-construction bug-risk to hedge a small risk in a studied one.
+- **C3 (cross-scheme binding — split the introducer witness across both halves) — REOPENED by Codex P1 (see §4.5).** *On the anonymity axis alone*, C3 buys nothing over C2: BBS anonymity is unconditional, so "break both" is unachievable and C3's anonymity collapses to the same unconditional ceiling C2 reaches — for the cost of a novel cross-domain ZK proof (proving one hidden value across the elliptic-curve and module-lattice worlds; no off-the-shelf pattern; highest audit risk). **That was the basis for preferring C2 — but it only considered anonymity.** Codex's P1 shows the *soundness-under-compromise* axis distinguishes them: C2's no-individual-identity property forces a *shared/threshold* lattice key, whose only single-introducer-vouch realization (shared key) has the compromise hole, while its safe realization (threshold-per-vouch) changes onboarding to t-of-n. C3 instead uses **individual, threshold-*issued*** credentials — one introducer vouches alone, a single compromise can't forge (issuance is t-of-n), *and* the binding keeps anonymity unconditional. So C3 may resolve the trilemma C2 cannot. The C2-vs-C3 choice is now genuinely open (§4.5).
+
+### 4.5 The per-vouch-authorization trilemma (Codex DESIGN-review P1) — the central open decision
+
+Three properties we want, of which **any construction can cleanly hold at most two**:
+
+- **(i) one-introducer onboarding** — a new dyad is introduced by *one* attested party it actually knows (the intimate pairing-ceremony model; low join friction).
+- **(ii) lattice half carries no recoverable individual identity** — required for *unconditional* (C2) record anonymity; otherwise a break of the lattice half's computational anonymity deanonymizes the graph despite BBS.
+- **(iii) single-compromise can't forge** — a single compromised/leaked introducer cannot mint vouches for Sybils (the §6 adversary), *especially* post-quantum when the lattice half is the sole soundness mechanism.
+
+The three candidate resolutions:
+
+| | Lattice half | (i) one-introducer | (ii) unconditional anon | (iii) compromise-safe | Cost |
+|---|---|---|---|---|---|
+| **C1** | per-introducer key + ZK membership | ✅ | ❌ (computational — break deanonymizes) | ✅ (own key only vouches as self) | lowest crypto risk; weakest anonymity |
+| **C2-shared** | one shared `K_epoch` | ✅ | ✅ | ❌ **(Codex P1 — one leak mints all)** | — *eliminated by P1* |
+| **C2-threshold** | `t`-of-`n` co-signed per vouch | ❌ (t co-vouchers) | ✅ | ✅ | onboarding friction (t introducers per new dyad) |
+| **C3** | individual cred, **threshold-*issued***, bound to the BBS half | ✅ | ✅ (binding ⇒ unconditional via BBS) | ✅ (issuance is t-of-n; a leaked cred only vouches as self) | the novel cross-domain binding proof |
+
+**Updated lean (changed by the review):** with C2-shared eliminated, the real choice is **C2-threshold** (clean crypto, t-of-n onboarding friction) vs **C3** (preserves one-introducer onboarding + unconditional anonymity + compromise-safety, at the cost of the cross-domain binding) vs **C1** (simplest, computational anonymity). If one-introducer onboarding is a hard product requirement, **C3 becomes the principled choice despite its complexity** — which inverts my pre-review recommendation. This is the reserved Fable 5 + Codex construction-choice call (INTRODUCTION_RECORD §5); it should be made with the cryptographer's eye on whether the C3 cross-domain binding is feasible to build soundly in sovereign pure-Rust, or whether C2-threshold's onboarding friction is acceptable.
 
 ---
 
@@ -136,15 +156,18 @@ BlindedVouch = VOUCH_VERSION (u16)
 
 ### 5.2 `EpochAnchor` bytes — derivable from the Vita-Chain attested set, **no extra trusted setup**
 
+**Self-delimiting, versioned, tagged encoding (Codex DESIGN-review P2)** — a raw concatenation is not unambiguously parseable (the BBS policy may be a full key-set *or* a root; revocation is optional), so the anchor is framed like `BlindedVouch`: a version, then a tag byte + length prefix per field. Verifiers reject unknown tags / trailing bytes.
+
 ```
-EpochAnchor.bytes = epoch_attested_bbs_policy   // the BBS issuer-hiding policy for the epoch
-                  ‖ K_epoch_public              // the lattice shared-epoch verification key
-                  ‖ revocation_root             // (optional) lattice accumulator root for revocation
+EpochAnchor.bytes = ANCHOR_VERSION (u16)
+                  ‖ field{ tag=BBS_POLICY_KEYSET | BBS_POLICY_ROOT, len(u32), bytes }
+                  ‖ field{ tag=K_EPOCH_PUBLIC,                       len(u32), bytes }
+                  ‖ field{ tag=REVOCATION_ROOT (OPTIONAL),           len(u32), bytes }   // absent ⇒ field omitted, not zero-length-ambiguous
 ```
 
-- **BBS policy** = the set of attested introducer BBS public keys for the epoch (or a Merkle/accumulator root over them); with randomizable-key public verification, this is published and verification is public. Derived directly from the chain's attested set → no trusted setup.
-- **`K_epoch_public`** = the public key of the shared/threshold epoch issuing key, established by the attested set at epoch start (DKG for the threshold-held variant). Derived from the attested set → no trusted setup.
-- **Revocation** (⚠️ sign-off): a lattice accumulator (Libert et al. / LaZer-style) over non-revoked introducers, root in the anchor; or handled by epoch rotation alone.
+- **BBS policy** (`tag` distinguishes keyset vs root) = the attested introducer BBS public keys for the epoch, or a Merkle/accumulator root over them; with randomizable-key public verification this is published and verification is public. Derived directly from the chain's attested set → no trusted setup.
+- **`K_epoch_public`** = the public key of the **threshold-held** epoch issuing key (§4.2), established by the attested set at epoch start via DKG. Derived from the attested set → no trusted setup.
+- **Revocation** (⚠️ sign-off): present (a lattice accumulator root, Libert et al. / LaZer-style, over non-revoked introducers) or omitted (epoch-rotation-only) — the tag's presence/absence is unambiguous in the framing above.
 
 ### 5.3 Epoch model + churn (⚠️ sign-off — INTRODUCTION_RECORD brief Q5)
 
@@ -174,7 +197,7 @@ Each half is independently testable (rule #27) without the live swarm — the se
 **Sign-off agenda:**
 1. **Confirm BBS issuer-hiding is everlasting *for our exact construction*** — and whether a single construction gives **both** everlasting anonymity **and** public verification, or whether we accept validator-held-policy-key verification to keep the everlasting guarantee. (The §4.2 unconditional-anonymity headline rests on this.)
 2. **Lattice scheme + parameters at our security level** — confirm the BLNS CCS-2023 base (or a justified alternative), exact params, and **current cryptanalysis status** (lattice blind sigs have a real history of breaks — non-negotiable diligence).
-3. **`K_epoch` issuance model** — shared vs threshold-held (Faller–Niot); per-vouch authorization (single-introducer vs t-of-n); DKG + churn cadence.
+3. **THE central decision — the §4.5 trilemma: C2-threshold vs C3** (vs C1). Shared-key C2 is eliminated (Codex P1). Decide with the cryptographer's eye on (a) whether the C3 cross-domain binding is buildable soundly in sovereign pure-Rust, vs (b) whether C2-threshold's t-of-n onboarding friction is acceptable, vs (c) accepting C1's computational anonymity. Drives the threshold compromise parameter `t`, the DKG, and churn cadence.
 4. **Test-vector availability** for the pure-Rust transcription, and the ARM constant-time strategy.
 5. **Revocation** — accumulator-in-anchor vs epoch-rotation-only.
 6. **Epoch length.**
@@ -202,4 +225,5 @@ Each half is independently testable (rule #27) without the live swarm — the se
 
 | Version | Author | Notes |
 |---|---|---|
-| 2026-06-13 v0.1 | Iris | HYP-338 design proposal. Locks the dual-hybrid as **composition C2** (BBS = unconditional anonymity; lattice = PQ soundness via a shared/threshold epoch key with no individual identity; AND-verify), build order both-at-once, after a co-design walk-through + primary-literature verification of BBS statistical anonymity. Pending Codex DESIGN-review + Fable 5 + Codex sign-off. |
+| 2026-06-13 v0.1 | Iris | HYP-338 design proposal. Dual-hybrid (BBS = unconditional anonymity; lattice = PQ soundness; AND-verify), build order both-at-once, after a co-design walk-through + primary-literature verification of BBS statistical anonymity. Initially locked composition C2. |
+| 2026-06-13 v0.2 | Iris | Folded in the Codex DESIGN-review: **P1** — shared-key C2 has a compromised-introducer soundness hole (post-quantum, the lattice half is the sole soundness mechanism), so threshold holding is mandatory and the §4.5 per-vouch-authorization trilemma **reopens C2-threshold vs C3** as the central sign-off decision (C3's individual-but-threshold-issued credentials may now be the principled choice — inverting the v0.1 lean). **P2** — `EpochAnchor` now uses a self-delimiting versioned+tagged encoding. Pending re-review + Fable 5 + Codex sign-off. |
