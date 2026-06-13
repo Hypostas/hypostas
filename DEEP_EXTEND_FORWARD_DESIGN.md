@@ -67,9 +67,11 @@ inner payload), and it reuses substantially more existing machinery than the rev
 `initiate_extend` stops calling `seal_extend` (the growing onion). Instead it frames the innermost payload as
 `[ FWD_KIND(1) ‖ request.to_wire() ]` and seals it through the existing `seal_data_outfox` construction with
 the **normal `CMD_DATA` outer command** at a **fixed `SizeClass::L`** (16350-byte body ≫ the framed request;
-constant across hop count → no size leak, no depth overflow). Routed to the ENTRY hop, byte-identical on the
-wire to a forward DATA cell. `FWD_KIND` lives INSIDE the innermost payload layer (sealed under the terminal
-leg's send key), so no relay or observer sees it.
+constant across hop count → no size leak, no depth overflow). Routed to the ENTRY hop with the SAME
+OBSERVABLE SHAPE as a forward DATA cell — same outer command (`CMD_DATA`), same header, same class/length.
+The *ciphertext* necessarily differs (the plaintext differs), but nothing observable on the wire
+distinguishes an EXTEND cell from a DATA cell. `FWD_KIND` lives INSIDE the innermost payload layer (sealed
+under the terminal leg's send key), so no relay or observer sees it.
 
 ```
 forward inner payload = [ FWD_KIND(1) ‖ body ]
@@ -110,9 +112,9 @@ at the terminal is stripping + demuxing the first inner byte.**
 
 ### D3′ — The terminal broker reuses `process_extend` unchanged
 
-At the terminal, on `CMD_EXTEND`: parse `message` as an `ExtendRequest` (`ExtendRequest::from_wire`), then
-call the EXISTING `process_extend(&extend, self_dyad, now, sign)` → `(HandshakeRequest, fingerprint)`. The
-broker:
+At the terminal, when the stripped inner `FWD_KIND == FWD_KIND_EXTEND`: parse `body[1..]` as an
+`ExtendRequest` (`ExtendRequest::from_wire`), then call the EXISTING
+`process_extend(&extend, self_dyad, now, sign)` → `(HandshakeRequest, fingerprint)`. The broker:
 1. **provisions the relay leg** for the new hop (so the EXTENDED reply + subsequent DATA can be forwarded) —
    the same `provisional_relays` / `confirm_prepared` path the old-onion broker uses;
 2. **forwards the `HandshakeRequest`** to `extend.next_relay_dyad_id` (a fresh handshake cell, sealed to the
@@ -137,9 +139,10 @@ Outfox path) is removed in the same chunk so there is ONE forward-EXTEND path (n
    `FWD_KIND_DATA`/`FWD_KIND_EXTEND` constants; prepend `FWD_KIND_DATA` to the existing `seal_data_outfox`
    inner payload + strip it at the terminal `Delivered`; add `seal_extend_outfox` (`FWD_KIND_EXTEND` +
    `ExtendRequest` wire, fixed-`L`, outer `CMD_DATA`) with a fail-closed `1 + wire ≤ L` size check. Unit
-   tests: a DATA round-trip still delivers `body[1..]`; the EXTEND cell is byte-IDENTICAL to a DATA cell at
-   the same class (no wire-distinguishable marker — the D4′ privacy property); the cell is byte-constant
-   across a 1/3/5-hop circuit. The terminal demux still treats every `FWD_KIND_EXTEND` as a drop for now
+   tests: a DATA round-trip still delivers `body[1..]`; an EXTEND cell has the SAME OBSERVABLE SHAPE as a DATA
+   cell at the same class — same outer command (`CMD_DATA`), same header, same length (the ciphertext differs,
+   as it must; assert the shape/header/length, NOT byte-equality — the D4′ privacy property); the cell length
+   is constant across a 1/3/5-hop circuit. The terminal demux still treats every `FWD_KIND_EXTEND` as a drop for now
    (no broker yet) — NO live extend behavior change.
 2. **Terminal broker on `FWD_KIND_EXTEND` (circuit_transport).** In `on_data_outfox`'s `Delivered` branch,
    on `FWD_KIND_EXTEND` parse `body[1..]` as an `ExtendRequest`, `process_extend`, provision the leg, forward
@@ -172,8 +175,9 @@ transport wiring; chunk 4 is the acceptance proof the harness already stages.
 - **R4 — uniform cell shape (RESOLVED by D1′/D2′ revision).** The Codex DESIGN-review caught that an outer
   `CMD_EXTEND` command would be a clear-header privacy leak. The revised design keeps the outer command
   `CMD_DATA` and carries the kind as an encrypted inner `FWD_KIND` byte, so the EXTEND cell is
-  byte-indistinguishable from a DATA cell BY CONSTRUCTION. Chunk 1's unit test asserts this (the two cells
-  are byte-identical at the same class). Remaining check: that `seal_data_outfox`'s existing callers all go
+  OBSERVABLY indistinguishable from a DATA cell BY CONSTRUCTION (same outer command, header, class, length —
+  the ciphertext differs, as a PRP over different plaintext must). Chunk 1's unit test asserts the SHAPE
+  (header/command/length), not byte-equality. Remaining check: that `seal_data_outfox`'s existing callers all go
   through the new `FWD_KIND_DATA`-prefixing path (no un-migrated DATA send bypasses the prefix → terminal
   strip mismatch).
 
