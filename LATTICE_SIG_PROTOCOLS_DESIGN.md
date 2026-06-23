@@ -93,12 +93,13 @@ time.
    *Retrieval note: eprint.iacr.org 403s automated fetch (WebFetch + curl both blocked by anti-bot);
    the PDFs must be pulled via an authenticated/manual path before transcription — the references are
    identified, not yet in hand.*
-2. **Show proof (the deep ZK core):** Lyubashevsky, Nguyen, Seiler — *"Practical Lattice-Based
-   Zero-Knowledge Proofs for Integer Relations"* / *"Shorter Lattice-Based Zero-Knowledge Proofs
-   via One-Time Commitments"* (LNS20/LNS21), and Lyubashevsky–Nguyen–Plançon for the product
-   (`b∈{0,1}`) proof. Provides: a commitment to the witness, a linear relation proof, and a
-   **product/quadratic** proof (the `b·(b−1)=0` constraint) so the bit-decomposition extraction is
-   *tight* (no `2^k` gadget blowup → extracted `x*` stays `< q`).
+2. **Show proof (the deep ZK core):** ⚠️ LOCKED to **[LNP22]** (Lyubashevsky–Nguyen–Plançon, CRYPTO
+   2022, ePrint 2022/284) — the LNS20/LNS21 "integer relations"/"one-time commitments" guess here was
+   SUPERSEDED once the reference (thesis §7.4) confirmed the anon-cred show uses LNP22's quadratic +
+   exact-ℓ₂-norm framework over an ABDLOP commitment. The authoritative show design is
+   **`LNP22_SHOW_DESIGN.md`** (incl. the proof ring `R_q̂` and the `q̂=p·q1` carry-lift). LNS20/21
+   remain only conceptual ancestors. Provides: ABDLOP commitment, linear + **quadratic** + exact-ℓ₂
+   proofs, Fiat–Shamir.
 3. **Cross-domain same-value bind:** our shipped `bind.rs` (HYP-345, Asiacrypt-2014 digit
    decomposition + shared challenge), generalized to bind `m` (lattice digits of `w`) to `C_r`.
 4. **Composition:** our shipped `presentation.rs` / `vouch.rs` AND-verify and `nullifier.rs`.
