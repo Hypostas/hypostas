@@ -68,6 +68,13 @@ under commitment matrix `[D_s | D]`. The show is a Fiat–Shamir argument of kno
      **no `s→F_r` map and no hash/compression** (the very risk R3 P1b flags). The nullifier is
      `N = w·H_G1(epoch)` over the EC `w` (the shipped `nullifier.rs` Schnorr-AND proves the `N`-`w`
      equals the `C_r`-`w`; the show additionally proves that `w` equals `m`'s digits via the bind).
+     ⚠️ DESIGN-review R8 P1: `bits(w)` MUST encode the **canonical** field representative
+     `0 ≤ w < Fr::MODULUS` — the EC side only sees the digit-value mod `r`, so without a canonical
+     constraint a non-canonical encoding (e.g. `w + r`, or any value `≥ r`) would be a DIFFERENT
+     signed lattice message that maps to the SAME `C_r`/`N` (malleability ⇒ a second valid credential
+     for one identity / nullifier collisions). The bind therefore fixes the bit width to
+     `⌈log₂ r⌉ = 255` bits AND **range-proves `digit-value < Fr::MODULUS`** (the standard "less-than-a-
+     constant" decomposition, done in the LNP22 quadratic layer). Same constraint applies at issuance.
    - `s ∈ T₁^{2d}` (binary, lattice-only) — the **thesis registration secret** (impersonation
      prevention, `upk = D_s·s`). It is signed + proven-known, but it is **not** the nullifier key and
      is never mapped to `F_r`.
@@ -75,9 +82,11 @@ under commitment matrix `[D_s | D]`. The show is a Fiat–Shamir argument of kno
    not the toy 32 — resolves the R2 P1e/§nullifier brute-force gap), and (b) blind issuance
    (`OblSign`) hides `m = bits(w)` from the issuer, so it cannot recompute `N`.
 
-So the show is a single LNP22 proof over: **linear** parts (the `A`,`D_s`,`D` terms, registration,
-tag weight) + **quadratic** parts (`tG·v₂`, binary `t∘t=t`/`m∘m=m`/`s∘s=s`) + **exact-ℓ₂-norm**
-(`‖v₁‖,‖v₂‖`), all over committed witnesses, made non-interactive by Fiat–Shamir.
+So the show is a single LNP22 proof over: **linear** parts (the `A`,`D_s`,`D` terms of the signature
+equation + the tag weight; NOT a `upk`-registration check — that is issuance-time, §1.5/R7 P2a) +
+**quadratic** parts (`tG·v₂`, binary `t∘t=t`/`m∘m=m`/`s∘s=s`, and the canonical-range constraint on
+`m=bits(w)`, R8 P1) + **exact-ℓ₂-norm** (`‖v₁‖,‖v₂‖`), all over committed witnesses, made
+non-interactive by Fiat–Shamir.
 
 ---
 
@@ -164,8 +173,10 @@ candidate (a). Then `vouch.rs` AND-verifies it with the BBS half over the shared
    soundness + completeness tests (honest credential shows verify; forgeries/tampering rejected).
 7. **5.7 Cross-domain bind + `w`-keyed nullifier** — generalize `bind.rs` to prove the lattice
    message `m = bits(w)` is the digit-encoding of the EC `C_r`'s scalar `w` (HYP-345), and emit
-   `N = w·H_G1(epoch)` over that same `w` (shipped `nullifier.rs` Schnorr-AND). FULL `DIGITS` (not the
-   toy 32) so `w` is full-entropy (resolves R2 P1e). `s` is separately proven-known, not the key.
+   `N = w·H_G1(epoch)` over that same `w` (shipped `nullifier.rs` Schnorr-AND). `255 = ⌈log₂ r⌉` bits
+   (full-entropy `w`, resolves R2 P1e) AND a **canonical-range proof `digit-value < Fr::MODULUS`** (R8
+   P1 — else a non-canonical `bits` maps to the same `C_r`/`N` as a different signed message). `s` is
+   separately proven-known, not the key.
 8. **5.8 Blind issuance** (`OblSign`, Alg 7.1) — user commits `c = A·ru + D_s·s + D·m` + proves the
    opening (5.3); signer `EllipticSampler`s; user unblinds. (Reuses 5.1–5.3.)
 9. **5.9 Issuer-hiding wrapper** (HYP-324, shared with BBS) — replace the public `vk_pub` with the
@@ -278,3 +289,20 @@ before the C3 dual-hybrid `BlindedVouch` is end-to-end.
   named key (revealing the introducer when an epoch has >1). **Resolution:** build plan split — **5.9
   issuer-hiding wrapper (HYP-324)** is the gate; the public-key core (≤5.8 + the 5.6 compose) is
   **TEST-ONLY** and MUST NOT be wired live; **5.10 wire into `vouch.rs`** depends on 5.9.
+
+### Round 7 (Codex gpt-5.5/high, 2026-06-15) — 2×P2, RESOLVED
+
+- **P2a — registration `upk` binding.** `D_s·s=upk` had no public `upk` in the show ⇒ vacuous (and a
+  public `upk` de-anonymizes). **Resolution:** §1 item 5 — registration is ISSUANCE-time
+  (`OblSign`/`UKeyGen`); the show keeps `s` hidden as a signed attribute. Parent §9.3 updated.
+- **P2b — parent transcription order didn't gate wiring.** **Resolution:** parent §9.3 now gates
+  vouch-wiring on the issuer-hiding wrapper (public core test-only until then).
+
+### Round 8 (Codex gpt-5.5/high, 2026-06-15) — 1×P1, 1×P2, RESOLVED
+
+- **P1 — canonical `F_r` range for `bits(w)`.** Raw bits are malleable: a non-canonical encoding
+  (value `≥ r`) maps to the same `C_r`/`N` as `w` but is a different signed message ⇒ a second
+  credential / nullifier collision. **Resolution:** §1.7 + chunk 5.7 require `bits(w)` = the canonical
+  representative (`255` bits AND a range-proof `digit-value < Fr::MODULUS`), at show AND issuance.
+- **P2 — residual `registration` in the show summary.** **Resolution:** §1's summary now states the
+  linear parts are the `A,D_s,D` signature terms + tag weight (NOT a `upk`-registration check).
