@@ -29,13 +29,17 @@ Gaussian-width preimage is structurally impossible at our modulus.
 
 ### 1.1 What the lattice half must prove
 
-A verifier, given the public anchor `C_r` (and the issuer's public key `ipk`), accepts iff the
-prover knows `(w, r, σ)` such that:
+A verifier, given the **per-show** anchor `C_r^(i)` and the **epoch attested-introducer anchor**
+(NOT a single issuer key), accepts iff the prover knows `(w, k, r_i, σ, ipk*)` such that:
 
-1. `C_r = w·g + r·h` (the prover opens the EC anchor — shared with the BBS half), AND
-2. `σ` is a valid issuer signature on `w` under `ipk` (PQ-unforgeable membership), AND
-3. the proof reveals nothing about `w`, `r`, or `σ` beyond their existence — **statistically**
-   (so the AND-composition preserves the BBS half's everlasting anonymity).
+1. `C_r^(i) = w·g + r_i·h` with **fresh per-show** `r_i` (the prover opens the EC anchor — shared
+   with the BBS half; re-randomized each show so issuance cannot match a show — §1.1 R2 P1c), AND
+2. `σ` is a valid issuer signature on **`(w, k)`** under some `ipk*` in the epoch introducer set
+   (PQ-unforgeable membership; `ipk*` hidden — introducer anonymity, R2 P1d), AND
+3. the emitted one-show nullifier `N = k·H_G1(epoch)` uses the **same `k` signed into `σ`** (R2 P1e),
+   AND
+4. the proof reveals nothing about `w`, `k`, `r_i`, `σ`, or `ipk*` beyond their existence —
+   **statistically** (so AND-composition preserves the BBS half's everlasting anonymity).
 
 Property (2) is the part that needs PQ cryptography: a quantum adversary that breaks BBS (q-SDH)
 must still be unable to forge the lattice half, so a vouch for a non-member remains infeasible.
@@ -108,12 +112,16 @@ Notation: ring `R_q = Z_q[X]/(X^256+1)`, `q = 8380417` (shipped). Module rank `n
 - `ipk`: `A` (public), a message matrix `D ∈ R_q^{n×ℓ}` (NUMS-derived), a public syndrome
   `u ∈ R_q^n`, and the tag parameters (an invertible-difference tag set `T ⊂ R_q`).
 
-### 3.2 Message encoding of `w`
+### 3.2 Message encoding of `(w, k)`
 
-`w` is the BLS12-381 scalar committed in `C_r`. Encode it as a small-norm digit vector
-`m ∈ R_q^ℓ`, `‖m‖_∞ ≤ B_m` (e.g. base-`β_m` digits packed into ring coefficients), with a public
-linear map `Φ` such that `Φ(m) = w` over the integers / in both domains. `Φ` is what the
-cross-domain bind (HYP-345) proves consistent with `C_r`. (Exact packing: design sub-decision §3.6.)
+The signed message is **both** the member identity `w` AND the member nullifier secret `k` (R2 P1e:
+`k` MUST be signed, else a holder picks a fresh `k` per show to forge distinct nullifiers and bypass
+one-show detection). `w` is the BLS12-381 scalar committed in the show anchor; `k` is the
+member-chosen, blind-committed nullifier key. Encode `(w, k)` as a small-norm digit vector
+`m ∈ R_q^ℓ`, `‖m‖_∞ ≤ B_m` (base-`β_m` digits packed into ring coefficients), with public linear
+maps `Φ_w, Φ_k` such that `Φ_w(m) = w` and `Φ_k(m) = k` in both domains. `Φ_w` is what the
+cross-domain bind (HYP-345) proves consistent with the show anchor; `Φ_k` is what ties the emitted
+nullifier to the signed `k` (§3.4.5). (Exact packing: design sub-decision §3.6 D2.)
 
 ### 3.3 Issue — **BLIND** (DESIGN-review R1 P1a: must be blind)
 
@@ -128,9 +136,15 @@ person" with "issuer cannot track." Blind GPV/preimage issuance is the JRS23 pro
 
 Blind issuance protocol (2-move, JRS23-style):
 
-1. **Member → Issuer:** a hiding commitment `Cm` to `(w, k)` where `k` is a member-chosen **nullifier
-   secret** (never revealed to anyone), plus a ZK proof that `Cm` is well-formed and that `w` matches
-   the member's long-term `C_r` anchor. (`k` is what the nullifier is keyed on — see §3.4.5 / P2.)
+1. **Member → Issuer:** a hiding commitment `Cm` to `(w, k)` (`k` = member-chosen nullifier secret,
+   never revealed to anyone), plus a ZK proof that `Cm` is well-formed (each of `w, k` a valid
+   small-norm encoding). ⚠️ R2 P1c: the issuance proof does **NOT** reference the show anchor `C_r`
+   — if it did, the issuer could store `C_r` and match it to the eventual published show, defeating
+   blindness even without learning `w, k`. `Cm` uses **fresh issuance-only randomness**, unlinkable
+   to any show anchor. The show anchor is re-randomized **per show** (fresh `r`, fresh
+   `C_r^(i) = w·g + r_i·h` — standard BBS-style presentation unlinkability), so the issuer never sees
+   any value reused at show time. The member's claim "this is the right person" is established
+   **out-of-band** at the protocol layer, not by linking `Cm` to a long-term on-chain anchor.
 2. **Issuer:** picks a fresh tag `τ ∈ T` (invertible-difference set → unforgeability), and using
    `isk` blind-signs the committed message: samples a short `x` with `A_τ·x = u − D·m_Cm` where
    `m_Cm` is the committed small-norm encoding — **without** learning `(w, k)`. Uses
@@ -144,8 +158,9 @@ signatures share `A_τ`, so linearity attacks fail). **Transcribe the exact blin
 
 ### 3.4 Show (prover — the deep ZK core)
 
-Prove knowledge of `(τ, x, m, w, r)` such that `A_τ·x = u − D·m`, `‖x‖,‖m‖` small, `C_r = w·g+r·h`,
-`Φ(m)=w` — in statistical ZK. Structure:
+Prove knowledge of `(τ, x, m, w, k, r)` such that `A_τ·x = u − D·m` under **some** attested
+introducer key (R2 P1d — see §3.4.6), `‖x‖,‖m‖` small, `C_r^(i) = w·g+r_i·h` (fresh per-show
+anchor), `Φ_w(m)=w`, `Φ_k(m)=k`, `N = k·H_G1(epoch)` — in statistical ZK. Structure:
 
 1. **Decompose** `x`, `m`, and the hidden tag `τ` into bits (or base-`β` digits) `b`, all
    coefficients in a small set. `τ` is committed (NOT revealed — revealing a per-signature tag would
@@ -165,18 +180,33 @@ Prove knowledge of `(τ, x, m, w, r)` such that `A_τ·x = u − D·m`, `‖x‖
      tag — rejected because revealing a unique per-signature tag links to issuance.)
    **This product proof is the hardest component and the long pole — it makes (C) both sound AND
    unlinkable. Transcribe from LNS (and the JRS23 show proof, which already includes the tag term).**
-5. **Cross-domain bind**: tie `b` (digits of `m`, hence `w`) to `C_r` via the shipped `bind.rs`
-   shared-challenge same-value proof. Produces the one-show **nullifier** keyed on the member secret
-   `k` (NOT on `w` known to the issuer): `N = k·H_G1(epoch)` in the EC domain (shipped
-   `nullifier.rs` / `Nullifier` type — see §4 / P2). `k` is the blind-committed secret from §3.3, so
-   the issuer cannot recompute `N`.
+5. **Cross-domain bind + nullifier**: tie `b` (digits of `m`) to the show anchor via the shipped
+   `bind.rs` shared-challenge same-value proof:
+   - `Φ_w(m) = w` consistent with the per-show anchor `C_r^(i)` (membership of the *same* `w`), AND
+   - the one-show **nullifier** `N = k·H_G1(epoch)` in the EC domain, where the show's ZK relation
+     proves this `k` is the **SAME `k` signed into `m`** via `Φ_k` (R2 P1e). Because `k` is part of
+     the signed message, a holder CANNOT pick a fresh `k` at show time to forge distinct nullifiers —
+     one credential yields exactly one `N` per epoch. `k` is the blind-committed secret from §3.3, so
+     the issuer never learns it and cannot recompute `N` (R1 P1a). Uses the shipped `nullifier.rs` /
+     EC `Nullifier` type (R2 P2).
+6. **Issuer-hiding** (R2 P1d): the show must prove the signature verifies under **some** attested
+   introducer key in the `epoch` anchor — NOT a specific `ipk`, or every verifier learns which
+   introducer vouched (violating INTRODUCTION_RECORD §4.2 introducer anonymity). This MIRRORS the
+   BBS half's verifier-side anonymity layer (the HYP-324 decision: epoch group/aggregate key, or ZK
+   set-membership over the attested-introducer set). The lattice show adopts the SAME mechanism the
+   BBS half adopts — not a separate one — so AND-verify hides the introducer in both halves. Concretely,
+   the verified statement becomes "`σ` is valid under `ipk*` AND `ipk* ∈ EpochIntroducerSet`" with
+   `ipk*` hidden, via the chosen anonymity layer. **Construction = HYP-324 (shared with BBS); this
+   doc adopts its output.**
 
 ### 3.5 Verify + compose
 
-`verify_lattice_show` checks the LNS proof (commitment opening, linear, product), the bind to `C_r`,
-and the nullifier. The full vouch verifier (shipped `vouch.rs`) checks **BBS-show AND lattice-show**,
-both over the same `C_r`, and returns `N`. Everlasting anonymity: BBS statistical + LNS statistical
-ZK. PQ soundness: JRS23 EUF-CMA (Module-SIS).
+`verify_lattice_show` checks the LNS proof (commitment opening, linear, product **incl. tag term**),
+the bind to the per-show anchor `C_r^(i)`, the nullifier `N`, and **issuer-hiding** (validity under
+the `epoch` introducer-set anchor, not a named `ipk` — R2 P1d). The full vouch verifier (shipped
+`vouch.rs`) checks **BBS-show AND lattice-show**, both over the same per-show `C_r^(i)` and the same
+`epoch` anchor, and returns the EC `N`. Everlasting anonymity: BBS statistical + LNS statistical ZK,
+introducer hidden in both halves. PQ soundness: JRS23 EUF-CMA (Module-SIS).
 
 ### 3.6 Design sub-decisions for the Codex DESIGN-review
 
@@ -206,21 +236,29 @@ pub struct IssuerPublicKey { a: ..., d: ..., u: ..., tags: ... }   // ipk
 pub struct IssuerSecretKey { trapdoor: RingTrapdoorKey }           // isk (wraps the shipped trapdoor)
 pub struct LatticeSig { tag: RingElem, x: Vec<RingElem> }          // σ = (τ, x) — held by member only
 
-// BLIND issuance (P1a): two moves. The issuer never learns (w, k).
+// BLIND issuance (P1a): two moves. The issuer never learns (w, k) and never sees a show anchor (P1c).
 pub fn keygen(n, m_bar, rng) -> (IssuerPublicKey, IssuerSecretKey)
-pub struct IssueRequest { commitment, wellformed_proof }           // member → issuer (commits w, k)
+pub struct IssueRequest { commitment, wellformed_proof }    // member → issuer; commits (w,k), NO C_r
 pub struct BlindSignature { tag: RingElem, blinded_x: Vec<RingElem> }
-pub fn request_issue(ipk, w: &Fr, k: &Fr, c_r, rng) -> (IssueRequest, BlindState)  // member
+pub fn request_issue(ipk, w: &Fr, k: &Fr, rng) -> (IssueRequest, BlindState)       // member (no C_r! P1c)
 pub fn blind_sign(isk, req: &IssueRequest, rng) -> Result<BlindSignature, Error>   // issuer (no w,k)
-pub fn unblind(st: BlindState, bsig: BlindSignature) -> LatticeSig                 // member
+pub fn unblind(st: BlindState, bsig: BlindSignature) -> LatticeSig                 // member; m signs (w,k)
 
-// The show proof (the deep ZK core). Nullifier is in the EC domain (P2): shared `Nullifier` type.
-pub struct LatticeShowProof { commit, linear, product /* incl. tag term */, bind, nullifier: Nullifier }
-pub fn show(ipk, sig, w: &Fr, k: &Fr, r: &Fr, c_r: &G1Affine, epoch, rng) -> LatticeShowProof
-pub fn verify_show(ipk, c_r: &G1Affine, epoch, proof) -> Result<Nullifier /*EC N=k·H_G1(epoch)*/, Error>
+// The show proof (the deep ZK core). Per-show fresh anchor (P1c); epoch introducer-set anchor (P1d);
+// signed-k nullifier in the EC domain (P1e, P2).
+pub struct EpochIntroducerAnchor { /* HYP-324 anonymity layer: group key OR set-membership root */ }
+pub struct LatticeShowProof { commit, linear, product /* b∈{0,1} + tag term */, bind, issuer_hiding,
+                              nullifier: Nullifier }
+// fresh per show: r_i (anchor randomness) → c_r_i = w·g + r_i·h
+pub fn show(sig, w: &Fr, k: &Fr, r_i: &Fr, c_r_i: &G1Affine, epoch_anchor: &EpochIntroducerAnchor,
+            epoch: u64, rng) -> LatticeShowProof
+pub fn verify_show(epoch_anchor: &EpochIntroducerAnchor, c_r_i: &G1Affine, epoch: u64,
+                   proof) -> Result<Nullifier /*EC N=k·H_G1(epoch)*/, Error>
 ```
 
-Notes: the nullifier is the existing EC `Nullifier` (`G1`), keyed on the **blind** member secret `k`
+Notes: `verify_show` takes the **epoch introducer-set anchor**, not a single `ipk` (P1d). The show
+anchor `c_r_i` is **fresh per show** (P1c). The nullifier is the existing EC `Nullifier` (`G1`),
+keyed on the **blind, signed** member secret `k`
 (not `w`) so the issuer cannot recompute it (P1a + P2). `show` takes `k` as a witness; the bind
 proves the same `k` is in the credential and the same `w` is in `C_r`.
 
@@ -301,3 +339,23 @@ The remaining novel work is: the tag-based signature wrapper (§3.3), and the LN
 These three caught pre-code validate the design-first discipline (the bar is us + the gate; missing
 soundness/anonymity *mechanisms* are not deferrable — blind issuance and the tag product proof are
 now first-class build chunks §5.4–5.5, not footnotes).
+
+### Round 2 (Codex gpt-5.5/high, 2026-06-15) — 3×P1, all RESOLVED
+
+- **P1c — issuance must not expose the show anchor.** Even blind, if issuance references the
+  long-term `C_r`, the issuer stores it and matches the eventual show. **Resolution:** §3.3 issuance
+  binds `(w,k)` via fresh issuance-only randomness, NOT `C_r`; the show anchor `C_r^(i)` is
+  re-randomized per show (§3.2/§4). `request_issue` no longer takes `C_r`.
+- **P1d — must not verify against an individual introducer key.** A single `ipk` de-anonymizes the
+  introducer (violates INTRODUCTION_RECORD §4.2). **Resolution:** §3.4.6 + §3.5 — the show proves
+  validity under the **epoch attested-introducer anchor**, mirroring the BBS half's HYP-324
+  verifier-side anonymity layer (group key / set-membership). `verify_show` takes
+  `EpochIntroducerAnchor`, not `ipk`. Construction = HYP-324, shared with BBS (not reinvented).
+- **P1e — nullifier secret `k` must be bound into the signed relation.** Else a holder picks a fresh
+  `k` per show, forging distinct nullifiers and bypassing one-show. **Resolution:** §3.2 — `k` is
+  part of the signed message `m` (via `Φ_k`); §3.4.5 — the show proves the emitted `N` uses the
+  SAME signed `k`.
+
+Net effect of R1+R2: the construction now satisfies blindness, introducer anonymity, unlinkability,
+PQ unforgeability, and one-show — the full INTRODUCTION_RECORD §4 property set — at the design level,
+before any code. Six P1s caught pre-implementation.
