@@ -80,11 +80,17 @@ faithful transcription of an audited reference), the build will transcribe from 
 fixes *which* and *how they compose*; the exact equations/constants come from the papers at build
 time.
 
-1. **Signature scheme:** Jeudy, Roux-Langlois, Sanders — *"Lattice Signature with Efficient
-   Protocols, Application to Anonymous Credentials"* (CRYPTO 2023). The tag-based, commitment-
-   compatible signature designed for exactly this show proof. Underlying primitive: a GPV/MP12
-   trapdoor signature (what we have). Fallback/cross-check reference: del Pino–Katsumata
-   "A New Framework for More Efficient Round-Optimal Lattice-Based (Partially) Blind Signatures."
+1. **Signature scheme:** ⚠️ PRIMARY reference updated 2026-06-15 — **"Practical Post-Quantum
+   Signatures for Privacy" (CCS 2024, ePrint 2024/131)**, which **supersedes** Jeudy–Roux-Langlois–
+   Sanders *"Lattice Signature with Efficient Protocols, Application to Anonymous Credentials"*
+   (CRYPTO 2023, ePrint 2022/509) with a more efficient construction by overlapping authors. Use
+   2024/131 as the construction to transcribe; 2022/509 as the conceptual/cross-check reference (its
+   tag-based, commitment-compatible, GPV/MP12-underlain signature is the family). Also newer:
+   "Lattice-based Proof-Friendly Signatures from Vanishing-SIS" (ePrint 2025/356) — evaluate at
+   build time. Fallback: del Pino–Katsumata round-optimal blind-signature framework.
+   *Retrieval note: eprint.iacr.org 403s automated fetch (WebFetch + curl both blocked by anti-bot);
+   the PDFs must be pulled via an authenticated/manual path before transcription — the references are
+   identified, not yet in hand.*
 2. **Show proof (the deep ZK core):** Lyubashevsky, Nguyen, Seiler — *"Practical Lattice-Based
    Zero-Knowledge Proofs for Integer Relations"* / *"Shorter Lattice-Based Zero-Knowledge Proofs
    via One-Time Commitments"* (LNS20/LNS21), and Lyubashevsky–Nguyen–Plançon for the product
