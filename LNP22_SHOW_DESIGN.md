@@ -29,6 +29,11 @@ under commitment matrix `[D_s | D]`. The show is a Fiat–Shamir argument of kno
 1. **Signature** (SEP.Verify, §6.2): `[A | tG − B]·v = u + D_s·s + D·m (mod p)`.
    - ⚠️ This is **NOT linear** in the witness: `tG·v₂` is a **product** of two committed witnesses
      `t` and `v₂` → a **quadratic relation** (thesis §7.4 line "quadratic relation because of tGv₂").
+   - ⚠️ DESIGN-review R3 P1: this relation holds **mod `p`**, but the LNP22 proof runs **mod `q̂ =
+     p·q1`**. `R_p → R_q̂` is NOT a homomorphic embedding (only the reduction `R_q̂ → R_p` is natural).
+     So the proven relation is `[A | tG − B]·v − (u + D_s·s + D·m) = p·z (mod q̂)` for an additional
+     **committed, bounded quotient witness `z`** — the LNP22 lift must carry + prove `z` (and its
+     bound), or honest signatures are rejected mod `q̂`. `z` joins the witness/commitment.
 2. **Short `v`** (ℓ₂): `‖v₁‖₂ ≤ B1`, `‖v₂‖₂ ≤ B2` — **exact-ℓ₂-norm** proofs (LNP22's quadratic
    machinery proves exact ℓ₂ bounds; the extracted witness is a genuine short solution).
 3. **Tag** `t ∈ Tw`: binary, fixed Hamming weight `w` — a membership/structure constraint (binary
@@ -121,10 +126,13 @@ linear + quadratic + norm + bind + nullifier + the `ipk* ∈ anchor` membership,
 
 ## 4. Build plan (chunk-by-chunk, each: tests + Codex gate)
 
-0. **5.0 Proof ring `R_q̂`** (R2 P1) — a new ring instance `Z_q̂[X]/(X^{n̂}+1)`, `n̂=64`, `q̂=q·q1`
-   (`q1≈2^19`), with the lift `R_p → R_q̂` (thesis: "lift the equation to `R_q̂`"). Distinct from
-   `sep_ring`; challenges + the LNP22 proof live here. Arithmetic + inversion (for the
-   invertible-difference challenge property). Tests: arithmetic, lift correctness, inversion.
+0. **5.0 Proof ring `R_q̂`** (R2 P1) — a new ring instance `Z_q̂[X]/(X^{n̂}+1)`, `n̂=64`, `q̂=p·q1`
+   (`q1≈2^19`). Distinct from `sep_ring`; challenges + the LNP22 proof live here. Arithmetic +
+   inversion (for the invertible-difference challenge property). ⚠️ R3 P1: the `R_p → R_q̂` lift is
+   NOT homomorphic (`q̂=p·q1`); a mod-`p` SEP relation becomes a mod-`q̂` relation **with a `p·z`
+   carry**, so the lift produces a bounded quotient witness `z` that the proof commits + bounds. Tests:
+   arithmetic, inversion, and the carry-lift round-trip (a mod-`p` equation lifts to `= p·z` mod `q̂`
+   with the recovered `z` bounded).
 1. **5.1 ABDLOP commitment** — extend `bdlop` to the Ajtai+BDLOP fused commitment (binding for the
    short block, hiding for the message block) over `R_q̂`. Tests: opening, binding, hiding, homomorphism.
 2. **5.2 Challenge space** (§7.4.1) — sample `c ∈ C ⊂ R_q̂` (`ρ,η` bounds); invertible-differences
@@ -206,3 +214,14 @@ before the C3 dual-hybrid `BlindedVouch` is end-to-end.
 - **P2b — verifier issuer-anonymity.** `verify_show` took a named `SepVerifyKey`, revealing the
   introducer. **Resolution:** §3 — `verify_show` takes ONLY the `EpochIntroducerAnchor`; the issuer
   key `ipk*` is a hidden witness the prover proves `∈ anchor` (the prover holds `ipk*`).
+
+### Round 3 (Codex gpt-5.5/high, 2026-06-15) — 1×P1, 1×P2, both RESOLVED
+
+- **P1 — `q̂` lift carry term.** `q̂ = p·q1`, so `R_p → R_q̂` is not a homomorphic embedding; a mod-`p`
+  SEP relation lifts to a mod-`q̂` relation with a `p·z` carry, which the proof must carry+bound or
+  honest sigs are rejected. **Resolution:** §1.1 + chunk 5.0 now prove `…·v − (u+…) = p·z (mod q̂)`
+  with a committed, bounded quotient witness `z`.
+- **P2 — stale `k` in the parent build plan.** Parent §5 (the early LNS build plan) still bound a
+  separate `k` and emitted `N=k·H_G1`. **Resolution:** the parent §3 supersede banner now explicitly
+  covers §4 AND the §5 build plan (LNS/`k` references there are non-normative; authoritative build
+  order = this doc §4, nullifier keyed by `w`).
