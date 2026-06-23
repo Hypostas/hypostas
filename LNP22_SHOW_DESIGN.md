@@ -163,11 +163,20 @@ candidate (a). Then `vouch.rs` AND-verifies it with the BBS half over the shared
    toy 32) so `w` is full-entropy (resolves R2 P1e). `s` is separately proven-known, not the key.
 8. **5.8 Blind issuance** (`OblSign`, Alg 7.1) — user commits `c = A·ru + D_s·s + D·m` + proves the
    opening (5.3); signer `EllipticSampler`s; user unblinds. (Reuses 5.1–5.3.)
-9. **5.9 Wire into `vouch.rs`** — AND-verify the lattice show with the BBS half (HYP-343, retire
-   `StubVouchScheme`); end-to-end vouch test.
+9. **5.9 Issuer-hiding wrapper** (HYP-324, shared with BBS) — replace the public `vk_pub` with the
+   `EpochIntroducerAnchor`: candidate (a) shared/aggregate epoch key (matrices stay public, relation
+   unchanged) or (b) committed-key + accumulator-membership (adds quadratic terms). This is the gate
+   for entering the live vouch path. ⚠️ R6 P1: until this lands, the public-`vk_pub` core (5.6) is
+   **TEST-ONLY** — it must NOT be wired into `vouch.rs`, because verifying against a named key reveals
+   the introducer (violating §1.6 when an epoch has >1 introducer).
+10. **5.10 Wire into `vouch.rs`** — ONLY after 5.9: AND-verify the issuer-hidden lattice show with the
+   BBS half (HYP-343, retire `StubVouchScheme`); end-to-end vouch test. Depends on 5.9 (no live
+   wiring of the public-key core).
 
-Realistic: 5.4 (quadratic) + 5.5 (norm) are the research-grade core; expect multiple careful gated
-sub-chunks each. No public LNP22 impl ⇒ faithful transcription throughout (thesis §7.4 is the source).
+Realistic: 5.4 (quadratic) + 5.5 (norm) are the research-grade core; 5.9 (issuer-hiding) is the
+HYP-324 crypto-sign-off decision. Expect multiple careful gated sub-chunks each. No public LNP22 impl
+⇒ faithful transcription throughout (thesis §7.4 is the source). The public-key core (≤5.8) is
+test-only until 5.9 gates it into the vouch path.
 
 ---
 
@@ -256,3 +265,11 @@ before the C3 dual-hybrid `BlindedVouch` is end-to-end.
   HYP-324 candidate (a) shared/aggregate epoch key keeps the matrices public (relation unchanged,
   preferred), while (b) committed-key+accumulator adds the quadratic terms (heavier, flagged). §3
   `verify_show` takes a public `vk_pub`; the HYP-324 wrapper swaps in the anchor + membership proof.
+
+### Round 6 (Codex gpt-5.5/high, 2026-06-15) — 1×P1, RESOLVED
+
+- **P1 — vouch wiring must gate on issuer-hiding.** The build plan let the public-`vk_pub` core be
+  wired into `vouch.rs` before the HYP-324 wrapper, producing a BlindedVouch that verifies against a
+  named key (revealing the introducer when an epoch has >1). **Resolution:** build plan split — **5.9
+  issuer-hiding wrapper (HYP-324)** is the gate; the public-key core (≤5.8 + the 5.6 compose) is
+  **TEST-ONLY** and MUST NOT be wired live; **5.10 wire into `vouch.rs`** depends on 5.9.
