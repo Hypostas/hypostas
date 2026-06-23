@@ -107,10 +107,20 @@ deepest in the privacy stack. The design-first step exists to commit to it with 
 
 ---
 
-## 3. The construction (the level we can fix now)
+## 3. The construction (early sketch — ⚠️ SUPERSEDED by §9)
 
-Notation: ring `R_q = Z_q[X]/(X^256+1)`, `q = 8380417` (shipped). Module rank `n`, gadget width
-`K=23`. `ipk` = issuer public key, `isk` = the MP12 trapdoor (shipped `RingTrapdoorKey`).
+> **⚠️ NORMATIVE NOTE (DESIGN-review R3 P1a):** This section is the EARLY abstract sketch and is
+> **superseded by §9** (and `LNP22_SHOW_DESIGN.md`). It is kept only for the reasoning trail. Do NOT
+> implement from it: it describes the construction over the *shipped* `q = 8380417` ring +
+> `RingTrapdoorKey`, but §9.4 establishes that this modulus splits fully and **breaks SEP tag
+> unforgeability** — the credential MUST use the separate SEP-compatible ring `R_p`, `p = 425837`
+> (`sep_ring`), with the tag-based signature of §9.1 (shipped as `sep_*`). The authoritative
+> construction + interface + build plan are **§9 here** and **`LNP22_SHOW_DESIGN.md`**. The §4
+> interface below is likewise an early sketch; the shipped/authoritative API is `sep_sig::SepSigKey`/
+> `SepVerifyKey` + the `lnp22` module planned in `LNP22_SHOW_DESIGN.md` §3.
+
+Notation (early sketch): ring `R_q = Z_q/(X^256+1)`, `q = 8380417`. Module rank `n`, gadget `K=23`.
+`ipk` = issuer public key, `isk` = the MP12 trapdoor. *(See §9 for the real `R_p`/`p=425837` setting.)*
 
 ### 3.1 Keys
 

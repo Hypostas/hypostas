@@ -37,9 +37,21 @@ under commitment matrix `[D_s | D]`. The show is a Fiat–Shamir argument of kno
 5. **Registration**: knowledge of `s` with `D_s·s = upk` (linear).
 6. **Issuer-hiding** (R2 P1d, parent §3.4.6): the proof is under the **epoch attested-introducer
    anchor**, not a named `ipk` — HYP-324 verifier-side anonymity layer, shared with the BBS half.
-7. **Cross-domain bind** (HYP-345): the same `w`/`s` is in `C_r = w·g + r·h` (EC); the one-show
-   **nullifier** `N = k·H_G1(epoch)` is keyed on `k = s` (the high-entropy user secret — resolves
-   R2 P1e: `s` is signed, so the holder can't swap it; and the issuer never learns it via OblSign).
+7. **Cross-domain bind + nullifier** (HYP-345). ⚠️ DESIGN-review R3 P1b: the nullifier key is the
+   **EC scalar `w`**, NOT the lattice registration secret `s`. Distinguish them:
+   - `w ∈ F_r` (BLS12-381 scalar) — the **member identity**, committed in `C_r = w·g + r·h` (EC) AND
+     encoded as its **binary digits** in the lattice message `m` (`m = bits(w)`, `T₁`). The
+     cross-domain bind (HYP-345: digit decomposition + shared challenge) proves *the same `w`* is in
+     `C_r` and is `m`'s digit-encoding — `w`'s digits are literally the lattice message, so there is
+     **no `s→F_r` map and no hash/compression** (the very risk R3 P1b flags). The nullifier is
+     `N = w·H_G1(epoch)` over the EC `w` (the shipped `nullifier.rs` Schnorr-AND proves the `N`-`w`
+     equals the `C_r`-`w`; the show additionally proves that `w` equals `m`'s digits via the bind).
+   - `s ∈ T₁^{2d}` (binary, lattice-only) — the **thesis registration secret** (impersonation
+     prevention, `upk = D_s·s`). It is signed + proven-known, but it is **not** the nullifier key and
+     is never mapped to `F_r`.
+   Identity-hiding + unlinkability hold because (a) `w` is full-entropy (the bind uses FULL `DIGITS`,
+   not the toy 32 — resolves the R2 P1e/§nullifier brute-force gap), and (b) blind issuance
+   (`OblSign`) hides `m = bits(w)` from the issuer, so it cannot recompute `N`.
 
 So the show is a single LNP22 proof over: **linear** parts (the `A`,`D_s`,`D` terms, registration,
 tag weight) + **quadratic** parts (`tG·v₂`, binary `t∘t=t`/`m∘m=m`/`s∘s=s`) + **exact-ℓ₂-norm**
@@ -111,8 +123,10 @@ the BBS half over the shared `C_r`/epoch (HYP-343).
 5. **5.5 Exact-ℓ₂-norm proof** — squared-norm-as-quadratic; tight extraction. Tests at the bound.
 6. **5.6 Compose `show`/`verify_show`** — assemble §1's statement; Fiat–Shamir; statistical-ZK +
    soundness + completeness tests (honest credential shows verify; forgeries/tampering rejected).
-7. **5.7 Cross-domain bind + `s`-keyed nullifier** — generalize `bind.rs` to tie the message slot to
-   `C_r` + emit `N = s·H_G1(epoch)` proven equal to the signed `s` (resolves R2 P1e).
+7. **5.7 Cross-domain bind + `w`-keyed nullifier** — generalize `bind.rs` to prove the lattice
+   message `m = bits(w)` is the digit-encoding of the EC `C_r`'s scalar `w` (HYP-345), and emit
+   `N = w·H_G1(epoch)` over that same `w` (shipped `nullifier.rs` Schnorr-AND). FULL `DIGITS` (not the
+   toy 32) so `w` is full-entropy (resolves R2 P1e). `s` is separately proven-known, not the key.
 8. **5.8 Blind issuance** (`OblSign`, Alg 7.1) — user commits `c = A·ru + D_s·s + D·m` + proves the
    opening (5.3); signer `EllipticSampler`s; user unblinds. (Reuses 5.1–5.3.)
 9. **5.9 Wire into `vouch.rs`** — AND-verify the lattice show with the BBS half (HYP-343, retire
@@ -135,9 +149,10 @@ sub-chunks each. No public LNP22 impl ⇒ faithful transcription throughout (the
 - **Q3 — quadratic-proof variant.** Which LNP22 quadratic technique (automorphism vs NTT-slot
   garbage) to transcribe — proof size vs pure-Rust implementability (no NTT yet for `q̂`; may need a
   partial NTT or schoolbook at the proof modulus).
-- **Q4 — `s` as the nullifier key.** Confirm `k = s` (the user secret, `T₁^{2d}`) is the right
-  nullifier key (high-entropy, signed, issuer-blind) and how it binds to the EC `C_r` scalar `w` (are
-  `w` and `s` the same value in two domains, or linked by a proven relation?).
+- **Q4 — nullifier key.** RESOLVED in §1.7 (DESIGN-review R3 P1b): the key is the EC scalar `w` (not
+  the lattice secret `s`); `m = bits(w)` is the lattice digit-encoding, cross-domain-bound to `C_r`'s
+  `w` (no `s→F_r` map). Remaining to confirm at build: the FULL `DIGITS` width for `w` (so the bind
+  covers a full `F_r` element) + its proof cost.
 - **Q5 — params.** Lock the provisional Ch8 params (`n̂,k̂,d̂,q1,ρ,η,σ_j,ℓ`) + the resulting
   bit-security (M-SIS/M-ISIS/M-LWE) and proof size (HYP-330).
 
@@ -150,3 +165,19 @@ Schur-complement perturbation), `sep_sig` (sign/verify + public `SepVerifyKey`),
 half of ABDLOP), `module_sis` (the Dilithium-style masked-opening shape 5.3 reuses), `bind`/
 `nullifier`/`bbs` (the EC half + cross-domain + AND-verify). The show is the last major component
 before the C3 dual-hybrid `BlindedVouch` is end-to-end.
+
+---
+
+## 7. DESIGN-review log
+
+### Round 1 (Codex gpt-5.5/high, 2026-06-15) — 2×P1, both RESOLVED
+
+- **P1a — obsolete shipped-modulus construction.** `LATTICE_SIG_PROTOCOLS_DESIGN.md` §3 still
+  described the construction over the shipped `q=8380417` ring, contradicting §9.4 (which requires the
+  separate `p=425837` SEP ring for tag unforgeability). **Resolution:** §3 (and its §4 interface) now
+  carry a ⚠️ SUPERSEDED-by-§9 banner; the authoritative construction is §9 + this doc.
+- **P1b — undefined vector→`F_r` nullifier binding.** The draft keyed the nullifier on the lattice
+  binary vector `s`, but `N = k·H_G1` needs an `F_r` scalar. **Resolution:** §1.7 now keys the
+  nullifier on the EC scalar `w` (the member identity, in `C_r`), with `m = bits(w)` the lattice
+  digit-encoding cross-domain-bound to `C_r` — no `s→F_r` map, no hash/compression. `s` is kept as the
+  separate lattice registration secret (proven-known, never the key). Q4 updated.
