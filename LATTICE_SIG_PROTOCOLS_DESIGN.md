@@ -115,34 +115,61 @@ Notation: ring `R_q = Z_q[X]/(X^256+1)`, `q = 8380417` (shipped). Module rank `n
 linear map `Φ` such that `Φ(m) = w` over the integers / in both domains. `Φ` is what the
 cross-domain bind (HYP-345) proves consistent with `C_r`. (Exact packing: design sub-decision §3.6.)
 
-### 3.3 Issue (issuer, knows `w` — non-blind; one-introducer onboarding)
+### 3.3 Issue — **BLIND** (DESIGN-review R1 P1a: must be blind)
 
-1. Pick a fresh tag `τ ∈ T` (invertible-difference set → unforgeability).
-2. Form the tag-shifted matrix `A_τ` (e.g. `A_τ = [A | A·R + τ·G]` per Ducas–Micciancio; exact form
-   from JRS23).
-3. Using `isk`, sample a short `x` with `A_τ · x = u − D·m` (this is `RingTrapdoorKey::sample_pre`
-   on the syndrome `u − D·m`, with `A_τ`'s extended structure — **reuses the shipped sampler**).
-4. Signature `σ = (τ, x)`; `‖x‖_∞ ≤ β_sig` (the shipped `CRED_RING_INF_NORM_BOUND` regime).
+⚠️ **Issuance MUST be blind**: the issuer learns neither `w` nor the member's nullifier secret. If
+the issuer (= introducer) learned `w`, then since the show emits a nullifier deterministic in the
+member's secret + epoch, the issuer could recompute every epoch's nullifier and **link every show to
+the issuance** — breaking unlinkability even though the ZK show hides `w`. The introducer's
+authorization ("I vouch for *this person*") happens at the **protocol layer** (the introducer
+chooses to run the issuance protocol with an out-of-band-authenticated person), NOT by learning the
+person's cryptographic secret. This is the standard reconciliation of "known issuer admits known
+person" with "issuer cannot track." Blind GPV/preimage issuance is the JRS23 protocol — transcribe it.
 
-Unforgeability (EUF-CMA): Module-SIS over `A` + the tag structure (no two signatures share `A_τ`,
-so linearity attacks fail). **Transcribe the exact reduction + tag set from JRS23.**
+Blind issuance protocol (2-move, JRS23-style):
+
+1. **Member → Issuer:** a hiding commitment `Cm` to `(w, k)` where `k` is a member-chosen **nullifier
+   secret** (never revealed to anyone), plus a ZK proof that `Cm` is well-formed and that `w` matches
+   the member's long-term `C_r` anchor. (`k` is what the nullifier is keyed on — see §3.4.5 / P2.)
+2. **Issuer:** picks a fresh tag `τ ∈ T` (invertible-difference set → unforgeability), and using
+   `isk` blind-signs the committed message: samples a short `x` with `A_τ·x = u − D·m_Cm` where
+   `m_Cm` is the committed small-norm encoding — **without** learning `(w, k)`. Uses
+   `RingTrapdoorKey::sample_pre` on `A_τ`'s extended structure (reuses the shipped sampler).
+3. **Member:** unblinds to obtain `σ = (τ, x)` on its own `(w, k)`; `‖x‖_∞ ≤ β_sig` (the shipped
+   `CRED_RING_INF_NORM_BOUND` regime).
+
+Unforgeability (EUF-CMA, even under blind queries): Module-SIS over `A` + the tag structure (no two
+signatures share `A_τ`, so linearity attacks fail). **Transcribe the exact blind-issuance reduction
++ tag set + the well-formedness proof from JRS23.**
 
 ### 3.4 Show (prover — the deep ZK core)
 
 Prove knowledge of `(τ, x, m, w, r)` such that `A_τ·x = u − D·m`, `‖x‖,‖m‖` small, `C_r = w·g+r·h`,
 `Φ(m)=w` — in statistical ZK. Structure:
 
-1. **Decompose** `x` and `m` into bits (or base-`β` digits) `b`, all coefficients in a small set.
+1. **Decompose** `x`, `m`, and the hidden tag `τ` into bits (or base-`β` digits) `b`, all
+   coefficients in a small set. `τ` is committed (NOT revealed — revealing a per-signature tag would
+   itself link the show to its issuance), so it joins the witness.
 2. **LNS commit** to `b` (Ajtai/BDLOP commitment, small-norm).
-3. **Linear-relation proof**: `A_τ·x = u − D·m` is linear in `b` (with `τ` handled as a committed
-   small element or a small set of public tag candidates). Dilithium-style masked response on the
-   *small* `b` (γ now fits: witnesses are small, `d·τ·‖b‖_∞ / γ = O(1)` is achievable `< q/2`).
-4. **Product proof**: `b·(b−1)=0` (exact binary), so extraction is tight → extracted `x*` is a
-   genuine short Module-SIS-valid signature (`< q`). **This is the component that makes (A)/(C)
-   sound and is the hardest to transcribe (LNS product proof).**
+3. **Linear-relation proof** for the *linear* part of the signature equation. ⚠️ DESIGN-review R1
+   P1b: for the DM-style `A_τ = [A | A·R + τ·G]` with hidden `τ`, the equation
+   `A_τ·x = A·x₁ + A·R·x₂ + τ·(G·x₂) = u − D·m` is **NOT linear in the committed bits** — it carries
+   the witness **product** `τ·(G·x₂)`. The linear proof covers only `A·x₁ + A·R·x₂ + D·m`; the
+   product term is discharged in step 4.
+4. **Product proof** — TWO obligations (both via the LNS product/quadratic machinery):
+   - (a) `b·(b−1)=0` (exact binary), so the decomposition extraction is tight → extracted `x*` is a
+     genuine short Module-SIS-valid signature (`< q`, no `2^k` gadget blowup).
+   - (b) the **tag–signature product** `τ·(G·x₂)` (P1b): prove the committed `τ` times the committed
+     `G·x₂` equals the committed cross-term, so the full `A_τ·x = u − D·m` is sound with `τ` hidden.
+     (Alternative considered + rejected: a tag **set-membership** proof + revealing a re-randomized
+     tag — rejected because revealing a unique per-signature tag links to issuance.)
+   **This product proof is the hardest component and the long pole — it makes (C) both sound AND
+   unlinkable. Transcribe from LNS (and the JRS23 show proof, which already includes the tag term).**
 5. **Cross-domain bind**: tie `b` (digits of `m`, hence `w`) to `C_r` via the shipped `bind.rs`
-   shared-challenge same-value proof. Produces the one-show **nullifier** `N = w·H(epoch)`
-   (shipped `nullifier.rs`).
+   shared-challenge same-value proof. Produces the one-show **nullifier** keyed on the member secret
+   `k` (NOT on `w` known to the issuer): `N = k·H_G1(epoch)` in the EC domain (shipped
+   `nullifier.rs` / `Nullifier` type — see §4 / P2). `k` is the blind-committed secret from §3.3, so
+   the issuer cannot recompute `N`.
 
 ### 3.5 Verify + compose
 
@@ -173,21 +200,29 @@ ZK. PQ soundness: JRS23 EUF-CMA (Module-SIS).
 ## 4. Interface (Rust, behind `experimental-unaudited`)
 
 ```text
-// New module: vouch-crypto::lattice_cred  (built on ring_trapdoor + module_sis + bind)
+// New module: vouch-crypto::lattice_cred  (built on ring_trapdoor + module_sis + bind + nullifier)
 
 pub struct IssuerPublicKey { a: ..., d: ..., u: ..., tags: ... }   // ipk
 pub struct IssuerSecretKey { trapdoor: RingTrapdoorKey }           // isk (wraps the shipped trapdoor)
-pub struct LatticeSig { tag: RingElem, x: Vec<RingElem> }          // σ = (τ, x)
+pub struct LatticeSig { tag: RingElem, x: Vec<RingElem> }          // σ = (τ, x) — held by member only
 
+// BLIND issuance (P1a): two moves. The issuer never learns (w, k).
 pub fn keygen(n, m_bar, rng) -> (IssuerPublicKey, IssuerSecretKey)
-pub fn issue(isk, w: &Fr, rng) -> LatticeSig                       // non-blind; encodes w→m, signs
-pub fn verify_sig(ipk, w: &Fr, sig) -> bool                        // non-ZK issuer/holder check
+pub struct IssueRequest { commitment, wellformed_proof }           // member → issuer (commits w, k)
+pub struct BlindSignature { tag: RingElem, blinded_x: Vec<RingElem> }
+pub fn request_issue(ipk, w: &Fr, k: &Fr, c_r, rng) -> (IssueRequest, BlindState)  // member
+pub fn blind_sign(isk, req: &IssueRequest, rng) -> Result<BlindSignature, Error>   // issuer (no w,k)
+pub fn unblind(st: BlindState, bsig: BlindSignature) -> LatticeSig                 // member
 
-// The show proof (the deep ZK core):
-pub struct LatticeShowProof { commit, linear, product, bind, nullifier }
-pub fn show(ipk, sig, w: &Fr, r: &Fr, c_r: &G1Affine, epoch, rng) -> LatticeShowProof
-pub fn verify_show(ipk, c_r: &G1Affine, epoch, proof) -> Result<RingElem /*N*/, Error>
+// The show proof (the deep ZK core). Nullifier is in the EC domain (P2): shared `Nullifier` type.
+pub struct LatticeShowProof { commit, linear, product /* incl. tag term */, bind, nullifier: Nullifier }
+pub fn show(ipk, sig, w: &Fr, k: &Fr, r: &Fr, c_r: &G1Affine, epoch, rng) -> LatticeShowProof
+pub fn verify_show(ipk, c_r: &G1Affine, epoch, proof) -> Result<Nullifier /*EC N=k·H_G1(epoch)*/, Error>
 ```
+
+Notes: the nullifier is the existing EC `Nullifier` (`G1`), keyed on the **blind** member secret `k`
+(not `w`) so the issuer cannot recompute it (P1a + P2). `show` takes `k` as a witness; the bind
+proves the same `k` is in the credential and the same `w` is in `C_r`.
 
 The full BlindedVouch (`vouch.rs`) gains a lattice-show field and AND-verifies it with the BBS half
 over the shared `C_r` (this is where HYP-343's trait reshape lands).
@@ -198,16 +233,23 @@ over the shared `C_r` (this is where HYP-343's trait reshape lands).
 
 Ordered so each chunk is independently gate-clean and the hard core is isolated:
 
-1. **`lattice_cred` skeleton + tag-based signature** — `keygen`/`issue`/`verify_sig` (non-ZK),
-   reusing `ring_trapdoor::sample_pre` on the tag-shifted syndrome. Tests: sign→verify, tag
-   freshness, EUF-flavor (no-trapdoor forgery fails, linearity-combination fails).
+1. **`lattice_cred` skeleton + tag-based signature (clear-tag first)** — `keygen` + a NON-blind,
+   clear-tag `sign`/`verify_sig` (non-ZK) reusing `ring_trapdoor::sample_pre` on the tag-shifted
+   syndrome. This is a build-scaffold ONLY (not the real issuance — clear tag + non-blind are both
+   insecure per R1); it validates the signature equation + sampler reuse in isolation. Tests:
+   sign→verify, tag freshness, EUF-flavor (no-trapdoor forgery fails, linearity-combination fails).
 2. **LNS witness commitment** (BDLOP/Ajtai) — commit + open, binding + hiding tests.
-3. **LNS linear-relation proof** — prove `A_τ·x = u − D·m` over committed small `b`. The Dilithium-
-   style masked proof on small witnesses (γ fits). Soundness/ZK tests.
-4. **LNS product proof** (`b∈{0,1}`) — the hardest core; tight extraction. Tests at threshold.
-5. **Cross-domain bind** — generalize `bind.rs` to bind `m`-digits to `C_r`; same-value tests.
-6. **Compose `show`/`verify_show`** + nullifier; statistical-ZK + soundness + one-show tests.
-7. **Wire into `vouch.rs`** (AND-verify) + HYP-343 trait reshape; end-to-end vouch test.
+3. **LNS linear-relation proof** — the linear part `A·x₁ + A·R·x₂ + D·m` over committed small `b`.
+   Dilithium-style masked proof on small witnesses (γ fits). Soundness/ZK tests.
+4. **LNS product proof** — the hardest core, BOTH obligations: (a) `b·(b−1)=0` (tight extraction),
+   (b) the tag–signature product `τ·(G·x₂)` (R1 P1b). Tests at threshold for each.
+5. **Blind issuance** (R1 P1a) — `request_issue`/`blind_sign`/`unblind` so the issuer learns neither
+   `w` nor `k`; the commitment well-formedness proof. Tests: correctness (unblinded σ verifies),
+   blindness (issuer view independent of `w,k`), EUF under blind queries.
+6. **Cross-domain bind + EC nullifier** — generalize `bind.rs` to bind `m`-digits to `C_r` AND tie
+   the member secret `k`; emit the EC `Nullifier = k·H_G1(epoch)` (R1 P2). Same-value + one-show tests.
+7. **Compose `show`/`verify_show`**; statistical-ZK + soundness + one-show-collision tests.
+8. **Wire into `vouch.rs`** (AND-verify) + HYP-343 trait reshape; end-to-end vouch test.
 
 Realistic scope: this is a multi-chunk, research-grade build (the LNS core especially). Each chunk
 stays behind `experimental-unaudited`; HYP-330 external audit remains the gate before any mainnet use.
@@ -236,3 +278,26 @@ stays behind `experimental-unaudited`; HYP-330 external audit remains the gate b
 
 The remaining novel work is: the tag-based signature wrapper (§3.3), and the LNS commitment + linear
 + **product** proofs (§3.4.2–4). The product proof is the long pole.
+
+---
+
+## 8. DESIGN-review log
+
+### Round 1 (Codex gpt-5.5/high, 2026-06-15) — 2×P1, 1×P2, all RESOLVED in this doc
+
+- **P1a — non-blind issuance + public nullifier links shows to the issuer.** With the issuer =
+  introducer learning `w`, and a nullifier deterministic in the member secret + epoch, the issuer
+  could recompute every nullifier and link shows to issuance. **Resolution:** issuance is now
+  **blind** (§3.3) — the issuer learns neither `w` nor the member nullifier secret `k`; the nullifier
+  is keyed on the blind `k`, not `w` (§3.4.5, §4). Introducer authorization moves to the protocol
+  layer (out-of-band-authenticated person), not knowledge of the secret.
+- **P1b — hidden tag makes `A_τ·x` non-linear (`τ·(Gx₂)` product term).** A plain LNS linear proof
+  cannot prove the signature equation when `τ` is hidden. **Resolution:** §3.4.4 now has the product
+  proof discharge BOTH `b∈{0,1}` AND the tag–signature product `τ·(Gx₂)`; revealing a re-randomized
+  tag was considered and rejected (a unique per-signature tag, if revealed, links to issuance).
+- **P2 — nullifier domain mismatch (`RingElem` vs EC).** **Resolution:** §4 returns the shared EC
+  `Nullifier` (`G1`), `N = k·H_G1(epoch)`, consistent with the existing vouch/nullifier plumbing.
+
+These three caught pre-code validate the design-first discipline (the bar is us + the gate; missing
+soundness/anonymity *mechanisms* are not deferrable — blind issuance and the tag product proof are
+now first-class build chunks §5.4–5.5, not footnotes).
