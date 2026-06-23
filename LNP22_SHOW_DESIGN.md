@@ -177,8 +177,13 @@ candidate (a). Then `vouch.rs` AND-verifies it with the BBS half over the shared
    (full-entropy `w`, resolves R2 P1e) AND a **canonical-range proof `digit-value < Fr::MODULUS`** (R8
    P1 — else a non-canonical `bits` maps to the same `C_r`/`N` as a different signed message). `s` is
    separately proven-known, not the key.
-8. **5.8 Blind issuance** (`OblSign`, Alg 7.1) — user commits `c = A·ru + D_s·s + D·m` + proves the
-   opening (5.3); signer `EllipticSampler`s; user unblinds. (Reuses 5.1–5.3.)
+8. **5.8 Blind issuance** (`OblSign`, Alg 7.1) — user commits `c = A·ru + D_s·s + D·m` and proves the
+   opening (5.3) **AND the full message well-formedness** (R9 P2): `m, s` binary (`m∘m=m`, `s∘s=s`,
+   via 5.4), `m = bits(w)` canonical (`< Fr::MODULUS`, range-proof via 5.4/5.7), and the
+   registration `D_s·s = upk` (here `upk` IS known to the issuer). Only then does the signer
+   `EllipticSampler`; user unblinds. ⚠️ Without these, the issuer signs out-of-space / non-canonical
+   `m`/`s` that later collide mod `Fr` — issuance must enforce the SAME constraints as the show, not
+   just opening correctness. (Reuses 5.1–5.4, 5.7.)
 9. **5.9 Issuer-hiding wrapper** (HYP-324, shared with BBS) — replace the public `vk_pub` with the
    `EpochIntroducerAnchor`: candidate (a) shared/aggregate epoch key (matrices stay public, relation
    unchanged) or (b) committed-key + accumulator-membership (adds quadratic terms). This is the gate
@@ -306,3 +311,11 @@ before the C3 dual-hybrid `BlindedVouch` is end-to-end.
   representative (`255` bits AND a range-proof `digit-value < Fr::MODULUS`), at show AND issuance.
 - **P2 — residual `registration` in the show summary.** **Resolution:** §1's summary now states the
   linear parts are the `A,D_s,D` signature terms + tag weight (NOT a `upk`-registration check).
+
+### Round 9 (Codex gpt-5.5/high, 2026-06-15) — 1×P2, RESOLVED
+
+- **P2 — blind issuance well-formedness.** Chunk 5.8 only proved the commitment opening, but issuance
+  must enforce the SAME message constraints as the show (binary `m,s`; canonical `m=bits(w) <
+  Fr::MODULUS`) or the issuer signs out-of-space / non-canonical messages that collide mod `Fr`.
+  **Resolution:** chunk 5.8 now requires the full well-formedness proof (binary via 5.4, canonical
+  range via 5.4/5.7, registration `D_s·s=upk`) before signing — not just opening correctness.
