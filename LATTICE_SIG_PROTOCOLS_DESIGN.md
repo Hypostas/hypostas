@@ -427,3 +427,21 @@ shared `A` to the shipped sampler. The norm checks are **ℓ₂** (not ℓ∞) �
    Pages route if eprint blocks).
 4. **Blind issuance** ← Alg 7.1/7.5. 5. **Cross-domain bind + nullifier** ← our `bind.rs`/`nullifier.rs`.
 6. **Compose + wire** (HYP-343).
+
+### 9.4 ⚠️ FOUNDATIONAL FINDING — the credential needs its OWN modulus (NOT the shipped ring's)
+
+Verified 2026-06-15: the shipped `ring.rs` uses `q = 8380417 ≡ 1 (mod 2n=512)`, so `X^256+1` splits
+**fully** into 256 linear factors. But SEP's unforgeability requires `q ≡ 2κ+1 (mod 4κ)` with **small
+κ** (LIMITED splitting), so that binary tags `Tw` AND their pairwise differences are units in `R_q`
+(thesis Lemma 1.4 / Remark 1.2 / §6.2.2). Under full splitting a binary poly can be a zero-divisor →
+the tag mechanism breaks. **Therefore the lattice credential (`lattice_cred`) is a SEPARATE ring
+instance with a SEP-compatible modulus — it does NOT reuse `module_sis`/`ring.rs`'s `q`.** Consequences:
+- a new ring module (or a generic ring parameterized by `q`, `n`, `κ`) with the SEP modulus;
+- **ring inversion** `t^{-1}` is needed (tag-scaled gadget `tG`: `SampleG_t(v) = SampleG(t^{-1}·v)`);
+  with limited splitting this is per-CRT-slot once an NTT exists, or extended-Euclid over `R_q` meanwhile;
+- norm bounds are **ℓ₂** (`B1 = s1√(nm1)`, `B2 = s√(ndk)`), not the ℓ∞ our current sampler tests use;
+- concrete SEP params (`d, κ, q, w, m1, m`, widths) come from thesis Ch. 8 — transcribe, don't invent.
+
+This means the shipped `ring_trapdoor` (q=8380417) validated the *sampler math* (Schur-complement
+elliptic perturbation) but the credential ring is re-instantiated at the SEP modulus. The sampler
+algorithm ports; the modulus + tag + inversion + ℓ₂ are the §5.1 deltas.
