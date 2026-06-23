@@ -198,9 +198,12 @@ AND-verifies it with the BBS half over the shared `C_r^(i)`/epoch — never the 
 4. **5.4 Quadratic-relation proof** — the garbage-term/automorphism technique for `f(witness)=0`
    (the `tGv₂` product + binary constraints). **The long pole within the long pole.** Threshold tests.
 5. **5.5 Exact-ℓ₂-norm proof** — squared-norm-as-quadratic; tight extraction. Tests at the bound.
-6. **5.6 Compose `show`/`verify_show`** — assemble §1's statement; Fiat–Shamir; statistical-ZK +
-   soundness + completeness tests (honest credential shows verify; forgeries/tampering rejected).
-7. **5.7 Cross-domain bind + PQ lattice-PRF nullifier (Q6=(ii))** — generalize `bind.rs` to prove the
+6. **5.6 Compose the SIGNATURE-CORE show** (⚠️ R12 P2b — NOT the full §1 statement yet) — assemble
+   ONLY the credential-possession core (sig relation §1.1 + tag §1.3 + binary §1.4 + norms §1.2 +
+   carry), Fiat–Shamir; soundness/ZK tests. Does NOT yet prove `m=bits(w)`-binds-`C_r` or emit `N` —
+   so it is test-only and incomplete on its own.
+7. **5.7 Cross-domain bind + PQ lattice-PRF nullifier (Q6=(ii)) + FULL show assembly** — extend 5.6
+   into the complete §1 statement: generalize `bind.rs` to prove the
    lattice message `m = bits(w)` is the digit-encoding of the EC `C_r`'s scalar `w` (HYP-345). The
    nullifier is `N = F^lat_w(epoch)` — a **PQ keyed lattice PRF** (BPR/BP14 candidate, ZK-friendly
    variant chosen at build), and the show proves **in-circuit** that `N` is that PRF of the bound `w`

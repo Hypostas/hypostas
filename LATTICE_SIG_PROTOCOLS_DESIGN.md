@@ -30,7 +30,9 @@ Gaussian-width preimage is structurally impossible at our modulus.
 ### 1.1 What the lattice half must prove
 
 A verifier, given the **per-show** anchor `C_r^(i)` and the **epoch attested-introducer anchor**
-(NOT a single issuer key), accepts iff the prover knows `(w, r_i, σ, ipk*)` such that:
+(NOT a single issuer key), accepts iff the prover knows `(w, s, r_i, σ, ipk*)` — where the SEP
+signature is over the attributes `[s | m = bits(w)]`, `s` the hidden registration secret
+(impersonation-prevention) and `m` the canonical digit-encoding of the EC scalar `w` — such that:
 
 1. `C_r^(i) = w·g + r_i·h` with **fresh per-show** `r_i` (the prover opens the EC anchor — shared
    with the BBS half; re-randomized each show so issuance cannot match a show — §1.1 R2 P1c), AND
