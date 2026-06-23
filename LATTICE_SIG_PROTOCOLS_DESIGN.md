@@ -365,3 +365,65 @@ now first-class build chunks §5.4–5.5, not footnotes).
 Net effect of R1+R2: the construction now satisfies blindness, introducer anonymity, unlinkability,
 PQ unforgeability, and one-show — the full INTRODUCTION_RECORD §4 property set — at the design level,
 before any code. Six P1s caught pre-implementation.
+
+---
+
+## 9. EXACT construction (LOCKED reference — Jeudy PhD thesis Ch. 6–8 = ePrint 2024/131)
+
+Reference obtained 2026-06-15: `refs/jeudy_thesis_2024.pdf` (+ `.txt`) — Corentin Jeudy's PhD thesis
+"Design of Advanced Post-Quantum Signature Schemes", the journal-version superset of JRS23/2024-131.
+eprint 403'd automated fetch; the author's GitHub Pages copy (`cjeudy.github.io/assets/pub/
+manuscript.pdf`) is unblocked. This section transcribes the EXACT algorithms to implement — no longer
+a sketch. **This validates the shipped trapdoor: thesis §6 signs `c = Ar + Dm` via the MP sampler
+(Alg 4.1); §6.4 uses the elliptic sampler (Alg 4.5) = our Schur-complement `SamplePre`.**
+
+### 9.1 SEP signature (thesis Alg 6.1–6.4 — the standard-model statistical signature)
+
+Ring `R_q`, cyclotomic conductor `2n`, `n` power of two. Public params:
+- `d` (M-SIS rank), `κ` splitting factors, prime `q ≡ 2κ+1 (mod 4κ)`, `k = ⌈log₂ q⌉`.
+- Tag space `Tw = { t ∈ T₁ : ‖t‖₂ = √w }` — **binary** polys of fixed Hamming weight `w`, with
+  `t ∈ R_q^×` and *differences of distinct tags also units* (the `q` condition guarantees this; this
+  is what defeats forgery-by-linearity). `w` chosen so `|Tw| ≥ Q` (#sig queries).
+- `m1 = ⌈d·log₃ q + f(λ)⌉` (commitment-randomness dim), `m` (message dim).
+- `G = I_d ⊗ [1|2|…|2^{k-1}] ∈ R_q^{d×dk}` (binary gadget, base 2).
+- Gaussian widths: `r̄ = η_ε(Z) = 5.4`; `s = r̄·√5·(√(nm1)+√(ndk)+t_slack)+1` (preimage width);
+  `s2` (commitment randomness width), `s1 = √(s² + s2²)`.
+- `A ← U(R_q^{d×m1})` **random, NO trapdoor on A** (so the commitment stays hiding); `u ← U(R_q^d)`;
+  `D ← U(R_q^{d×m})` (message commitment key). All NUMS from a 32-byte seed.
+
+**KeyGen (6.2):** `R ← U(S₁^{m1×dk})` (ternary, `‖R‖₂ ≤ √(nm1)+√(ndk)+t_slack`); `B = A·R mod qR`.
+`pk = B`, `sk = R`. (The MP trapdoor is for `[A | tG − B] = [A | tG − AR]`, secret `R`.)
+
+**Sign (6.3)** message `m ∈ T₁^m` (binary), stateful tag:
+1. `r ← D_{R^{m1}, s2}`;  2. `c = Ar + Dm mod qR`;  3. `t = F(st) ∈ Tw` (Fisher–Yates from counter, Alg 8.1);
+4. `v = MP-Sampler(R; A, u+c, t·I_d, s, r̄√5) − [r; 0_{dk}]`;  5. `st++`.  `sig = (t, v)`.
+
+**Verify (6.4):** `A_t = [A | tG − B] ∈ R_q^{d×(m1+dk)}`; parse `v = [v1; v2]` (`m1`, `dk`);
+check `‖v1‖₂ ≤ B1 = s1√(nm1)`, `‖v2‖₂ ≤ B2 = s√(ndk)`, `A_t·v = u + Dm mod qR`, `t ∈ Tw`.
+
+Note vs our shipped `ring_trapdoor` (`[Ā | G − ĀR]`, relation `A·[R;I]=G`): SEP generalizes to
+`[A | tG − AR]` (relation `A_t·[R;I] = tG`) — the §5.1 chunk adds the **tag** `t` and the random
+shared `A` to the shipped sampler. The norm checks are **ℓ₂** (not ℓ∞) — match this.
+
+### 9.2 Anonymous-credential show + blind issuance (thesis Ch. 7) — uses [LNP22]
+
+- ZK system = **[LNP22]** (Lyubashevsky–Nguyen–Plançon, CRYPTO 2022) — tackles **quadratic relations
+  + exact ℓ₂-norm constraints**. This is the §5.4 product-proof framework (replaces the LNS20/21
+  guess in §2). The tag-membership `t ∈ Tw` and the signature relation `A_t·v = u+Dm` are proven in it.
+- `OblSign` (7.1) + `Issue` (7.5): **blind issuance** — the user commits the hidden message, proves
+  well-formedness, the issuer obliviously signs (MP-samples) without learning `m`. Matches §3.3 (P1a).
+- `Prove` (7.2): the **show** — a [LNP22] argument of knowledge of `(t, v, m)` with `A_t·v = u+Dm`,
+  `v` short (ℓ₂), `t ∈ Tw`, and `m` opening the shown commitment. Matches §3.4; binds to `C_r` via the
+  message-commitment slot (our HYP-345 cross-domain layer on top).
+- §8 gives concrete params + the Fisher–Yates `F` (Alg 8.1).
+
+### 9.3 Transcription order (refines §5 with thesis algorithm numbers)
+
+1. **§5.1 SEP signature** ← thesis Alg 6.1–6.4 (+ elliptic sampler 4.5 already shipped). Tag space
+   `Tw` + Fisher–Yates `F` (Alg 8.1). Tests: sign→verify, tag-difference-is-unit, EUF-flavor.
+2. **§5.2 BDLOP commitment** ✅ shipped (the [LNP22] ansatz commitment).
+3. **[LNP22] argument** (the deep core) ← thesis §7.4 / ePrint 2022/284: linear + quadratic + exact
+   ℓ₂-norm. This is `Prove`/`Verify` (Alg 7.2) and the long pole. Fetch 2022/284 next (same GitHub
+   Pages route if eprint blocks).
+4. **Blind issuance** ← Alg 7.1/7.5. 5. **Cross-domain bind + nullifier** ← our `bind.rs`/`nullifier.rs`.
+6. **Compose + wire** (HYP-343).
