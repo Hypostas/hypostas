@@ -90,7 +90,11 @@ widths `σ1,σ2,σ3`; transcript ≈ 80 KB. All PROVISIONAL (HYP-330).
 // New module(s): vouch-crypto::lnp22  (+ extend bdlop → abdlop)
 
 pub struct AbdlopParams { /* Ajtai block (binding) + BDLOP block (hiding) */ }
-pub struct Challenge { c: SepRingElem }           // ‖c‖∞≤ρ, ‖c‖1-like≤η, from C
+// ⚠️ R2 P1: challenges live in the PROOF ring R_q̂ (degree n̂=64, modulus q̂=q·q1), NOT the SEP ring
+// R_p — the LNP22 challenge distribution + invertible-difference property are defined there. A
+// dedicated proof-ring element type is a build prerequisite (chunk 5.0).
+pub struct ProofRingElem { /* Z_q̂[X]/(X^{n̂}+1), n̂=64, q̂=q·q1 */ }
+pub struct Challenge { c: ProofRingElem }          // ‖c‖∞≤ρ, ‖c‖1-like≤η, from C ⊂ R_q̂
 pub fn sample_challenge(transcript_hash) -> Challenge
 
 // The LNP22 sub-proofs over an ABDLOP commitment to the witness:
@@ -98,25 +102,33 @@ pub struct LinearProof   { ... }                  // (c) public linear relations
 pub struct QuadraticProof{ ... }                  // (d) quadratic relations (tGv₂, binary)
 pub struct NormProof     { ... }                  // (e) exact ℓ₂ bounds
 
-// The composed credential show:
-pub struct ShowProof { commit, linear, quadratic, norm, bind, nullifier: Nullifier }
-pub fn show(vk: &SepVerifyKey, epoch_anchor, sig: &SepSignature, s, m, w, r,
-            c_r, epoch, rng) -> ShowProof
-pub fn verify_show(vk_or_epoch_anchor, c_r, epoch, proof) -> Result<Nullifier, Error>
+// The composed credential show. ⚠️ R2 P2b: the verifier input is ONLY the epoch
+// introducer-set anchor — NOT a named SepVerifyKey. The individual issuer key ipk* is a HIDDEN
+// witness proven ∈ the anchor (issuer-hiding, §1.6). The PROVER holds ipk* (+ its own credential).
+pub struct ShowProof { commit, linear, quadratic, norm, bind, issuer_hiding, nullifier: Nullifier }
+pub fn show(ipk_star: &SepVerifyKey, epoch_anchor: &EpochIntroducerAnchor,
+            sig: &SepSignature, s, m_bits_w, w, r_i, c_r_i, epoch, rng) -> ShowProof
+pub fn verify_show(epoch_anchor: &EpochIntroducerAnchor, c_r_i, epoch, proof)
+    -> Result<Nullifier, Error>
 ```
 
-`show` proves §1's statement in ZK; `verify_show` checks the ABDLOP opening + linear + quadratic +
-norm + bind + nullifier + issuer-hiding, and returns the EC `N`. Then `vouch.rs` AND-verifies it with
-the BBS half over the shared `C_r`/epoch (HYP-343).
+`show` proves §1's statement in ZK (the prover knows `ipk*` + its credential); `verify_show` takes
+ONLY the `epoch_anchor` (no named issuer key — issuer-hiding, R2 P2b), checks the ABDLOP opening +
+linear + quadratic + norm + bind + nullifier + the `ipk* ∈ anchor` membership, and returns the EC
+`N`. Then `vouch.rs` AND-verifies it with the BBS half over the shared `C_r^(i)`/epoch (HYP-343).
 
 ---
 
 ## 4. Build plan (chunk-by-chunk, each: tests + Codex gate)
 
+0. **5.0 Proof ring `R_q̂`** (R2 P1) — a new ring instance `Z_q̂[X]/(X^{n̂}+1)`, `n̂=64`, `q̂=q·q1`
+   (`q1≈2^19`), with the lift `R_p → R_q̂` (thesis: "lift the equation to `R_q̂`"). Distinct from
+   `sep_ring`; challenges + the LNP22 proof live here. Arithmetic + inversion (for the
+   invertible-difference challenge property). Tests: arithmetic, lift correctness, inversion.
 1. **5.1 ABDLOP commitment** — extend `bdlop` to the Ajtai+BDLOP fused commitment (binding for the
-   short block, hiding for the message block). Tests: opening, binding, hiding, homomorphism.
-2. **5.2 Challenge space** (§7.4.1) — sample `c ∈ C` (`ρ,η` bounds) over the proof ring; invertible-
-   differences property; `|C| ≥ 2^λ`. Tests: bounds, difference-invertibility.
+   short block, hiding for the message block) over `R_q̂`. Tests: opening, binding, hiding, homomorphism.
+2. **5.2 Challenge space** (§7.4.1) — sample `c ∈ C ⊂ R_q̂` (`ρ,η` bounds); invertible-differences
+   property; `|C| ≥ 2^λ`. Tests: bounds, difference-invertibility.
 3. **5.3 Linear-relation proof** — masked opening + rejection sampling over ABDLOP; soundness/ZK.
 4. **5.4 Quadratic-relation proof** — the garbage-term/automorphism technique for `f(witness)=0`
    (the `tGv₂` product + binary constraints). **The long pole within the long pole.** Threshold tests.
@@ -181,3 +193,16 @@ before the C3 dual-hybrid `BlindedVouch` is end-to-end.
   nullifier on the EC scalar `w` (the member identity, in `C_r`), with `m = bits(w)` the lattice
   digit-encoding cross-domain-bound to `C_r` — no `s→F_r` map, no hash/compression. `s` is kept as the
   separate lattice registration secret (proven-known, never the key). Q4 updated.
+
+### Round 2 (Codex gpt-5.5/high, 2026-06-15) — 1×P1, 2×P2, all RESOLVED
+
+- **P1 — challenges in the proof ring.** `Challenge` was `SepRingElem` (degree-256 SEP ring), but
+  LNP22 challenges live in `R_q̂` (degree `n̂=64`, `q̂=q·q1`) — using the SEP ring breaks the challenge
+  distribution + invertible-difference soundness. **Resolution:** §3 introduces `ProofRingElem` over
+  `R_q̂`; build chunk **5.0** adds the proof ring + the `R_p → R_q̂` lift before everything else.
+- **P2a — parent nullifier inconsistency.** Parent §1.1 still said signature on `(w,k)` + `N=k·H_G1`.
+  **Resolution:** parent §1.1 updated to the EC-scalar `w` key + `m = bits(w)` (matching §1.7); the
+  separate `k` is dropped (full-entropy `w` via full-`DIGITS` bind + blind issuance does the job).
+- **P2b — verifier issuer-anonymity.** `verify_show` took a named `SepVerifyKey`, revealing the
+  introducer. **Resolution:** §3 — `verify_show` takes ONLY the `EpochIntroducerAnchor`; the issuer
+  key `ipk*` is a hidden witness the prover proves `∈ anchor` (the prover holds `ipk*`).

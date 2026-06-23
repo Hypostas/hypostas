@@ -30,15 +30,17 @@ Gaussian-width preimage is structurally impossible at our modulus.
 ### 1.1 What the lattice half must prove
 
 A verifier, given the **per-show** anchor `C_r^(i)` and the **epoch attested-introducer anchor**
-(NOT a single issuer key), accepts iff the prover knows `(w, k, r_i, σ, ipk*)` such that:
+(NOT a single issuer key), accepts iff the prover knows `(w, r_i, σ, ipk*)` such that:
 
 1. `C_r^(i) = w·g + r_i·h` with **fresh per-show** `r_i` (the prover opens the EC anchor — shared
    with the BBS half; re-randomized each show so issuance cannot match a show — §1.1 R2 P1c), AND
-2. `σ` is a valid issuer signature on **`(w, k)`** under some `ipk*` in the epoch introducer set
-   (PQ-unforgeable membership; `ipk*` hidden — introducer anonymity, R2 P1d), AND
-3. the emitted one-show nullifier `N = k·H_G1(epoch)` uses the **same `k` signed into `σ`** (R2 P1e),
-   AND
-4. the proof reveals nothing about `w`, `k`, `r_i`, `σ`, or `ipk*` beyond their existence —
+2. `σ` is a valid issuer signature on `w` (lattice-encoded as `m = bits(w)`, cross-domain-bound to
+   `C_r`) under some `ipk*` in the epoch introducer set (PQ-unforgeable membership; `ipk*` hidden —
+   introducer anonymity, R2 P1d), AND
+3. the emitted one-show nullifier `N = w·H_G1(epoch)` uses the **same `w`** that is in `C_r` and
+   signed (R3 P1b: the key is the EC scalar `w`, full-entropy via the full-`DIGITS` bind + hidden from
+   the issuer by blind issuance — NOT a separate secret; see `LNP22_SHOW_DESIGN.md` §1.7), AND
+4. the proof reveals nothing about `w`, `r_i`, `σ`, or `ipk*` beyond their existence —
    **statistically** (so AND-composition preserves the BBS half's everlasting anonymity).
 
 Property (2) is the part that needs PQ cryptography: a quantum adversary that breaks BBS (q-SDH)
