@@ -78,9 +78,19 @@ under commitment matrix `[D_s | D]`. The show is a Fiat–Shamir argument of kno
    - `s ∈ T₁^{2d}` (binary, lattice-only) — the **thesis registration secret** (impersonation
      prevention, `upk = D_s·s`). It is signed + proven-known, but it is **not** the nullifier key and
      is never mapped to `F_r`.
-   Identity-hiding + unlinkability hold because (a) `w` is full-entropy (the bind uses FULL `DIGITS`,
-   not the toy 32 — resolves the R2 P1e/§nullifier brute-force gap), and (b) blind issuance
-   (`OblSign`) hides `m = bits(w)` from the issuer, so it cannot recompute `N`.
+   Identity-hiding + unlinkability require: (a) ⚠️ R10 P2 — `w` MUST be **generated uniformly at
+   random in `F_r`** (construction-owned, NOT a user-chosen or low-entropy-identity-derived value;
+   full *width* ≠ full *entropy*). Else the public `N = w·H_G1(epoch)` is brute-forceable over a small
+   candidate set and links shows even under blind issuance. `UKeyGen` samples `w ← U(F_r)`. And (b)
+   blind issuance (`OblSign`) hides `m = bits(w)` from the issuer, so it cannot recompute `N`.
+   ⚠️ R10 P1 — **everlasting-anonymity scope:** the SHOW proof is statistically/everlasting ZK, but
+   the public EC nullifier `N = w·H_G1(epoch)` is only **computationally** hiding: a future EC-DL break
+   (quantum) recovers `w` from any `N` and links that member across epochs. So the everlasting claim
+   covers the credential show, NOT the nullifier — the nullifier is a documented **computational**
+   linkability caveat under future EC-DL. This is a property of the **shared** EC nullifier
+   (`nullifier.rs`, used by the BBS half too), NOT specific to the lattice half. A fully-everlasting
+   nullifier needs a **PQ/statistically-hiding construction** (e.g. a lattice PRF/VRF nullifier) — a
+   crypto-sign-off / HYP-330 DECISION, shared with the BBS half. See OPEN Q6.
 
 So the show is a single LNP22 proof over: **linear** parts (the `A`,`D_s`,`D` terms of the signature
 equation + the tag weight; NOT a `upk`-registration check — that is issuance-time, §1.5/R7 P2a) +
@@ -217,6 +227,13 @@ test-only until 5.9 gates it into the vouch path.
   the lattice secret `s`); `m = bits(w)` is the lattice digit-encoding, cross-domain-bound to `C_r`'s
   `w` (no `s→F_r` map). Remaining to confirm at build: the FULL `DIGITS` width for `w` (so the bind
   covers a full `F_r` element) + its proof cost.
+- **Q6 — everlasting nullifier (DECISION, shared with BBS).** The public EC nullifier `N=w·H_G1(epoch)`
+  is computationally (not everlasting) hiding — a future EC-DL break links a member across epochs
+  (R10 P1). Decide: **(i)** accept computational nullifier-hiding (everlasting covers the show only —
+  a documented caveat), or **(ii)** replace with a PQ/statistically-hiding nullifier (a lattice
+  PRF/VRF keyed by `w`, proven consistent with `C_r` in the same LNP22 proof — more crypto). This is a
+  crypto-sign-off item and affects `nullifier.rs` (used by the BBS half too), so it should be decided
+  ONCE for both halves.
 - **Q5 — params.** Lock the provisional Ch8 params (`n̂,k̂,d̂,q1,ρ,η,σ_j,ℓ`) + the resulting
   bit-security (M-SIS/M-ISIS/M-LWE) and proof size (HYP-330).
 
@@ -319,3 +336,13 @@ before the C3 dual-hybrid `BlindedVouch` is end-to-end.
   Fr::MODULUS`) or the issuer signs out-of-space / non-canonical messages that collide mod `Fr`.
   **Resolution:** chunk 5.8 now requires the full well-formedness proof (binary via 5.4, canonical
   range via 5.4/5.7, registration `D_s·s=upk`) before signing — not just opening correctness.
+
+### Round 10 (Codex gpt-5.5/high, 2026-06-15) — 1×P1, 1×P2, RESOLVED (P1 ⇒ DECISION Q6)
+
+- **P1 — EC nullifier vs everlasting hiding.** `N=w·H_G1(epoch)` is public + only computationally
+  hiding; a future EC-DL break recovers `w` and links epochs, contradicting everlasting anonymity.
+  **Resolution:** §1.7 + parent §1.1 now SCOPE the claim (everlasting = the show; the EC nullifier is
+  a documented computational caveat) and flag the fix as **Q6** — a PQ/statistically-hiding nullifier
+  is a crypto-sign-off DECISION shared with the BBS half (same `nullifier.rs`). Not overclaimed.
+- **P2 — `w` must be full-entropy, not full-width.** §1.7 + parent §1.1 now require `w ← U(F_r)`
+  generated uniformly by `UKeyGen` (else the public `N` is brute-forceable over a low-entropy `w`).
