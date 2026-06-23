@@ -37,15 +37,16 @@ A verifier, given the **per-show** anchor `C_r^(i)` and the **epoch attested-int
 2. `σ` is a valid issuer signature on `w` (lattice-encoded as `m = bits(w)`, cross-domain-bound to
    `C_r`) under some `ipk*` in the epoch introducer set (PQ-unforgeable membership; `ipk*` hidden —
    introducer anonymity, R2 P1d), AND
-3. the emitted one-show nullifier `N = w·H_G1(epoch)` uses the **same `w`** that is in `C_r` and
-   signed (R3 P1b: the key is the EC scalar `w`; `w ← U(F_r)` is generated **uniformly at random** by
-   `UKeyGen` (R10 P2 — full entropy, not just full width) + hidden from the issuer by blind issuance —
-   NOT a separate secret; see `LNP22_SHOW_DESIGN.md` §1.7), AND
+3. the emitted one-show nullifier `N = F^lat_w(epoch)` — a **PQ keyed lattice PRF** (Q6 DECIDED = (ii),
+   2026-06-15), NOT the EC `w·H_G1` — uses the **same `w`** that is in `C_r` and signed (key = the EC
+   scalar `w`; `w ← U(F_r)` uniform via `UKeyGen`, R10 P2; hidden from the issuer by blind issuance;
+   the show proves in-circuit that `N` is `F^lat` of the bound `w` — `LNP22_SHOW_DESIGN.md` §1.7), AND
 4. the proof reveals nothing about `w`, `r_i`, `σ`, or `ipk*` beyond their existence —
-   **statistically** (so AND-composition preserves the BBS half's everlasting anonymity). ⚠️ R10 P1:
-   the everlasting claim covers the SHOW; the public EC nullifier `N` is only **computationally**
-   hiding (a future EC-DL break recovers `w` from `N` and links epochs). Fully-everlasting needs a
-   PQ/statistically-hiding nullifier — a crypto-sign-off DECISION shared with the BBS half (same
+   **statistically** (so AND-composition preserves the BBS half's everlasting anonymity). ⚠️ Nullifier
+   scope (Q6=(ii)): everlasting anonymity covers the SHOW/membership; the nullifier is **PQ-computational**
+   unlinkable (a deterministic `w`-keyed nullifier cannot be everlasting — unbounded brute-force of `w`;
+   PQ-computational is the max, reached by the lattice PRF, NOT by the EC `w·H_G1` a QC would break).
+   The lattice-PRF nullifier is shared with the BBS half (same
    `nullifier.rs`); see `LNP22_SHOW_DESIGN.md` §1.7 / Q6.
 
 Property (2) is the part that needs PQ cryptography: a quantum adversary that breaks BBS (q-SDH)

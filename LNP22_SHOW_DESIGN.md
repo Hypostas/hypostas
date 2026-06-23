@@ -174,7 +174,10 @@ pub fn verify_show(vk_pub: &SepVerifyKey, c_r_i, epoch, proof) -> Result<Lattice
 `w`); `verify_show` checks the ABDLOP opening + linear + quadratic (incl. the `p·z` carry + the PRF
 eval) + norm + bind + nullifier, and returns the PQ lattice nullifier `N`. The
 **issuer-hiding wrapper is HYP-324** (§1.6), layered on top without changing this core relation under
-candidate (a). Then `vouch.rs` AND-verifies it with the BBS half over the shared `C_r^(i)`/epoch (HYP-343).
+candidate (a). ⚠️ `verify_show(vk_pub, …)` is **TEST-ONLY** (named key ⇒ reveals the introducer). The
+**live `vouch.rs` path consumes ONLY the HYP-324-wrapped, issuer-hidden proof** (epoch anchor) and
+AND-verifies it with the BBS half over the shared `C_r^(i)`/epoch — never the public-key core (chunk
+5.9 gates 5.10; see §4).
 
 ---
 
