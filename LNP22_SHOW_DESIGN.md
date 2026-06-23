@@ -40,8 +40,20 @@ under commitment matrix `[D_s | D]`. The show is a Fiat–Shamir argument of kno
    coeffs = quadratic `t∘t = t`; weight = a linear sum).
 4. **Binary message** `m, s ∈ T₁`: `m∘m = m`, `s∘s = s` (quadratic binary constraints).
 5. **Registration**: knowledge of `s` with `D_s·s = upk` (linear).
-6. **Issuer-hiding** (R2 P1d, parent §3.4.6): the proof is under the **epoch attested-introducer
-   anchor**, not a named `ipk` — HYP-324 verifier-side anonymity layer, shared with the BBS half.
+6. **Issuer-hiding** — ⚠️ DESIGN-review R5 P1: this is a LAYERED concern, deferred to **HYP-324**
+   (shared with the BBS half), NOT resolved in this sub-design. The **core show** (chunks 5.0–5.7)
+   proves §1.1–5 + bind + nullifier under a **PUBLIC issuer/epoch verification key** — so the SEP
+   matrices `A,B,u,D_s,D` are public constants and the relation above is tractable. Issuer-hiding
+   (hiding *which* introducer) is then the HYP-324 wrapper, with two known shapes:
+   - **(a) shared/aggregate epoch key** (HYP-324 candidate a): all attested introducers verify under
+     ONE public epoch key, so the matrices stay **public constants** and this sub-design's relation is
+     UNCHANGED; anonymity comes from the sharing/aggregation (a PQ aggregatable/threshold sig or
+     group-sig-with-blind-issuance — the research-heaviest path). **Preferred — keeps LNP22 tractable.**
+   - **(b) committed-key + accumulator membership**: the issuer key is a hidden witness proven `∈` an
+     accumulator of attested keys; then `A·v₁, B·v₂, D·m` become **witness×witness quadratics** — a
+     materially heavier LNP22 relation (extra quadratic terms + the membership proof).
+   Until HYP-324 locks (a) or (b), the buildable target is the core show under a public key (the first
+   cut may use a named `ipk`, non-anonymous; (a) then swaps in the epoch key with no relation change).
 7. **Cross-domain bind + nullifier** (HYP-345). ⚠️ DESIGN-review R3 P1b: the nullifier key is the
    **EC scalar `w`**, NOT the lattice registration secret `s`. Distinguish them:
    - `w ∈ F_r` (BLS12-381 scalar) — the **member identity**, committed in `C_r = w·g + r·h` (EC) AND
@@ -107,20 +119,22 @@ pub struct LinearProof   { ... }                  // (c) public linear relations
 pub struct QuadraticProof{ ... }                  // (d) quadratic relations (tGv₂, binary)
 pub struct NormProof     { ... }                  // (e) exact ℓ₂ bounds
 
-// The composed credential show. ⚠️ R2 P2b: the verifier input is ONLY the epoch
-// introducer-set anchor — NOT a named SepVerifyKey. The individual issuer key ipk* is a HIDDEN
-// witness proven ∈ the anchor (issuer-hiding, §1.6). The PROVER holds ipk* (+ its own credential).
-pub struct ShowProof { commit, linear, quadratic, norm, bind, issuer_hiding, nullifier: Nullifier }
-pub fn show(ipk_star: &SepVerifyKey, epoch_anchor: &EpochIntroducerAnchor,
-            sig: &SepSignature, s, m_bits_w, w, r_i, c_r_i, epoch, rng) -> ShowProof
-pub fn verify_show(epoch_anchor: &EpochIntroducerAnchor, c_r_i, epoch, proof)
-    -> Result<Nullifier, Error>
+// The composed credential show. ⚠️ R5 P1: the CORE show verifies under a PUBLIC issuer/epoch verify
+// key `vk_pub` (so the SEP matrices A,B,u,D_s,D are public constants and the §1.1 relation is
+// tractable). Issuer-hiding (which introducer) is the HYP-324 wrapper (§1.6): under candidate (a)
+// `vk_pub` IS the shared epoch key (anonymous, relation unchanged); under (b) the key is committed +
+// proven ∈ an accumulator, adding quadratic terms. The first buildable cut uses a named public key.
+pub struct ShowProof { commit, linear, quadratic /* incl. p·z carry */, norm, bind,
+                       nullifier: Nullifier }
+pub fn show(vk_pub: &SepVerifyKey, sig: &SepSignature, s, m_bits_w, w, r_i, c_r_i, epoch, rng) -> ShowProof
+pub fn verify_show(vk_pub: &SepVerifyKey, c_r_i, epoch, proof) -> Result<Nullifier, Error>
+// HYP-324 wrapper (later): swap vk_pub → EpochIntroducerAnchor; add the issuer-key-membership proof.
 ```
 
-`show` proves §1's statement in ZK (the prover knows `ipk*` + its credential); `verify_show` takes
-ONLY the `epoch_anchor` (no named issuer key — issuer-hiding, R2 P2b), checks the ABDLOP opening +
-linear + quadratic + norm + bind + nullifier + the `ipk* ∈ anchor` membership, and returns the EC
-`N`. Then `vouch.rs` AND-verifies it with the BBS half over the shared `C_r^(i)`/epoch (HYP-343).
+`show` proves §1's statement in ZK under the public `vk_pub`; `verify_show` checks the ABDLOP opening
++ linear + quadratic (incl. the `p·z` carry) + norm + bind + nullifier, and returns the EC `N`. The
+**issuer-hiding wrapper is HYP-324** (§1.6), layered on top without changing this core relation under
+candidate (a). Then `vouch.rs` AND-verifies it with the BBS half over the shared `C_r^(i)`/epoch (HYP-343).
 
 ---
 
@@ -225,3 +239,20 @@ before the C3 dual-hybrid `BlindedVouch` is end-to-end.
   separate `k` and emitted `N=k·H_G1`. **Resolution:** the parent §3 supersede banner now explicitly
   covers §4 AND the §5 build plan (LNS/`k` references there are non-normative; authoritative build
   order = this doc §4, nullifier keyed by `w`).
+
+### Round 4 (Codex gpt-5.5/high, 2026-06-15) — 1×P2, RESOLVED
+
+- **P2 — §2 still named LNS20/21 as the show framework.** **Resolution:** §2 item 2 locked to
+  **[LNP22]**; LNS20/21 are conceptual ancestors only; authoritative = this doc.
+
+### Round 5 (Codex gpt-5.5/high, 2026-06-15) — 1×P1, RESOLVED
+
+- **P1 — hidden issuer key vs the public-matrix SEP relation.** If `verify_show` takes only the epoch
+  anchor and `ipk*` is hidden, the SEP matrices `A,B,u,D_s,D` are no longer public constants, so
+  `A·v₁, B·v₂, D·m` become witness×witness quadratics — the proof would have to commit the issuer key
+  + prove membership + handle those products, or it loses anonymity / soundness. **Resolution:**
+  issuer-hiding is now correctly scoped as the **HYP-324 layer** (§1.6), NOT invented here: the CORE
+  show (this doc) verifies under a **public** issuer/epoch key (matrices public ⇒ §1.1 tractable);
+  HYP-324 candidate (a) shared/aggregate epoch key keeps the matrices public (relation unchanged,
+  preferred), while (b) committed-key+accumulator adds the quadratic terms (heavier, flagged). §3
+  `verify_show` takes a public `vk_pub`; the HYP-324 wrapper swaps in the anchor + membership proof.
