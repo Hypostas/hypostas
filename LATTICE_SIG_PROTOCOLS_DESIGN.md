@@ -441,8 +441,12 @@ shared `A` to the shipped sampler. The norm checks are **ℓ₂** (not ℓ∞) �
 3. **[LNP22] argument** (the deep core) ← thesis §7.4 / ePrint 2022/284: linear + quadratic + exact
    ℓ₂-norm. This is `Prove`/`Verify` (Alg 7.2) and the long pole. Fetch 2022/284 next (same GitHub
    Pages route if eprint blocks).
-4. **Blind issuance** ← Alg 7.1/7.5. 5. **Cross-domain bind + nullifier** ← our `bind.rs`/`nullifier.rs`.
-6. **Compose + wire** (HYP-343).
+4. **Blind issuance** ← Alg 7.1/7.5 (incl. issuance-time registration `D_s·s=upk`). 5. **Cross-domain
+   bind + `w`-keyed nullifier** ← our `bind.rs`/`nullifier.rs`.
+6. **Issuer-hiding wrapper (HYP-324)** — the gate for live use; the public-`vk_pub` core is TEST-ONLY
+   until this lands (else a live vouch verifies against a named key, revealing the introducer). 7.
+   **Compose + wire into `vouch.rs`** (HYP-343) — ONLY after the issuer-hiding wrapper. ⚠️ The detailed
+   authoritative order is `LNP22_SHOW_DESIGN.md` §4 (chunks 5.0–5.10); this is the summary.
 
 ### 9.4 ⚠️ FOUNDATIONAL FINDING — the credential needs its OWN modulus (NOT the shipped ring's)
 

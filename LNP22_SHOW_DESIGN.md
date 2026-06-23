@@ -39,7 +39,12 @@ under commitment matrix `[D_s | D]`. The show is a Fiat–Shamir argument of kno
 3. **Tag** `t ∈ Tw`: binary, fixed Hamming weight `w` — a membership/structure constraint (binary
    coeffs = quadratic `t∘t = t`; weight = a linear sum).
 4. **Binary message** `m, s ∈ T₁`: `m∘m = m`, `s∘s = s` (quadratic binary constraints).
-5. **Registration**: knowledge of `s` with `D_s·s = upk` (linear).
+5. **`s` is a hidden SIGNED attribute** (not re-checked against `upk` here). ⚠️ DESIGN-review R7 P2a:
+   registration (`D_s·s = upk`, proving the user knows their secret) is an **ISSUANCE-time** check
+   (`OblSign`/`UKeyGen`, where `upk` IS public to the issuer) — NOT a show input. Putting `upk` in the
+   show would de-anonymize the user, and without it the relation is vacuous; so the show proves only
+   that the signed `s` is the same `s` bound under the credential (via the signature relation), with
+   `s` hidden. Impersonation-prevention is enforced at issuance (§1.7 / chunk 5.8), not at show.
 6. **Issuer-hiding** — ⚠️ DESIGN-review R5 P1: this is a LAYERED concern, deferred to **HYP-324**
    (shared with the BBS half), NOT resolved in this sub-design. The **core show** (chunks 5.0–5.7)
    proves §1.1–5 + bind + nullifier under a **PUBLIC issuer/epoch verification key** — so the SEP
