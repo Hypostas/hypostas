@@ -66,8 +66,8 @@ under commitment matrix `[D_s | D]`. The show is a Fiat–Shamir argument of kno
      cross-domain bind (HYP-345: digit decomposition + shared challenge) proves *the same `w`* is in
      `C_r` and is `m`'s digit-encoding — `w`'s digits are literally the lattice message, so there is
      **no `s→F_r` map and no hash/compression** (the very risk R3 P1b flags). The nullifier is
-     `N = w·H_G1(epoch)` over the EC `w` (the shipped `nullifier.rs` Schnorr-AND proves the `N`-`w`
-     equals the `C_r`-`w`; the show additionally proves that `w` equals `m`'s digits via the bind).
+     the nullifier `N = F^lat_w(epoch)` over that same `w` (the **PQ lattice PRF** — see NULLIFIER
+     CONSTRUCTION below; the show proves `N` is the PRF of the `w` that equals `m`'s digits via the bind).
      ⚠️ DESIGN-review R8 P1: `bits(w)` MUST encode the **canonical** field representative
      `0 ≤ w < Fr::MODULUS` — the EC side only sees the digit-value mod `r`, so without a canonical
      constraint a non-canonical encoding (e.g. `w + r`, or any value `≥ r`) would be a DIFFERENT
@@ -79,18 +79,30 @@ under commitment matrix `[D_s | D]`. The show is a Fiat–Shamir argument of kno
      prevention, `upk = D_s·s`). It is signed + proven-known, but it is **not** the nullifier key and
      is never mapped to `F_r`.
    Identity-hiding + unlinkability require: (a) ⚠️ R10 P2 — `w` MUST be **generated uniformly at
-   random in `F_r`** (construction-owned, NOT a user-chosen or low-entropy-identity-derived value;
-   full *width* ≠ full *entropy*). Else the public `N = w·H_G1(epoch)` is brute-forceable over a small
-   candidate set and links shows even under blind issuance. `UKeyGen` samples `w ← U(F_r)`. And (b)
-   blind issuance (`OblSign`) hides `m = bits(w)` from the issuer, so it cannot recompute `N`.
-   ⚠️ R10 P1 — **everlasting-anonymity scope:** the SHOW proof is statistically/everlasting ZK, but
-   the public EC nullifier `N = w·H_G1(epoch)` is only **computationally** hiding: a future EC-DL break
-   (quantum) recovers `w` from any `N` and links that member across epochs. So the everlasting claim
-   covers the credential show, NOT the nullifier — the nullifier is a documented **computational**
-   linkability caveat under future EC-DL. This is a property of the **shared** EC nullifier
-   (`nullifier.rs`, used by the BBS half too), NOT specific to the lattice half. A fully-everlasting
-   nullifier needs a **PQ/statistically-hiding construction** (e.g. a lattice PRF/VRF nullifier) — a
-   crypto-sign-off / HYP-330 DECISION, shared with the BBS half. See OPEN Q6.
+   random in `F_r`** (`UKeyGen` samples `w ← U(F_r)`; full *width* ≠ full *entropy*), and (b) blind
+   issuance (`OblSign`) hides `m = bits(w)` from the issuer.
+
+   **NULLIFIER CONSTRUCTION — Q6 DECIDED = (ii) PQ lattice PRF** (Josh, 2026-06-15). The nullifier is
+   `N = F^{lat}_w(epoch)` — a **post-quantum (lattice) keyed PRF** evaluated on the epoch, keyed by the
+   member scalar `w`, NOT the EC `N = w·H_G1(epoch)`. Rationale + the exact guarantee:
+   - ⚠️ **Framing correction (was mis-stated R10 P1):** a *deterministic*, `w`-keyed nullifier can
+     NEVER be everlasting-(unbounded)-unlinkable — an unbounded adversary brute-forces the finite-
+     entropy `w`, recomputes `N=f(w,·)`, and links. So "everlasting nullifier" is impossible by
+     construction; the achievable maximum is **PQ-computational** unlinkability. The EC nullifier gives
+     only **classical**-computational (a future QC solves the DLP, recovers `w`, links the introduction
+     graph across epochs). We choose the lattice PRF to reach **PQ-computational** — consistent with
+     the PQ-soundness ambition (a QC must not forge a vouch AND must not de-anonymize the introduction
+     graph). Everlasting anonymity remains for the SHOW/membership (statistical ZK); the nullifier is
+     PQ-computational (the honest, maximal claim for a deterministic nullifier).
+   - **Construction:** a PQ keyed PRF `F^{lat}: (w, epoch) ↦ N`. Candidate = a key-homomorphic /
+     rounded Ring-LWE PRF (Banerjee–Peikert–Rosen / BP14), chosen for ZK-friendliness at build (the
+     rounding is the cost). The LNP22 show proves, in-circuit, that `N = F^{lat}_w(epoch)` for the
+     **same `w`** bound in `C_r`/`m=bits(w)` — so the emitted `N` is consistent + unforgeable, and the
+     proof reveals nothing about `w`. One-show holds (deterministic in `(w,epoch)`); cross-epoch
+     unlinkability is PQ-computational (PRF pseudorandomness).
+   - **Shared with the BBS half:** the vouch carries ONE nullifier `N`; switching it to `F^{lat}` fixes
+     both halves at once. The shipped EC `nullifier.rs` is SUPERSEDED for the C3 vouch by the lattice
+     PRF nullifier (a new build component — see chunk 5.7). This is the Q6 crypto-sign-off outcome.
 
 So the show is a single LNP22 proof over: **linear** parts (the `A`,`D_s`,`D` terms of the signature
 equation + the tag weight; NOT a `upk`-registration check — that is issuance-time, §1.5/R7 P2a) +
@@ -148,15 +160,19 @@ pub struct NormProof     { ... }                  // (e) exact ℓ₂ bounds
 // tractable). Issuer-hiding (which introducer) is the HYP-324 wrapper (§1.6): under candidate (a)
 // `vk_pub` IS the shared epoch key (anonymous, relation unchanged); under (b) the key is committed +
 // proven ∈ an accumulator, adding quadratic terms. The first buildable cut uses a named public key.
-pub struct ShowProof { commit, linear, quadratic /* incl. p·z carry */, norm, bind,
-                       nullifier: Nullifier }
+// Q6=(ii): the nullifier is a PQ LATTICE-PRF output `N = F^lat_w(epoch)` (a canonical digest), NOT an
+// EC G1 point — and the show proves `N` is that PRF of the bound `w` (a relation in the LNP22 proof).
+pub struct LatticeNullifier { /* canonical bytes of F^lat_w(epoch) */ }
+pub struct ShowProof { commit, linear, quadratic /* incl. p·z carry + PRF-eval relation */, norm,
+                       bind, nullifier: LatticeNullifier }
 pub fn show(vk_pub: &SepVerifyKey, sig: &SepSignature, s, m_bits_w, w, r_i, c_r_i, epoch, rng) -> ShowProof
-pub fn verify_show(vk_pub: &SepVerifyKey, c_r_i, epoch, proof) -> Result<Nullifier, Error>
+pub fn verify_show(vk_pub: &SepVerifyKey, c_r_i, epoch, proof) -> Result<LatticeNullifier, Error>
 // HYP-324 wrapper (later): swap vk_pub → EpochIntroducerAnchor; add the issuer-key-membership proof.
 ```
 
-`show` proves §1's statement in ZK under the public `vk_pub`; `verify_show` checks the ABDLOP opening
-+ linear + quadratic (incl. the `p·z` carry) + norm + bind + nullifier, and returns the EC `N`. The
+`show` proves §1's statement in ZK under the public `vk_pub` (incl. `N = F^lat_w(epoch)` for the bound
+`w`); `verify_show` checks the ABDLOP opening + linear + quadratic (incl. the `p·z` carry + the PRF
+eval) + norm + bind + nullifier, and returns the PQ lattice nullifier `N`. The
 **issuer-hiding wrapper is HYP-324** (§1.6), layered on top without changing this core relation under
 candidate (a). Then `vouch.rs` AND-verifies it with the BBS half over the shared `C_r^(i)`/epoch (HYP-343).
 
@@ -181,9 +197,13 @@ candidate (a). Then `vouch.rs` AND-verifies it with the BBS half over the shared
 5. **5.5 Exact-ℓ₂-norm proof** — squared-norm-as-quadratic; tight extraction. Tests at the bound.
 6. **5.6 Compose `show`/`verify_show`** — assemble §1's statement; Fiat–Shamir; statistical-ZK +
    soundness + completeness tests (honest credential shows verify; forgeries/tampering rejected).
-7. **5.7 Cross-domain bind + `w`-keyed nullifier** — generalize `bind.rs` to prove the lattice
-   message `m = bits(w)` is the digit-encoding of the EC `C_r`'s scalar `w` (HYP-345), and emit
-   `N = w·H_G1(epoch)` over that same `w` (shipped `nullifier.rs` Schnorr-AND). `255 = ⌈log₂ r⌉` bits
+7. **5.7 Cross-domain bind + PQ lattice-PRF nullifier (Q6=(ii))** — generalize `bind.rs` to prove the
+   lattice message `m = bits(w)` is the digit-encoding of the EC `C_r`'s scalar `w` (HYP-345). The
+   nullifier is `N = F^lat_w(epoch)` — a **PQ keyed lattice PRF** (BPR/BP14 candidate, ZK-friendly
+   variant chosen at build), and the show proves **in-circuit** that `N` is that PRF of the bound `w`
+   (a new ZK relation — the PRF rounding is the cost, done in the quadratic/norm layer). This SUPERSEDES
+   the EC `nullifier.rs` for the C3 vouch (new build component, shared with the BBS half). `255 = ⌈log₂
+   r⌉` bits
    (full-entropy `w`, resolves R2 P1e) AND a **canonical-range proof `digit-value < Fr::MODULUS`** (R8
    P1 — else a non-canonical `bits` maps to the same `C_r`/`N` as a different signed message). `s` is
    separately proven-known, not the key.
@@ -227,13 +247,13 @@ test-only until 5.9 gates it into the vouch path.
   the lattice secret `s`); `m = bits(w)` is the lattice digit-encoding, cross-domain-bound to `C_r`'s
   `w` (no `s→F_r` map). Remaining to confirm at build: the FULL `DIGITS` width for `w` (so the bind
   covers a full `F_r` element) + its proof cost.
-- **Q6 — everlasting nullifier (DECISION, shared with BBS).** The public EC nullifier `N=w·H_G1(epoch)`
-  is computationally (not everlasting) hiding — a future EC-DL break links a member across epochs
-  (R10 P1). Decide: **(i)** accept computational nullifier-hiding (everlasting covers the show only —
-  a documented caveat), or **(ii)** replace with a PQ/statistically-hiding nullifier (a lattice
-  PRF/VRF keyed by `w`, proven consistent with `C_r` in the same LNP22 proof — more crypto). This is a
-  crypto-sign-off item and affects `nullifier.rs` (used by the BBS half too), so it should be decided
-  ONCE for both halves.
+- **Q6 — nullifier construction. ✅ DECIDED = (ii)** (Josh, 2026-06-15): a **PQ keyed lattice PRF**
+  `N = F^lat_w(epoch)`, proven in-circuit consistent with the bound `w`, SUPERSEDING the EC
+  `nullifier.rs` for the C3 vouch (shared with the BBS half — one nullifier, fixed once). Framing
+  corrected: a deterministic `w`-keyed nullifier can't be everlasting-(unbounded)-unlinkable
+  (brute-force `w`); the achievable max is **PQ-computational**, which the lattice PRF reaches and the
+  EC nullifier (classical-computational) does not — consistent with the PQ-soundness ambition. See
+  §1.7 + chunk 5.7. (Cost: the PRF-eval ZK relation, accepted.)
 - **Q5 — params.** Lock the provisional Ch8 params (`n̂,k̂,d̂,q1,ρ,η,σ_j,ℓ`) + the resulting
   bit-security (M-SIS/M-ISIS/M-LWE) and proof size (HYP-330).
 
