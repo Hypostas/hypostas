@@ -1,10 +1,10 @@
 # Aggregated Masked Show — LNP22 Figure 7.2 (HYP-352 item 1 (C), §C-iv aggregation)
 
-**Status:** DESIGN (pre-build). Rounds 0–1 Codex DESIGN-review done. R0: 3 P1s + 5 P2s. R1: P1.1 (tail
-constants) + P1.3 (four-square ×3) RESOLVED, all P2s addressed; P1.2 NOT yet resolved (Eq 7.11 block
-errors). Round 2 (this revision) fixes P1.2: (a) v3'' dim `kk̂+1` not `kd̂k+1`; (b) f-vector block order —
-binariness linear terms on conjugate `t'*`/`m'_sm*`, `y3`=approx-range coupling, `g`=`[μ]`, `m̂*`=0;
-(c) `D'_sm` sign convention explicit; + β tail-constant cleanup. Round 2 review pending.
+**Status:** ✅ DESIGN COMPLETE — approved to build. Codex DESIGN-review rounds 0–2: R0 (3 P1s + 5 P2s) →
+R1 (P1.1 tail-constants + P1.3 four-square×3 RESOLVED) → R2 (**P1.2 Eq 7.11 transcription RESOLVED; no
+remaining/new P1; "sound and faithful enough to begin the chunked build C1→C5"**). The build transcribes
+Eq 7.11 verbatim from the PDF; `D'_sm` stored pre-negated; tail constants `c_{n̂m1}/c_{n̂m2}/c_256` (not the
+challenge). Proceed C1→C5 per §5.
 **Supersedes:** the separate-masked-proof rollout (commits aa3a36a + 3a7087f) for `proof_show`.
 **Ref:** thesis ePrint 2024/131 (`refs/jeudy_thesis_2024.pdf`) §7.4.3, Figure 7.2, Eq 7.9–7.12, Lemmas 7.5–7.7, Table 7.1.
 
@@ -37,7 +37,7 @@ exist ⇒ the leak is structurally impossible, and the SEP relation is masked as
 Witness `(v1, v2, v3, t, m_sm)` (all-concealed base case: no revealed attributes `m_I`, so `u' = q1·u`):
 
 ```
-q1·( A·v1 − B·v2 + A3·v3 + G(t·v2) − D_sm·m_sm ) = q1·u   (mod q̂R)   [the SEP signature eq, d rows]
+q1·( A·v1 − B·v2 + A3·v3 + G(t·v2) − D_sm·m'_sm ) = q1·u   (mod q̂R)   [the SEP signature eq, d rows]
 ‖v1‖₂ ≤ B1',  ‖v2‖₂ ≤ B2,  ‖v3‖₂ ≤ B3                                 [exact-ℓ2 norms]
 ‖t‖₂ = √w,  t, m_sm ∈ T1                                              [tag fixed-weight + binariness]
 ```
@@ -89,7 +89,7 @@ garbage masks). `*` = the conjugate automorphism `σ_{-1}` (our `conjugate()`).
 
 ### Fourth round → `msg4 = (t0, t1)`
 11. Combine the `h_i` well-formedness AND the main SEP relation (`A''v1'' − B''v2'' + A3''v3'' −
-    D'_sm·m_sm + t'·G''·v2'' = u'`, `d̂k` rows) via `μ` into **Eq 7.10**: `0 = Σμ_i(h_i…) + Σμ_{ℓ+i}(SEP_i)`.
+    D'_sm·m'_sm + t'·G''·v2'' = u'`, `d̂k` rows) via `μ` into **Eq 7.10**: `0 = Σμ_i(h_i…) + Σμ_{ℓ+i}(SEP_i)`.
 12. Recast as `ŝ^T F ŝ + f^T ŝ + f = 0 (mod q̂R)` — **the build transcribes Eq 7.11 VERBATIM from the PDF**;
     the map below fixes the layout (P1.2). `ŝ = [s1 | s1* | m̂ | m̂*]`, `s1 = (v1'',v2'',v3'',t',m'_sm)`,
     `m̂ = [y3 | g]`. **Packing dims (thesis p.190):** `|v1''|=2d̂k̂+1`, `|v2''|=kd̂k̂+1`, `|v3''|=kk̂+1`,
@@ -108,7 +108,7 @@ garbage masks). `*` = the conjugate automorphism `σ_{-1}` (our `conjugate()`).
       | `v2''` | `Σ_iΣ_j μ_iγ_{i,j} r₂,j* − Σ_{i∈d̂k̂} μ_{ℓ+i} B''ᵀe_R̂` |
       | `v3''` | `Σ_iΣ_j μ_iγ_{i,j} r₃,j* + Σ_{i∈d̂k̂} μ_{ℓ+i} A₃''ᵀe_R̂` |
       | `t'` | `Σ_iΣ_j μ_iγ_{i,j} r_t,j*` |
-      | `m'_sm` | `Σ_iΣ_j μ_iγ_{i,j} r_sm,j* ± Σ_{i∈d̂k̂} μ_{ℓ+i} D'_smᵀe_R̂` (**sign — P1.2c below**) |
+      | `m'_sm` | `Σ_iΣ_j μ_iγ_{i,j} r_sm,j* + Σ_{i∈d̂k̂} μ_{ℓ+i} D'_smᵀe_R̂` (`D'_sm` stored pre-negated — P1.2c) |
       | `v1''*`,`v2''*`,`v3''*` | **0** |
       | `t'*` | `−Σ_i μ_iγ_{i,261}·1_{R̂k̂}` (tag binariness 3.6b — on the **conjugate**, not `y3`) |
       | `m'_sm*` | `−Σ_i μ_iγ_{i,262}·1_{R̂k̂m_sm}` (msg binariness 3.7b — on the **conjugate**) |
@@ -166,7 +166,7 @@ garbage masks). `*` = the conjugate automorphism `σ_{-1}` (our `conjugate()`).
 **Reuse (already gate-clean):**
 - ring `R̂_q̂` (`proof_ring`, q̂≈2^57.7 HYP-330), conjugate `σ_{-1}`, challenge space `C` (`proof_challenge`).
 - subring embed `θ` (`embed`, `SUBRING_K`, `block`), `sep_bilinear` (= `G''_i` quad term), `sep_linear`
-  (= `A''v1''−B''v2''+A3''v3''−D'_sm·m_sm`), `neg_u_rows` (= `u'`), `aggregate_rows`, `mu_vector`.
+  (= `A''v1''−B''v2''+A3''v3''−D'_sm·m'_sm`), `neg_u_rows` (= `u'`), `aggregate_rows`, `mu_vector`.
 - `squared_norm` / `norm_constraints` (3.2b–3.4b), `aggregated_binariness` (3.6b/3.7b + tag-weight 3.5b).
 - garbage helpers `garbage_b`, `b_dot`, `sample_garbage` (τ0=0), `commit_garbage` (`proof_garbage`/`_zk`).
 - rejection `Rej1` (`gaussian`/`proof_linear`), Gaussian `sample_z`, `D_{σ}`.
