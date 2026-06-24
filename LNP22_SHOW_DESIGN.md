@@ -423,9 +423,11 @@ the COMPLETE construction the remaining build transcribes. `n̂=64`, `k̂=4`, `�
 SHOW needs a LARGER `q̂` (~2^57.7 class). ⚠️ **`q1=549755813869 ≈2^39` is ILLUSTRATIVE ONLY and is NOT
 a valid target — it FAILS the ZK bound** (the bounds section: `2B256²/13−B256 ≈5.2e17 > q̂≈2.34e17`). It
 shows the right magnitude class + the structural constraints any candidate must meet (i64 coeffs fit
-2^57.7<2^63; i128 products fit 2^115.4<2^127; `mod 8 = 5` ✓ for SEP + invertible-diff). The REAL show
-modulus is a HYP-330 deliverable: solve the ZK bound jointly (`q̂`, `σ1-3`, `c_256`) → pick a `q1` with
-`q≡5 mod 8` that SATISFIES all three `max` terms, THEN flip `PHAT_Q1`. Do NOT flip to `549755813869`.
+2^57.7<2^63; i128 products fit 2^115.4<2^127; the candidate `q1≡5 mod 8` so `q̂=q·q1≡1 mod 8`, giving
+the SEP/CRT splitting + invertible-difference the proof ring needs — `q=425837` is fixed and already
+`≡5 mod 8`, so the live constraint is on the NEW `q1`). The REAL show modulus is a HYP-330 deliverable:
+solve the ZK bound jointly (`q̂`, `σ1-3`, `c_256`) → pick a `q1` with **`q1≡5 mod 8`** that SATISFIES all
+three `max` terms, THEN flip `PHAT_Q1`. Do NOT flip to `549755813869`.
 The ring/CRT MECHANISM is modulus-agnostic; only the value is provisional.
 
 ## Figure 7.2 — the non-interactive ZK show (5 rounds, Fiat-Shamir)
