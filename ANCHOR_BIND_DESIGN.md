@@ -61,8 +61,13 @@ For round `j ∈ [0, κ)` (one shared FS challenge yields all `c_j` and binds ev
    `0/1`, so a `MASK_SIGMA`-class mask keeps `τ0(y)` from wrapping mod `q̂`) and the matching EC
    announcement `A_{j,i} = τ0(y_{j,i})·g_i + s_{j,i}·h` (the EC mask `a_{j,i} = τ0(y_{j,i})` — the
    const-coeff of the lattice mask, the cross-domain glue). Plus an EC randomness mask for the link.
-2. **Challenge.** `c_j ∈ {0,1}` from the FS hash of (`C_r`, `t_A`, all `A_{j,i}`, the link
-   announcement, `g_i`, `h`, the public statement).
+2. **Challenge.** `c_j ∈ {0,1}` from the FS hash of (`C_r`, `t_A`, **the per-round lattice
+   announcement `w_c_j = A1·y1_j + A2·y2_j`**, all EC announcements `A_{j,i}`, the link announcement,
+   `g_i`, `h`, the public statement). ⚠️ **`w_c_j` MUST be in the transcript (P1, DESIGN-review round 5
+   2026-06-15):** omitting it lets the prover pick `c_j` first then set `w_c_j = A1·Z1 + A2·Z2 − c_j·t_A`
+   to pass the lattice opening for arbitrary digit projections — the leg would no longer bind the
+   projections to the committed `s1`. `bind.rs::fs_challenge` hashes `w_lat` alongside `t_ec` for exactly
+   this reason; mirror it.
 3. **Responses.** Lattice: `Z_{j,i} = y_{j,i} + c_j·b_i` (proof-ring element). EC: the verifier
    recomputes from `τ0(Z_{j,i})`. The SAME small integer `τ0(Z_{j,i})` plays the digit response in
    BOTH the EC equation and the lattice opening (rejection-bounded so it does not wrap in either
@@ -78,15 +83,22 @@ For round `j ∈ [0, κ)` (one shared FS challenge yields all `c_j` and binds ev
   shared projection is precisely what forces `C_r`'s digits to equal the bits committed in `t_A`.
 - **Link**: `C_r − Σ_i 2^i·D_i = δ·h` is implicit in the digit-base aggregation (no separate `D_i`
   needed if the EC equation uses `g_i = 2^i·g` directly, as `bind.rs` does).
-- **Range/binariness** of `b_i` comes from the reused `proof_range` proof (lattice side), so the
-  shared `τ0(Z_{j,i})` are genuinely bit-responses, not arbitrary.
-- ⚠️ **`w` is a bounded `DIGITS`-bit identity (DIGITS ≤ 254) — canonical for free, NO `<r` gadget, NO
-  limbs (CORRECTED; re-audit of the rounds 2-3 findings, 2026-06-15).** The C3 design already defines
-  the introducer identity this way: `bind.rs::decompose` rejects `w ≥ 2^DIGITS`, so `w ∈ [0, 2^DIGITS)`
-  — NOT full `U(F_r)`. With `DIGITS ≤ 254 < log2 r`, `w < 2^254 < r` automatically, so the digit
-  decomposition is **canonical** (no `w` vs `w−r` ambiguity) with no extra proof. 254 bits is ample
-  identity entropy (≫ any introducer population); the earlier "`w ← U(F_r)` full-entropy" framing in
-  this doc was the mistake that drove the (unnecessary) `<r`-gadget + multi-limb spiral.
+- **Binariness only** of `b_i` is reused from `proof_range`'s binariness sub-proof (each `b_i ∈ {0,1}`),
+  so the shared `τ0(Z_{j,i})` are genuinely bit-responses. ⚠️ **Do NOT reuse `proof_range`'s
+  *recomposition* relation `Σ 2^i·b_i = w` (P2, DESIGN-review round 5):** for `DIGITS ≈ 255` that sum
+  exceeds `q̂`, so over `R̂_q̂` it would only prove a residue mod `q̂` (or reject honest identities). The
+  full recomposition lives ONLY in the EC digit equation (next bullet); the lattice side contributes
+  binariness + the per-bit opening, never the wide sum.
+- ⚠️ **`w ← U(F_r)` is FULL 255-bit width + a canonical `< Fr::MODULUS` proof (the SETTLED
+  representation; P2, round 5).** `LNP22_SHOW_DESIGN.md` §1 (R8 P1) already fixes `w ← U(F_r)`, `m =
+  bits(w)` the canonical 255-bit representative, AND a `digit-value < Fr::MODULUS` range proof at
+  show/issuance — chosen deliberately (full width ≠ full entropy; the EC side only sees `w mod r`, so
+  without canonicity the same `C_r` binds `w` vs `w−r`, colliding nullifiers). The anchor MUST use the
+  SAME `w` (else it cannot bind credentials issued under the show spec — the round-5 cross-doc P2). So:
+  `DIGITS = 255`, and canonicity is the **show's existing `< Fr::MODULUS` bit-gadget** (a less-than-
+  constant boolean check over the committed bits — NOT `proof_range`'s `i64` two-range trick, NOT
+  multi-limb; it is a per-bit comparison, no wide sum). The anchor REUSES that one shared gadget. (My
+  earlier "bounded `DIGITS ≤ 254`" detour contradicted the settled show spec — reverted.)
 - ✅ **No multi-limb recomposition (CORRECTED — the round-3 "multi-limb" item was MY over-correction,
   not a gate finding).** The recomposition `Σ_i 2^i·b_i = w` happens ENTIRELY on the **EC side**, whose
   group order ≈2^255 holds it natively (mod `r`). The **lattice side never forms the `>q̂` sum** — it
@@ -99,8 +111,8 @@ For round `j ∈ [0, κ)` (one shared FS challenge yields all `c_j` and binds ev
 
 Soundness: `2^−κ` (κ ≈ 128 ⇒ negligible). Both equations forced to agree on every small `τ0(Z_{j,i})`
 (matched over the integers) ⇒ the committed proof-ring bits and the `C_r` digits are identical ⇒ same
-`w` (canonical for free since `DIGITS ≤ 254 < log2 r`, removing the `w` vs `w−r` ambiguity). ZK: the
-masks `y_{j,i}`/`s_{j,i}` are uniform; rejection sampling on `Z` (deferred to §C-iv's masking pass).
+`w` (made canonical by the shared `< Fr::MODULUS` bit-gadget, removing the `w` vs `w−r` ambiguity). ZK:
+the masks `y_{j,i}`/`s_{j,i}` are uniform; rejection sampling on `Z` (deferred to §C-iv's masking pass).
 
 ## 4. Witness layout & types (build sketch)
 
@@ -122,25 +134,32 @@ masks `y_{j,i}`/`s_{j,i}` are uniform; rejection sampling on `Z` (deferred to §
 
 ## 5. Build chunks (each: build → test → Codex gate → commit)
 
-0. ✅ **No gating sub-design (CORRECTED).** The re-audit removed the multi-limb / `<r`-gadget items:
-   `w ∈ [0, 2^DIGITS)`, `DIGITS ≤ 254`, so the bind is canonical-for-free and is `bind.rs`'s proven
-   per-digit ROUNDS technique cross-ring (§3.1-3.2). Chunk 1 starts directly. Read `bind.rs` end-to-end
-   as the line-by-line template before coding (it is the audited reference for this exact construction).
-1. `AnchorBindParams` + `g_pow` precompute (`g_i = 2^i·g`, `i < DIGITS`) + the EC digit-base
-   aggregation helper (+ test: `Σ b_i·g_i + r·h == C_r` for honest digits, `DIGITS ≤ 254`).
-2. One round of the binary-challenge protocol (prove/verify a single `c_j`), both legs (lattice
-   opening + EC digit equation) sharing `τ0(Z)`.
+0. **SHARED DEPENDENCY (build first, reuse): the `< Fr::MODULUS` canonical bit-gadget.** NOT built yet
+   (confirmed: no less-than-`r` gadget in the crate; `proof_range`'s `i64` `B` cannot reach `2^255`).
+   It is a less-than-constant **boolean** check over the `DIGITS = 255` committed bits (MSB-walk /
+   borrow chain; each step a small per-bit constraint, NO wide ring sum, NOT multi-limb). It is ALSO
+   the show/issuance R8 P1 requirement (`LNP22_SHOW_DESIGN §1`), so build it ONCE as a shared module
+   (`proof_ltconst.rs` or fold into `proof_range`) and reuse in show + issuance + anchor. Design +
+   DESIGN-review this gadget before anchor chunk 1. (This is the only real sub-construction the rounds
+   surfaced — small + bounded, unlike the false multi-limb alarm.)
+1. `AnchorBindParams` + `g_pow` precompute (`g_i = 2^i·g`, `i < DIGITS = 255`) + the EC digit-base
+   aggregation helper (+ test: `Σ b_i·g_i + r·h == C_r` for honest digits). Read `bind.rs` end-to-end
+   as the line-by-line template (the audited reference for this exact construction, cross-ring).
+2. One round of the binary-challenge protocol (prove/verify a single `c_j`), both legs (lattice ABDLOP
+   opening with `w_c_j` IN the FS transcript + EC digit equation) sharing the projected `τ0(Z1)`.
 3. κ-round Fiat–Shamir wrapper + soundness test (tampered digit / swapped `w'` rejected; honest
    verifies).
-4. Wire `proof_range` in as the binariness/range sub-proof; full `anchor_bind_verifies` integration
-   test binding a real nullifier `w` to its `C_r`.
+4. Wire `proof_range`'s **binariness** + the chunk-0 `< Fr::MODULUS` gadget as the sub-proofs (NOT
+   proof_range's wide recomposition); full `anchor_bind_verifies` integration test binding a real
+   nullifier `w` to its `C_r`.
 5. Compose into the vouch (`vouch.rs`, HYP-343/§5.10): the show + nullifier + anchor-bind share one
    `w`, one `C_r`.
 
 ## 6. Open params (PROVISIONAL → HYP-330)
 
-`κ` (soundness rounds, target 128), `DIGITS` (identity bit-width, `≤ 254`; `bind.rs` uses 32
-provisionally and notes a real deployment raises the lattice witness dim for full width), the lattice
-mask σ for bit-openings, and the `q̂` flip to the show modulus. Params provisional; the *mechanism*
+`κ` (soundness rounds, target 128), `DIGITS = 255` (full canonical `Fr` width, per the settled show
+spec; `bind.rs` uses 32 as a toy and notes a real deployment raises the lattice witness dim for full
+width), the lattice mask σ for bit-openings, and the `q̂` flip to the show modulus. Params provisional;
+the *mechanism*
 (ROUNDS cross-ring, shared small `τ0(Z)` matched over the integers, EC-side recomposition) is the
 soundness core and is not deferrable.
