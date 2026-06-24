@@ -372,3 +372,111 @@ before the C3 dual-hybrid `BlindedVouch` is end-to-end.
   is a crypto-sign-off DECISION shared with the BBS half (same `nullifier.rs`). Not overclaimed.
 - **P2 — `w` must be full-entropy, not full-width.** §1.7 + parent §1.1 now require `w ← U(F_r)`
   generated uniformly by `UKeyGen` (else the public `N` is brute-forceable over a low-entropy `w`).
+
+---
+
+# §5.4c–5.6: FULL ZK SHOW — faithful spec from thesis Figure 7.2 + Eq 7.9–7.12 + Table 7.1
+
+*Captured 2026-06-15 by reading the thesis PDF directly (the .txt OCR garbled the F-matrix). This is
+the COMPLETE construction the remaining build transcribes. `n̂=64`, `k̂=4`, `ℓ=7` (soundness-amp dim),
+`d̂` = Ajtai module rank, `q̂ = q·q1`. Source: cjeudy.github.io manuscript Ch7 §7.4.3, Fig 7.2.*
+
+## Table 7.1 — exact parameters (SHOW column; issuance differs)
+| sym | issuance | **show** |
+|-----|----------|----------|
+| λ | 128 | 128 |
+| n̂ (ring degree) | 64 | 64 |
+| k̂ (subring embed) | 4 | 4 |
+| d̂ (Ajtai rank) | 20 | **23** |
+| q1 (modulus factor) | 524269 ≈2^19 | **549755813869 ≈2^39** |
+| q_min | 425837 ≈2^18.7 | 425837 |
+| q̂ = q·q1 | ≈2^37.7 | **≈2^57.7** |
+| ℓ (soundness amp) | 7 | 7 |
+| m1 (witness dim) | 104 | **211** |
+| m2 (commit rand dim) | 58 | **74** |
+| χ (commit rand distn) | B1 (ternary) | B1 |
+| ρ (ℓ∞ chal norm) | 8 | 8 |
+| η (ℓ1-like chal norm) | 93 | 93 |
+| γ_j (rej slack, j∈[3]) | 48.64 | 48.64 |
+| M_j (rej rate) | 2 | 2 |
+| σ1 (1st mask width) | 369051 | **582380223** |
+| σ2 (2nd mask width) | 275603 | **311305** |
+| σ3 (3rd mask width) | 72848 | **114957847** |
+| ‖π‖ proof size | 35.99 KB | **79.58 KB** |
+| λ*_anon / λ*_unf | — | 129 / 124 |
+
+**MODULUS FINDING (build impact):** my shipped `proof_ring.rs` uses `PHAT_Q1=524269` (=issuance). The
+SHOW needs `q1=549755813869 ≈2^39` ⇒ `q̂≈2^57.7`. i64 coeffs fit (2^57.7<2^63); i128 products fit
+(2^115.4<2^127). `549755813869 mod 8 = 5` ✓ (q≡5 mod 8, consistent w/ SEP + invertible-diff). This is
+a PROVISIONAL param (HYP-330) — the ring/CRT MECHANISM is modulus-agnostic; flip `PHAT_Q1` for show.
+
+## Figure 7.2 — the non-interactive ZK show (5 rounds, Fiat-Shamir)
+
+**Witness:** `s1` (the committed witness incl. SEP sig `v`, tag `t`, message `m`, hidden attrs `m_sm`);
+ABDLOP commit randomness `s2 ← χ^{m2}`.
+
+**Prove (reject-loop until all `keep`):**
+```
+s2 ← χ^{m2};  t_A ← A1 s1 + A2 s2                       # ABDLOP Ajtai commit
+y_i ← D_{σ_i}^{m_i}, i∈{1,2};  w ← A1 y1 + A2 y2        # masks + mask commit
+y3 ← D_{σ3}^{256/n̂};  g ← U({x∈R̂_q̂^ℓ : τ0(x)=0})       # 3rd mask + ZERO-CONST-COEFF garbage
+m̂ ← [y3^T | g^T]^T;  t_B ← B_{y,g} s2 + m̂              # BDLOP commit of (y3,g)
+msg1 = (t_A, t_B, w);  (R0,R1) ← H(1,crs,x,msg1) ∈ ({0,1}^{256×m1 n̂})²
+R ← R0 − R1;  z3 ← τ(y3) − R·τ(s1);  keep ← Rej(z3, R·τ(s1), σ3, M3)   # approx-shortness of s1
+msg2 = z3;  (γ_{i,j}) ← H(2,…) ∈ Z_q̂^{ℓ×262}           # aggregation challenges
+compute h_i  (Eq 7.9);  msg3 = (h1..hℓ)
+(μ_i) ← H(3,…) ∈ R̂_q̂^{ℓ+d̂k̂}
+compute ŝ, y (Eq 7.12), F, f, f̄ (Eq 7.11)
+e0 ← y^T F y;  e1 ← ŝ^T F y + y^T F ŝ + f^T y           # garbage terms
+t0 ← b^T y2 + e0;  t1 ← b^T s2 + e1                     # BDLOP-commit the garbage (b∈crs)
+msg4 = (t0,t1);  c ← H(4,…) ∈ C                         # self-conjugate challenge
+z1 ← y1 + c·s1;  z2 ← y2 + c·s2;  keep1/2 ← Rej1(…)
+π = (t_A, t_B, z3, h1..hℓ, t1, c, z1, z2)               # w,t0 recomputed by verifier
+```
+
+**Verify (b1∧b2∧b3∧b4∧b5):**
+```
+w ← A1 z1 + A2 z2 − c·t_A;  msg1=(t_A,t_B,w)
+(R0,R1)←H(1,…); msg2=z3; (γ)←H(2,…); msg3=(h_i); (μ)←H(3,…)
+compute F,f,f̄ (Eq 7.11)
+z ← [z1; z1^{*T}; c·t_B − B_{y,g} z2; (c·t_B − B_{y,g} z2)^{*T}]     # packed response
+t0 ← z^T F z + c·f^T z + c²·f̄ − (c·t1 − b^T z2)         # reconstruct garbage commit
+msg4=(t0,t1)
+b1: ‖z1‖2 ≤ c_{n̂m1}·σ1·√(n̂m1)      b2: ‖z2‖2 ≤ c_{n̂m2}·σ2·√(n̂m2)
+b3: ‖z3‖2 ≤ c_{256}·σ3·√256          b4: ∀i∈[ℓ], τ0(h_i)=0          # THE relation check
+b5: H(4,crs,x,msg1,msg2,msg3,msg4) = c                  # Fiat-Shamir
+```
+
+## Eq 7.9 — the aggregated `h_i` (combine all quadratic eqs via γ, mask via g_i, τ0(h_i)=0 carries the truth)
+```
+h_i = g_i + Σ_{j∈[256]} γ_{i,j}(e_j*·y3 + r_j*·s1 − z3,j)            # (3.1b) approx-shortness rows
+        + γ_{i,257}(v1''*·v1'' − B1'^2)                              # (3.2b) ‖v1''‖²=B1'^2
+        + γ_{i,258}(v2''*·v2'' − B2^2) + γ_{i,259}(v3''*·v3'' − B3^2) # (3.3b,3.4b) norm bounds
+        + γ_{i,260}(t'*·t' − w_) + γ_{i,261}(t'*·(t' − 1_{R̂k̂}))      # (3.5b,3.6b) tag norm + binariness
+        + γ_{i,262}(m_sm'*·(m_sm' − 1_{R̂km_sm}))                     # (3.7b) hidden-attr binariness
+```
+where `r_j = τ^{-1}(R^T e_j^Z)`. The `v1''/v2''/v3''/t'/m_sm'` are the subring-decomposed witness parts
+(the SEP signature `v` split, the tag `t`, hidden attrs). `g_i` (τ0=0) masks all non-const coeffs.
+
+## Eq 7.11 — F, f, f̄ (the public quadratic form; built from μ, γ + SEP matrices A'',B'',A3'',D'_sm,G_i'')
+`ŝ = [s1^T | s1^{*T} | m̂^T | m̂^{*T}]^T`. The main linear SEP relation aggregated by μ_{ℓ+i}:
+`A''v1'' − B''v2'' + A3''v3'' − D'_sm m_sm + t'G''v2'' = u'` (this is the SEP VERIFY eq with the
+tag-product `t'G''v2''` = the QUADRATIC term; `d̂k̂` equations). f̄ is the scalar constant from 7.10.
+`F = [[F', F'', 0],[0,0,0]]` block; `F' = Σ_{i∈[d]} μ_{ℓ+i} G_i''` placement; `F'' = Σ_i μ_i·
+diag(γ_{i,257}I, γ_{i,258}I, γ_{i,259}I, (γ_{i,260}+γ_{i,261})I, γ_{i,262}I)`. (Full block shapes in
+PDF p.192; transcribe verbatim at build.)
+
+## Build order (remaining)
+- **5.4c** subring decomposition `τ`/`τ^{-1}` (n→n̂=64, k̂=4 split) + the `R^T` approx-range rows + `g`
+  (τ0=0) garbage + BDLOP-commit garbage (t0,t1) + the `b4: τ0(h_i)=0` check. (Unblocks ZK.)
+- **5.5** the three exact ℓ2-norm bounds (b1,b2,b3 via the `‖v‖²=B²` rows of h_i).
+- **5.6** F/f assembly (Eq 7.11) incl. the SEP tag-product quadratic `t'G''v2''` — the sig-core.
+- **5.7** full Figure 7.2 prove/verify compose + bind to C_r + PQ lattice-PRF nullifier.
+- **5.8** issuance (Figure 7.1, simpler — no show-relation, commitment-opening + registration).
+- **5.9** HYP-324 issuer-hiding gate;  **5.10** wire vouch.rs (HYP-343).
+
+## Completeness/ZK/soundness bounds (Lemmas 7.5–7.7, for HYP-330 calibration)
+- `B = √(B1'^2 + B2^2 + B3^2 + w + n·m_sm)` bounds ‖s1‖2;  σ1=γ1·η·B, σ2=γ2·η·√(n̂m2), σ3=γ3·√337·B.
+- soundness error `≈ 2/|C| + q_min^{-n̂/κ} + q_min^{-ℓ} + 2^{-128} + ε_{M-SIS}`;
+  `β = 8η√((c_{n̂m1}σ1√(n̂m1))² + (c_{n̂m2}σ2√(n̂m2))²)` for M-SIS_{n̂,d̂,m1+m2,q̂,β}.
+- ZK: `q̂ > max(B², 82/√26·n̂ m1 B256, 2B256²/13 − B256)`, `B256 = c_256 σ3 √256`.
