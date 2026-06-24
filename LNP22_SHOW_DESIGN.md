@@ -498,3 +498,11 @@ PDF p.192; transcribe verbatim at build.)
 - soundness error `≈ 2/|C| + q_min^{-n̂/κ} + q_min^{-ℓ} + 2^{-128} + ε_{M-SIS}`;
   `β = 8η√((c_{n̂m1}σ1√(n̂m1))² + (c_{n̂m2}σ2√(n̂m2))²)` for M-SIS_{n̂,d̂,m1+m2,q̂,β}.
 - ZK: `q̂ > max(B², 82/√26·n̂ m1 B256, 2B256²/13 − B256)`, `B256 = c_256 σ3 √256`.
+  ⚠️ **The Table 7.1 / §5.6 modulus values are ILLUSTRATIVE and do NOT yet satisfy this bound (P2,
+  DESIGN-review round 7 2026-06-15).** With the listed `q̂ = 425837·549755813869 ≈ 2.34e17` and
+  `σ3√256 ≈ 1.84e9`, the dominating `2B256²/13 − B256` term `≈ 5.2e17 > q̂` — so the documented show
+  modulus FAILS ZK. This is the HYP-330 joint-calibration target (the *bound* is the canonical
+  mechanism from Lemma 7.7; the specific `q̂`/`σ1-3`/`c_256`/`B256` values are PROVISIONAL and must be
+  solved together — `q̂` larger and/or `σ3`/`c_256` smaller — so all three `max` terms hold). Do NOT
+  treat the listed numbers as a validated parameter set; implement the bound as a runtime/param-gate
+  assertion so an uncalibrated set is rejected, not silently shipped.
