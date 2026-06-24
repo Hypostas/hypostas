@@ -80,19 +80,28 @@ For round `j ∈ [0, κ)` (one shared FS challenge yields all `c_j` and binds ev
   needed if the EC equation uses `g_i = 2^i·g` directly, as `bind.rs` does).
 - **Range/binariness** of `b_i` comes from the reused `proof_range` proof (lattice side), so the
   shared `τ0(Z_{j,i})` are genuinely bit-responses, not arbitrary.
-- ⚠️ **Canonical `Fr`-range (REQUIRED, P1, DESIGN-review round 2 2026-06-15).** The EC digit equation
-  only constrains `Σ_i 2^i·b_i ≡ w (mod r)` where `r = Fr::MODULUS` (BLS12-381 scalar order, ≈2^255).
-  If the reconstructed value could reach `r`, the SAME `C_r` would bind two distinct lattice messages
-  (`w` and `w−r`) — a soundness break. So the bind MUST enforce the reconstructed digit value
-  `< Fr::MODULUS`. Concretely: the `proof_range` bound `2^L ≤ Fr::MODULUS` (i.e. `L ≤ 254`) makes the
-  decomposition canonical for free (no extra proof). The implementer MUST assert `L ≤ 254` (a
-  `debug_assert!`/param guard, mirroring `norm_bounds_provable`) — never silently allow `L > 254`. `w`
-  (the SEP identity message) is far smaller than `2^254` in practice, so this is a guard, not a limit.
+- ⚠️ **Canonical `Fr`-range — explicit `< r` proof, NO bit cap (REQUIRED; P1, DESIGN-review rounds 2-3
+  2026-06-15).** `w ← U(F_r)` is FULL-entropy (`r = Fr::MODULUS`, BLS12-381 scalar order ≈2^255), so it
+  spans the full 255 bits — capping at `L ≤ 254` would reject a large fraction of honest identities and
+  destroy nullifier entropy (round-3 finding; the round-2 "cap at 254" was WRONG). The EC digit
+  equation only constrains `Σ_i 2^i·b_i ≡ w (mod r)`, so without a canonical check the SAME `C_r`
+  binds both `w` and `w−r`. The bind therefore needs `L = 255` digits AND an **explicit
+  less-than-`r`** proof on the committed bits (the textbook MSB-walk / borrow-chain `bit-string < r`
+  gadget — NOT `proof_range`'s `i64` two-range trick, which cannot represent `B = r ≈ 2^255`).
+- ⚠️ **KEY OPEN CONSTRUCTION — multi-limb recomposition (P1, round 3).** The proof modulus
+  `q̂ ≈ 2^37.7` (issuance scaffold) — even the show modulus `≈2^57.7` — is **smaller than `2^255`**, so
+  `Σ_i 2^i·b_i = w` is NOT a single ring-coefficient relation (the weights `2^i` for `i > log2 q̂` wrap
+  mod `q̂`). The EC side sums all 255 bases `g_i = 2^i·g` fine (EC group order ≈2^255). The LATTICE
+  side must recompose `w` in **limbs**: split the 255 bits into `⌈255/B⌉` limbs (`B < log2 q̂`), prove
+  each limb's partial sum (no wrap) + a carry chain across limbs, binding the per-limb partial sums to
+  `C_r` via the digit aggregation. This limb decomposition + carry chain is the substantive remaining
+  design work for the build (akin to `bind.rs`'s own depth) — it is NOT yet fully specified here and
+  MUST be designed before the chunk-1 build. Tracked as the gating open item.
 
 Soundness: `2^−κ` (κ ≈ 128 ⇒ negligible). Both equations forced to agree on every `τ0(Z_{j,i})` ⇒
-the committed proof-ring `w` and the `C_r` `w` decompose to the same bits ⇒ same `w` (canonical, since
-`L ≤ 254 < log2 r` removes the `w` vs `w−r` ambiguity). ZK: the masks `y_{j,i}`/`s_{j,i}` are uniform;
-rejection sampling on `Z` (deferred to §C-iv's masking pass, consistent with the rest of the show).
+the committed proof-ring `w` and the `C_r` `w` recompose (limb-wise) to the same value ⇒ same `w`
+(canonical via the explicit `< r` proof, removing the `w` vs `w−r` ambiguity). ZK: the masks
+`y_{j,i}`/`s_{j,i}` are uniform; rejection sampling on `Z` (deferred to §C-iv's masking pass).
 
 ## 4. Witness layout & types (build sketch)
 
@@ -114,6 +123,11 @@ rejection sampling on `Z` (deferred to §C-iv's masking pass, consistent with th
 
 ## 5. Build chunks (each: build → test → Codex gate → commit)
 
+0. **GATING DESIGN (do FIRST, design-first + DESIGN-review before any code):** specify the multi-limb
+   recomposition of the 255-bit `w` over the small proof modulus `q̂` (§3.2 KEY OPEN item) — limb width
+   `B`, the carry chain, how each limb's partial sum binds to `C_r` via the digit aggregation — AND the
+   explicit `bit-string < r` canonical gadget. Until this is specified + DESIGN-review-clean, chunk 1
+   does NOT start (the rounds-2/3 findings proved a naive single-coefficient/254-cap bind is unsound).
 1. `AnchorBindParams` + `g_pow` precompute + the EC digit-base aggregation helper (+ test:
    `Σ τ0(b_i)·g_i + r·h == C_r` for honest digits).
 2. One round of the binary-challenge protocol (prove/verify a single `c_j`), both legs (lattice

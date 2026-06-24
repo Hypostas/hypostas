@@ -471,8 +471,15 @@ where `r_j = τ^{-1}(R^T e_j^Z)`. The `v1''/v2''/v3''/t'/m_sm'` are the subring-
 
 ## Eq 7.11 — F, f, f̄ (the public quadratic form; built from μ, γ + SEP matrices A'',B'',A3'',D'_sm,G_i'')
 `ŝ = [s1^T | s1^{*T} | m̂^T | m̂^{*T}]^T`. The main linear SEP relation aggregated by μ_{ℓ+i}:
-`A''v1'' − B''v2'' + A3''v3'' − D'_sm m_sm + t'G''v2'' = u'` (this is the SEP VERIFY eq with the
-tag-product `t'G''v2''` = the QUADRATIC term; `d̂k̂` equations). f̄ is the scalar constant from 7.10.
+`A''v1'' − B''v2'' + A3''v3'' − D'_sm m_sm + t'G''v2'' = u' + p·ẑ` (this is the SEP VERIFY eq with the
+tag-product `t'G''v2''` = the QUADRATIC term; `d̂k̂` equations). ⚠️ **CARRY (P1, DESIGN-review round 3
+2026-06-15):** the SEP relation holds mod `p`, but the proof lives mod `q̂ = p·q1` (§1, non-homomorphic
+lift), so the lifted equation carries the **committed bounded quotient witness `ẑ`** as `+ p·ẑ` — `ẑ`
+is a witness coordinate in `ŝ` that the proof commits AND norm-bounds (so the carry cannot be abused).
+Omitting `p·ẑ` would reject honest signatures that satisfy the relation only mod `p`. The
+implementation already does this (`proof_show::compute_carry` / `sep_exact_carry_holds` /
+`sep_lhs_from_blocks` − `sep_rhs_from_blocks` `= p·z`); these equations must match it. f̄ is the scalar
+constant from 7.10.
 `F = [[F', F'', 0],[0,0,0]]` block; `F' = Σ_{i∈[d]} μ_{ℓ+i} G_i''` placement; `F'' = Σ_i μ_i·
 diag(γ_{i,257}I, γ_{i,258}I, γ_{i,259}I, (γ_{i,260}+γ_{i,261})I, γ_{i,262}I)`. (Full block shapes in
 PDF p.192; transcribe verbatim at build.)
