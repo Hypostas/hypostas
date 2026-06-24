@@ -72,9 +72,10 @@ For round `j ∈ [0, κ)` (one shared FS challenge yields all `c_j` and binds ev
 
 - **Lattice opening** (per round): the ABDLOP opening `A1·Z1 + A2·Z2 = w_c + c_j·t_A` holds with the
   reconstructed `Z` (mirror `proof_linear`). This ties `τ0(Z_{j,i})` to the committed bits in `s1`.
-- **EC digit equation** (per round): `Σ_i τ0(Z_{j,i})·g_i + z_{r,j}·h == A_j-aggregate + c_j·C_r`
-  where `A_j-aggregate` is the round's combined EC announcement. This ties the SAME `τ0(Z_{j,i})` to
-  `C_r`'s digits.
+- **EC digit equation** (per round): `Σ_i τ0(Z1[bit_idx_i])·g_i + z_{r,j}·h == A_j-aggregate + c_j·C_r`
+  where `A_j-aggregate` is the round's combined EC announcement and `τ0(Z1[bit_idx_i])` is the
+  **projection of the SAME full lattice opening `Z1`** checked above (NOT a standalone value) — that
+  shared projection is precisely what forces `C_r`'s digits to equal the bits committed in `t_A`.
 - **Link**: `C_r − Σ_i 2^i·D_i = δ·h` is implicit in the digit-base aggregation (no separate `D_i`
   needed if the EC equation uses `g_i = 2^i·g` directly, as `bind.rs` does).
 - **Range/binariness** of `b_i` comes from the reused `proof_range` proof (lattice side), so the
@@ -89,9 +90,17 @@ the committed proof-ring `w` and the `C_r` `w` decompose to the same bits ⇒ sa
 
 - `AnchorBindParams { bridge: BridgeParams, g_pow: Vec<G1Affine>, kappa: usize }` (mirror
   `bind.rs::BindParams` but proof-ring side instead of SIS).
-- `AnchorBindProof { c_r: G1Affine, w_c: Vec<ProofRingElem> /*lattice announcements, per round*/,
-  challenge: Vec<bool> /*κ*/, z_lat: Vec<Vec<ProofRingElem>> /*per round*/, z_r: Vec<Fr>, range:
-  proof_range::RangeProof }`.
+- `AnchorBindProof { c_r: G1Affine, w_c: Vec<ProofRingElem> /*lattice opening announcement A1·y1+A2·y2,
+  per round*/, challenge: Vec<bool> /*κ*/, z1: Vec<Vec<ProofRingElem>> /*FULL opening over ALL s1
+  coords, per round*/, z2: Vec<Vec<ProofRingElem>> /*opening over s2 randomness, per round*/, z_r:
+  Vec<Fr>, range: proof_range::RangeProof }`.
+  ⚠️ **P1 (DESIGN-review 2026-06-15): carry the FULL ABDLOP opening, not just digit columns.** `t_A`
+  commits the *whole* show witness `s1`, so the lattice check `A1·Z1 + A2·Z2 = w_c + c_j·t_A` needs
+  `Z1` over ALL `s1` coordinates plus `Z2` over the commitment randomness `s2`. The per-digit responses
+  consumed by the EC equation are the **projections** `τ0(Z1[bit_idx_i])` of that same full opening —
+  this is what binds the bits to the original committed signature witness. Projecting to digit columns
+  *without* the full opening (the rejected shortcut) would leave the bits unbound to `t_A` unless a
+  separate bit subcommitment were added (more data, not less) — so the full opening is the right design.
 - `prove(params, t_a, w_idx, bit_lo, bit_hi, s1, s2, c_r, w, r, mask_sigma, rng) -> Option<…>`.
 - `verify(params, t_a, w_idx, bit_lo, bit_hi, c_r, proof, mask_sigma) -> bool`.
 

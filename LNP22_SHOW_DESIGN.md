@@ -183,8 +183,15 @@ AND-verifies it with the BBS half over the shared `C_r^(i)`/epoch — never the 
 
 ## 4. Build plan (chunk-by-chunk, each: tests + Codex gate)
 
-0. **5.0 Proof ring `R_q̂`** (R2 P1) — a new ring instance `Z_q̂[X]/(X^{n̂}+1)`, `n̂=64`, `q̂=p·q1`
-   (`q1≈2^19`). Distinct from `sep_ring`; challenges + the LNP22 proof live here. Arithmetic +
+0. **5.0 Proof ring `R_q̂`** (R2 P1) — a new ring instance `Z_q̂[X]/(X^{n̂}+1)`, `n̂=64`, `q̂=p·q1`.
+   ⚠️ **MODULUS (P1, DESIGN-review 2026-06-15):** the SHOW requires `q1=549755813869≈2^39` ⇒
+   `q̂≈2^57.7` (the exact show params in §5.6 / Table 7.1 — the mask widths + ZK norm bounds are sized
+   for this `q̂`). The build is bootstrapped over the **issuance** modulus `q1=PHAT_Q1=524269≈2^19`
+   (`q̂≈2^37.7`) **PROVISIONALLY** so the arithmetic/CRT/proof scaffolding lands first; this caps the
+   provable signature-norm dims (see `proof_show::norm_bounds_provable`, the `B²<q̂` guard). **The flip
+   to the show modulus is HYP-330** and MUST happen before mainnet — until then, params are toy and
+   honest large-dim shows are (correctly) rejected, not silently mis-secured. Do NOT read "q1≈2^19" as
+   the target. Distinct from `sep_ring`; challenges + the LNP22 proof live here. Arithmetic +
    inversion (for the invertible-difference challenge property). ⚠️ R3 P1: the `R_p → R_q̂` lift is
    NOT homomorphic (`q̂=p·q1`); a mod-`p` SEP relation becomes a mod-`q̂` relation **with a `p·z`
    carry**, so the lift produces a bounded quotient witness `z` that the proof commits + bounds. Tests:
