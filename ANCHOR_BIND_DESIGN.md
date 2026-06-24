@@ -61,20 +61,22 @@ Reuse, don't reinvent:
 
 For round `j ∈ [0, κ)` (one shared FS challenge yields all `c_j` and binds every announcement):
 
-1. **Prover masks.** Per digit `i`: a lattice mask `y_{j,i}` (a *small* proof-ring element — bits are
-   `0/1`, so a `MASK_SIGMA`-class mask keeps `τ0(y)` from wrapping mod `q̂`) and the matching EC
-   announcement `A_{j,i} = τ0(y_{j,i})·g_i + s_{j,i}·h` (the EC mask `a_{j,i} = τ0(y_{j,i})` — the
-   const-coeff of the lattice mask, the cross-domain glue). Plus an EC randomness mask for the link.
+1. **Prover masks.** One lattice mask `y_j` over ALL `s1` coords (`y2_j` over `s2`) — a *small*
+   proof-ring mask so each `τ0(y_j[bit_idx_i])` does not wrap mod `q̂`. ONE **aggregate** EC announcement
+   per round (NOT per-digit — P2, round 12): `A_j = Σ_i τ0(y_j[bit_idx_i])·g_i + ρ_r_j·h` with a SINGLE
+   randomness mask `ρ_r_j` over `h` (matches the single `z_r_j` response below; mirrors
+   `bind.rs`'s `T_EC_j = ec_digit_comb(g_pow, y_j[..DIGITS]) + h·rr`). The per-digit cross-domain glue
+   is the const-coeff `τ0(y_j[bit_idx_i])` reused as the `g_i` scalar; there is no per-digit `s_{j,i}`.
 2. **Challenge.** `c_j ∈ {0,1}` from the FS hash of (`C_r`, `t_A`, **the per-round lattice
-   announcement `w_c_j = A1·y1_j + A2·y2_j`**, all EC announcements `A_{j,i}`, the link announcement,
-   `g_i`, `h`, the public statement). ⚠️ **`w_c_j` MUST be in the transcript (P1, DESIGN-review round 5
-   2026-06-15):** omitting it lets the prover pick `c_j` first then set `w_c_j = A1·Z1 + A2·Z2 − c_j·t_A`
-   to pass the lattice opening for arbitrary digit projections — the leg would no longer bind the
-   projections to the committed `s1`. `bind.rs::fs_challenge` hashes `w_lat` alongside `t_ec` for exactly
-   this reason; mirror it.
-3. **Responses.** Lattice: `Z_{j,i} = y_{j,i} + c_j·b_i` (proof-ring element). EC: the verifier
-   recomputes from `τ0(Z_{j,i})`. The SAME small integer `τ0(Z_{j,i})` plays the digit response in
-   BOTH the EC equation and the lattice opening (rejection-bounded so it does not wrap in either
+   announcement `w_c_j = A1·y1_j + A2·y2_j`**, the aggregate EC announcement `A_j`, `g_i`, `h`, the
+   public statement). ⚠️ **`w_c_j` MUST be in the transcript (P1, DESIGN-review round 5 2026-06-15):**
+   omitting it lets the prover pick `c_j` first then set `w_c_j = A1·Z1 + A2·Z2 − c_j·t_A` to pass the
+   lattice opening for arbitrary digit projections — the leg would no longer bind the projections to the
+   committed `s1`. `bind.rs::fs_challenge` hashes `w_lat` alongside `t_ec` for exactly this reason.
+3. **Responses.** Lattice (full): `Z1_j = y_j + c_j·s1`, `Z2_j = y2_j + c_j·s2` (proof-ring); EC
+   randomness: `z_r_j = ρ_r_j + c_j·r` (ONE per round). The SAME small integer `τ0(Z1_j[bit_idx_i])`
+   plays the digit response in BOTH the EC equation and the lattice opening (rejection-bounded so it
+   does not wrap in either
    modulus — the crux, identical to `bind.rs`'s shared-`z_i`).
 
 ### 3.2 Verifier checks
