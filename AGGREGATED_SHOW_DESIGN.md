@@ -1,6 +1,9 @@
 # Aggregated Masked Show — LNP22 Figure 7.2 (HYP-352 item 1 (C), §C-iv aggregation)
 
-**Status:** DESIGN (pre-build). Codex DESIGN-review pending.
+**Status:** DESIGN (pre-build). Round 0 Codex DESIGN-review done → 3 P1s + 5 P2s addressed (round 1
+pending): P1.1 norm-bound tail constants (not the challenge `c`); P1.2 full Eq 7.11 F/f block-for-block
+transcription; P1.3 four-square slack for all three norms; P2.2/3/4/5 (b4+F both required, z3 sign locked,
+params pinned, t0 reconstruction).
 **Supersedes:** the separate-masked-proof rollout (commits aa3a36a + 3a7087f) for `proof_show`.
 **Ref:** thesis ePrint 2024/131 (`refs/jeudy_thesis_2024.pdf`) §7.4.3, Figure 7.2, Eq 7.9–7.12, Lemmas 7.5–7.7, Table 7.1.
 
@@ -38,9 +41,12 @@ q1·( A·v1 − B·v2 + A3·v3 + G(t·v2) − D_sm·m_sm ) = q1·u   (mod q̂R) 
 ‖t‖₂ = √w,  t, m_sm ∈ T1                                              [tag fixed-weight + binariness]
 ```
 
-`v3` is the **norm-slack carrier**: `B1'² − ‖v1'‖₂² = a1,0² + a1,1² + a1,2² + a1,3²` (four-square
-decomposition, `v1'' = [v1'^T | a1]^T` so `‖v1''‖₂² = B1'²` exactly). Same idea our current `norm_slack`
-uses (one slack block); the thesis four-square is the faithful form — **DECISION D1** below.
+**Four-square slack (P1.3 — all three norm witnesses):** `v1, v2, v3` are three separate witnesses, each
+with its own bound (`B1', B2, B3`). For EACH `j∈{1,2,3}`, decompose `Bj² − ‖vj'‖₂² = a_{j,0}² + a_{j,1}² +
+a_{j,2}² + a_{j,3}²` (Lagrange four-square), pack `a_j = a_{j,0}+a_{j,1}x+a_{j,2}x²+a_{j,3}x³`, set
+`vj'' = [vj'^T | a_j]^T` so `‖vj''‖₂² = Bj²` **exactly**. The exact-norm equations 3.2b–3.4b then become
+the three `F''` norm blocks. (Our current single `norm_slack` is replaced by this four-square form for all
+three — **D1** below.) Note `v3` is itself a signature-component witness, NOT a slack carrier.
 
 Everything is lifted via the subring embedding `θ` (our `embed`/`SUBRING_K`): `v'_j = θ(v_j)`,
 `t' = θ(t)`, `m'_sm = θ(m_sm)`, `A'' = [Â|0]` etc. The quadratic term `G·θ(t·v2)` is linearised into
@@ -83,10 +89,30 @@ garbage masks). `*` = the conjugate automorphism `σ_{-1}` (our `conjugate()`).
 ### Fourth round → `msg4 = (t0, t1)`
 11. Combine the `h_i` well-formedness AND the main SEP relation (`A''v1'' − B''v2'' + A3''v3'' −
     D'_sm·m_sm + t'·G''·v2'' = u'`, `d̂k` rows) via `μ` into **Eq 7.10**: `0 = Σμ_i(h_i…) + Σμ_{ℓ+i}(SEP_i)`.
-12. Recast as `ŝ^T F ŝ + f^T ŝ + f = 0 (mod q̂R)` — **F (Eq 7.11)**, **f (Eq 7.11)**, scalar `f`. `F` is the
-    public block matrix encoding: `F''` = the `diag(γ·I)` norm/tag/binariness blocks; `F'` = the
-    `Σμ_{ℓ+i}G''_i` SEP-quadratic block; `f` = the linear `Σμγr* + Σμ A''ᵀ e_R̂` terms; scalar `f` = the
-    `−Σμ_i(Σγz3 + γB² + γw + h_i) − Σμ u'` constant.
+12. Recast as `ŝ^T F ŝ + f^T ŝ + f = 0 (mod q̂R)` — **transcribe Eq 7.11 BLOCK-FOR-BLOCK** (P1.2; the
+    prose below is the map, the build MUST match Eq 7.11 exactly):
+    - **`F = [[F' | F'' | 0],[0 | 0 | 0]]`** (the lower half is zero — `F` acts on `ŝ`'s first half).
+      - **`F''` (the scalar-family quadratic, diag over `γ`):** `Σ_i μ_i · diag( γ_{i,257}·I_{2d̂k+1},
+        γ_{i,258}·I_{kd̂k+1}, γ_{i,259}·I_{kd̂k+1}, (γ_{i,260}+γ_{i,261})·I_{k̂}, γ_{i,262}·I_{k̂m_sm} )`
+        — the three norm blocks (3.2b–3.4b), the tag block (3.5b `w` + 3.6b binariness), the message
+        block (3.7b).
+      - **`F'` (the SEP quadratic `t'·G''·v2''`):** the `Σ_{i∈d̂k} μ_{ℓ+i}·G''_i` block placed at the
+        `(t', v2'')` cross-position (zeros elsewhere) — this is `sep_bilinear`'s `G''_i`.
+    - **`f` (linear, Eq 7.11) — all blocks:**
+      - `v1''`: `Σ_i Σ_j μ_iγ_{i,j} r₁,j* + Σ_{i∈d̂k} μ_{ℓ+i} A''ᵀ e_R̂`
+      - `v2''`: `Σ_i Σ_j μ_iγ_{i,j} r₂,j* − Σ_{i∈d̂k} μ_{ℓ+i} B''ᵀ e_R̂`
+      - `v3''`: `Σ_i Σ_j μ_iγ_{i,j} r₃,j* + Σ_{i∈d̂k} μ_{ℓ+i} A₃''ᵀ e_R̂`
+      - `t'`:   `Σ_i Σ_j μ_iγ_{i,j} r_t,j*`
+      - `m'_sm`: `Σ_i Σ_j μ_iγ_{i,j} r_sm,j* + Σ_{i∈d̂k} μ_{ℓ+i} D'_smᵀ e_R̂`
+      - conjugate halves of the above: **zero**.
+      - `y3` block: `−Σ_i μ_iγ_{i,261}·1_{R̂k̂}` ... and the binariness/approx-range linear blocks:
+        the **`y3` coupling** `Σ_i μ_i Σ_j γ_{i,j} e_j*`, the tag/msg binariness linear terms
+        `−Σ_i μ_iγ_{i,261}·1_{R̂k̂}` and `−Σ_i μ_iγ_{i,262}·1_{R̂k̂m_sm}`.
+      - `g` block: `[μ_1 | … | μ_ℓ]ᵀ`.   trailing zero blocks `0_{256/n̂}`, `0_ℓ`.
+    - **scalar `f`:** `−Σ_i μ_i( Σ_j γ_{i,j} z3,j + γ_{i,257}B1'² + γ_{i,258}B2² + γ_{i,259}B3² +
+      γ_{i,260}w + h_i ) − Σ_{i∈d̂k} μ_{ℓ+i} u'_i`.
+    The `r_{·,j}` are defined by `r_j*·s1 = r₁,j*·v1'' + r₂,j*·v2'' + r₃,j*·v3'' + r_t,j*·t' +
+    r_sm,j*·m'_sm` (Eq 7.10, the approx-range `R`-row split across the witness blocks).
 13. Garbage with `y = [y1 | y1* | −B_{y,g}y2 | −(B_{y,g}y2)*]` (**Eq 7.12**):
     `e0 = y^T F y`, `e1 = ŝ^T F y + y^T F ŝ + f^T y`. Commit `t0 = b^T y2 + e0`, `t1 = b^T s2 + e1`
     (`b ∈ crs`, ONE row — the SINGLE garbage commitment for everything).
@@ -99,9 +125,16 @@ garbage masks). `*` = the conjugate automorphism `σ_{-1}` (our `conjugate()`).
 - `w = A1·z1 + A2·z2 − c·t_A`; recompute `chal1..3`; `μ` from `chal3`.
 - `z = [z1 | z1* | c·t_B − B_{y,g}·z2 | (c·t_B − B_{y,g}·z2)*]` — the masked opening
   (`c·t_B − B·z2 = c·m̂ − B·y2`, the garbage opened **without revealing `m̂`**).
-- `t0 ?= z^T F z + c·f^T z + c²·f − (c·t1 − b^T z2)` — **the one quadratic check** (all relations at once).
-- `b1: ‖z1‖₂ ≤ c·σ1√(n̂m1)`,  `b2: ‖z2‖₂ ≤ c·σ2√(n̂m2)`,  `b3: ‖z3‖₂ ≤ c·σ3√256`.
-- `b4: ∀i, τ0(h_i) = 0` — THE relation.   `b5: chal4 = c`.
+- **Reconstruct** `t0 := z^T F z + c·f^T z + c²·f − (c·t1 − b^T z2)` (NOT a transmitted field — `t0 ∉ π`;
+  the verifier rebuilds it, forms `msg4 = (t0, t1)`, and the soundness comes from `b5` below).
+- `b1: ‖z1‖₂ ≤ c_{n̂m1}·σ1·√(n̂m1)`,  `b2: ‖z2‖₂ ≤ c_{n̂m2}·σ2·√(n̂m2)`,  `b3: ‖z3^Z‖₂ ≤ c_256·σ3·√256`
+  — the `c_N` are **Gaussian-tail constants** (P1.1; NOT the Fiat–Shamir challenge `c`), the standard
+  `‖D_σ^N‖₂ ≤ c_N·σ·√N` bound from the rejection analysis; the soundness β (Lemma 7.6) uses these same
+  `c_{n̂m1}, c_{n̂m2}`.
+- `b4: ∀i, τ0(h_i) = 0` — the relation-truth predicate, sound **only together with** the F reconstruction
+  (P2.2: `b4` proves each randomized scalar relation; the `t0` check proves the published `h_i` are
+  well-formed — both are required).
+- `b5: chal4 = H(4, crs, x, msg1, msg2, msg3, msg4) = c` — binds the reconstructed `t0` (Figure 7.2).
 
 ---
 
@@ -163,17 +196,24 @@ garbage masks). `*` = the conjugate automorphism `σ_{-1}` (our `conjugate()`).
 
 ## 6. Open decisions (for Codex DESIGN-review)
 
-- **D1 — norm slack:** four-square `a1,0..a1,3` (thesis, p.190) vs our single `norm_slack` block. Faithful =
-  four-square (it makes `‖v1''‖₂²=B1'²` exact for ANY `‖v1'‖₂²≤B1'²` via Lagrange). DECISION: adopt
-  four-square (C3a).
+- **D1 — norm slack (RESOLVED, P1.3):** four-square `a_{j,0..3}` for **ALL THREE** `v1,v2,v3` (thesis
+  p.190: "perform the same decomposition" for a2,a3), making `‖vj''‖₂²=Bj²` exact via Lagrange. Replaces
+  the single `norm_slack`. (C3a.)
 - **D2 — `ℓ` (garbage count):** thesis Table 7.1 `ℓ=7`. Soundness `q_min^{−ℓ}`; ZK needs `ℓ` masks. Use 7.
-- **D3 — params:** σ1/σ2/σ3, η, γ_j, M_j from Table 7.1 (HYP-330-calibrated `q̂`). σ PROVISIONAL until the
-  HYP-330 external audit; `proof_params::zk_bound` already encodes the Lemma 7.6 bound.
-- **D4 — revealed attributes `m_I`:** base case all-concealed (`u'=q1u`). The `D_I·m_I` split is a later
-  extension (issuer-hiding / selective disclosure HYP-324) — out of scope here, note the seam.
-- **D5 — approx-range vs exact-norm overlap:** the thesis proves BOTH (3.1b shortness AND 3.2b–3.4b exact).
-  Confirm both are required (3.1b = witness `s1` shortness for M-SIS soundness; 3.2b–3.4b = signature
-  validity). Keep both.
+- **D3 — params (RESOLVED, pin Table 7.1 SHOW):** `n̂=64, k̂=4, d̂=23, q1=549755813869, q̂≈2^57.7,
+  m1=211, m2=74, ρ=8, η=93, γj=48.64, Mj=2, σ1=582380223, σ2=311305, σ3=114957847, ℓ=7`. `q̂` is the
+  HYP-330 flip (live); `proof_params::zk_bound` encodes the Lemma 7.6 bound. σ/B256 PROVISIONAL until the
+  HYP-330 external audit. The `b1..b3` tail constants `c_{n̂m1}, c_{n̂m2}, c_256` are the rejection tail
+  (≈ from the thesis §8.3 53-bit-precision samplers), NOT the challenge.
+- **D4 — revealed attributes `m_I`:** base case all-concealed (`u'=q1u`, `I=∅`). The `D_I·m_I` split is a
+  later extension (selective disclosure / HYP-324) — out of scope here; note the seam.
+- **D5 — approx-range vs exact-norm overlap (RESOLVED):** the thesis proves BOTH and both are required —
+  3.1b (approx-range `z3`) = witness `s1` **shortness** for M-SIS soundness; 3.2b–3.4b (exact `⟨v,v⟩=B²`)
+  = signature-component **validity**. Keep both.
+- **D6 — z3 sign convention (RESOLVED, P2.3):** lock to **Eq 7.9** (the safer source): `z3^Z = τ(y3) +
+  R·τ(s1)` and the `h_i` term `e_j*·y3 + r_j*·s1 − z3,j`. Define `r_j` (the `R`-rows lifted to R̂) so
+  `r_j*·s1` splits across the witness blocks as in step-12's `r_{·,j}`. (Figure 7.2's prover line shows the
+  same up to sign; Eq 7.9 governs.)
 
 ---
 
