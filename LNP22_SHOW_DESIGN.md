@@ -131,8 +131,9 @@ The framework proves, for committed `s₁` (short) and `m` (arbitrary), statemen
 - **(f) Fiat–Shamir** — non-interactive in the ROM; repeats until a non-aborting transcript (rejection
   sampling). Yields a signature-of-knowledge (binds the message/epoch/C_r).
 
-The proof modulus is `q̂ = q·q1` (thesis Ch8: `q=425837` the SEP modulus). ⚠️ **The SHOW requires
-`q1=549755813869≈2^39` ⇒ `q̂≈2^57.7`** (Table 7.1 / §5.6 — the mask widths `σ1,σ2,σ3` and ZK norm
+The proof modulus is `q̂ = q·q1` (thesis Ch8: `q=425837` the SEP modulus). ⚠️ **The SHOW needs a
+HYP-330-calibrated `q̂` of the ~2^57.7 magnitude class** (NOT the illustrative `q1=549755813869`, which
+FAILS the ZK bound — see the bounds section) (Table 7.1 / §5.6 — the mask widths `σ1,σ2,σ3` and ZK norm
 bounds are sized for this). The current build is bootstrapped over the **issuance** modulus
 `q1=524269≈2^19` (`q̂≈2^37.7`) **as scaffolding only** (caps provable dims via
 `proof_show::norm_bounds_provable`'s `B²<q̂` guard); the flip to the show modulus is **HYP-330**,
@@ -188,8 +189,9 @@ AND-verifies it with the BBS half over the shared `C_r^(i)`/epoch — never the 
 ## 4. Build plan (chunk-by-chunk, each: tests + Codex gate)
 
 0. **5.0 Proof ring `R_q̂`** (R2 P1) — a new ring instance `Z_q̂[X]/(X^{n̂}+1)`, `n̂=64`, `q̂=p·q1`.
-   ⚠️ **MODULUS (P1, DESIGN-review 2026-06-15):** the SHOW requires `q1=549755813869≈2^39` ⇒
-   `q̂≈2^57.7` (the exact show params in §5.6 / Table 7.1 — the mask widths + ZK norm bounds are sized
+   ⚠️ **MODULUS (P1, DESIGN-review 2026-06-15):** the SHOW needs a HYP-330-calibrated ~2^57.7-class `q̂`
+   (NOT the illustrative `549755813869`, which FAILS the ZK bound — see the bounds section)
+   (the show params in §5.6 / Table 7.1 — the mask widths + ZK norm bounds are sized
    for this `q̂`). The build is bootstrapped over the **issuance** modulus `q1=PHAT_Q1=524269≈2^19`
    (`q̂≈2^37.7`) **PROVISIONALLY** so the arithmetic/CRT/proof scaffolding lands first; this caps the
    provable signature-norm dims (see `proof_show::norm_bounds_provable`, the `B²<q̂` guard). **The flip
@@ -380,7 +382,8 @@ before the C3 dual-hybrid `BlindedVouch` is end-to-end.
   hiding; a future EC-DL break recovers `w` and links epochs, contradicting everlasting anonymity.
   **Resolution:** §1.7 + parent §1.1 now SCOPE the claim (everlasting = the show; the EC nullifier is
   a documented computational caveat) and flag the fix as **Q6** — a PQ/statistically-hiding nullifier
-  is a crypto-sign-off DECISION shared with the BBS half (same `nullifier.rs`). Not overclaimed.
+  is a crypto-sign-off DECISION shared with the BBS half (the C3 PQ lattice-PRF `nullifier_lwr.rs`; the
+  EC `nullifier.rs` is superseded for C3, Q6). Not overclaimed.
 - **P2 — `w` must be full-entropy, not full-width.** §1.7 + parent §1.1 now require `w ← U(F_r)`
   generated uniformly by `UKeyGen` (else the public `N` is brute-forceable over a low-entropy `w`).
 
@@ -399,7 +402,7 @@ the COMPLETE construction the remaining build transcribes. `n̂=64`, `k̂=4`, `�
 | n̂ (ring degree) | 64 | 64 |
 | k̂ (subring embed) | 4 | 4 |
 | d̂ (Ajtai rank) | 20 | **23** |
-| q1 (modulus factor) | 524269 ≈2^19 | **549755813869 ≈2^39** |
+| q1 (modulus factor) | 524269 ≈2^19 | **~2^39 class — HYP-330-calibrated** (549755813869 illustrative, fails ZK) |
 | q_min | 425837 ≈2^18.7 | 425837 |
 | q̂ = q·q1 | ≈2^37.7 | **≈2^57.7** |
 | ℓ (soundness amp) | 7 | 7 |

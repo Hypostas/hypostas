@@ -48,8 +48,9 @@ signature is over the attributes `[s | m = bits(w)]`, `s` the hidden registratio
    scope (Q6=(ii)): everlasting anonymity covers the SHOW/membership; the nullifier is **PQ-computational**
    unlinkable (a deterministic `w`-keyed nullifier cannot be everlasting — unbounded brute-force of `w`;
    PQ-computational is the max, reached by the lattice PRF, NOT by the EC `w·H_G1` a QC would break).
-   The lattice-PRF nullifier is shared with the BBS half (same
-   `nullifier.rs`); see `LNP22_SHOW_DESIGN.md` §1.7 / Q6.
+   The PQ lattice-PRF nullifier (`nullifier_lwr.rs`, `N=round_p(a_epoch·w)`) anchors to the SAME `w`
+   as the BBS half; the classical EC `nullifier.rs` is SUPERSEDED for C3 (Q6). See
+   `LNP22_SHOW_DESIGN.md` §1.7 / Q6.
 
 Property (2) is the part that needs PQ cryptography: a quantum adversary that breaks BBS (q-SDH)
 must still be unable to forge the lattice half, so a vouch for a non-member remains infeasible.
@@ -110,7 +111,8 @@ time.
    proofs, Fiat–Shamir.
 3. **Cross-domain same-value bind:** our shipped `bind.rs` (HYP-345, Asiacrypt-2014 digit
    decomposition + shared challenge), generalized to bind `m` (lattice digits of `w`) to `C_r`.
-4. **Composition:** our shipped `presentation.rs` / `vouch.rs` AND-verify and `nullifier.rs`.
+4. **Composition:** our shipped `presentation.rs` / `vouch.rs` AND-verify, with the PQ lattice-PRF
+   `nullifier_lwr.rs` for C3 (the EC `nullifier.rs` is the BBS-half/classical reference only, Q6).
 
 ⚠️ **Sovereignty note:** there is no audited *pure-Rust, C-free* implementation of LNS to depend
 on (reference code is research-grade, often x86/AVX). This is a faithful-transcription build, the
@@ -217,8 +219,9 @@ anchor), `Φ_w(m)=w`, `Φ_k(m)=k`, `N = k·H_G1(epoch)` — in statistical ZK. S
      proves this `k` is the **SAME `k` signed into `m`** via `Φ_k` (R2 P1e). Because `k` is part of
      the signed message, a holder CANNOT pick a fresh `k` at show time to forge distinct nullifiers —
      one credential yields exactly one `N` per epoch. `k` is the blind-committed secret from §3.3, so
-     the issuer never learns it and cannot recompute `N` (R1 P1a). Uses the shipped `nullifier.rs` /
-     EC `Nullifier` type (R2 P2).
+     the issuer never learns it and cannot recompute `N` (R1 P1a). For C3 this is the PQ lattice-PRF
+     `nullifier_lwr.rs` (`N=round_p(a_epoch·w)`, Q6); the shipped EC `nullifier.rs` / `Nullifier` type
+     (R2 P2) is the classical/BBS-half reference, superseded for the C3 PQ path.
 6. **Issuer-hiding** (R2 P1d): the show must prove the signature verifies under **some** attested
    introducer key in the `epoch` anchor — NOT a specific `ipk`, or every verifier learns which
    introducer vouched (violating INTRODUCTION_RECORD §4.2 introducer anonymity). This MIRRORS the
