@@ -1,9 +1,10 @@
 # Aggregated Masked Show — LNP22 Figure 7.2 (HYP-352 item 1 (C), §C-iv aggregation)
 
-**Status:** DESIGN (pre-build). Round 0 Codex DESIGN-review done → 3 P1s + 5 P2s addressed (round 1
-pending): P1.1 norm-bound tail constants (not the challenge `c`); P1.2 full Eq 7.11 F/f block-for-block
-transcription; P1.3 four-square slack for all three norms; P2.2/3/4/5 (b4+F both required, z3 sign locked,
-params pinned, t0 reconstruction).
+**Status:** DESIGN (pre-build). Rounds 0–1 Codex DESIGN-review done. R0: 3 P1s + 5 P2s. R1: P1.1 (tail
+constants) + P1.3 (four-square ×3) RESOLVED, all P2s addressed; P1.2 NOT yet resolved (Eq 7.11 block
+errors). Round 2 (this revision) fixes P1.2: (a) v3'' dim `kk̂+1` not `kd̂k+1`; (b) f-vector block order —
+binariness linear terms on conjugate `t'*`/`m'_sm*`, `y3`=approx-range coupling, `g`=`[μ]`, `m̂*`=0;
+(c) `D'_sm` sign convention explicit; + β tail-constant cleanup. Round 2 review pending.
 **Supersedes:** the separate-masked-proof rollout (commits aa3a36a + 3a7087f) for `proof_show`.
 **Ref:** thesis ePrint 2024/131 (`refs/jeudy_thesis_2024.pdf`) §7.4.3, Figure 7.2, Eq 7.9–7.12, Lemmas 7.5–7.7, Table 7.1.
 
@@ -89,30 +90,39 @@ garbage masks). `*` = the conjugate automorphism `σ_{-1}` (our `conjugate()`).
 ### Fourth round → `msg4 = (t0, t1)`
 11. Combine the `h_i` well-formedness AND the main SEP relation (`A''v1'' − B''v2'' + A3''v3'' −
     D'_sm·m_sm + t'·G''·v2'' = u'`, `d̂k` rows) via `μ` into **Eq 7.10**: `0 = Σμ_i(h_i…) + Σμ_{ℓ+i}(SEP_i)`.
-12. Recast as `ŝ^T F ŝ + f^T ŝ + f = 0 (mod q̂R)` — **transcribe Eq 7.11 BLOCK-FOR-BLOCK** (P1.2; the
-    prose below is the map, the build MUST match Eq 7.11 exactly):
-    - **`F = [[F' | F'' | 0],[0 | 0 | 0]]`** (the lower half is zero — `F` acts on `ŝ`'s first half).
-      - **`F''` (the scalar-family quadratic, diag over `γ`):** `Σ_i μ_i · diag( γ_{i,257}·I_{2d̂k+1},
-        γ_{i,258}·I_{kd̂k+1}, γ_{i,259}·I_{kd̂k+1}, (γ_{i,260}+γ_{i,261})·I_{k̂}, γ_{i,262}·I_{k̂m_sm} )`
-        — the three norm blocks (3.2b–3.4b), the tag block (3.5b `w` + 3.6b binariness), the message
-        block (3.7b).
-      - **`F'` (the SEP quadratic `t'·G''·v2''`):** the `Σ_{i∈d̂k} μ_{ℓ+i}·G''_i` block placed at the
-        `(t', v2'')` cross-position (zeros elsewhere) — this is `sep_bilinear`'s `G''_i`.
-    - **`f` (linear, Eq 7.11) — all blocks:**
-      - `v1''`: `Σ_i Σ_j μ_iγ_{i,j} r₁,j* + Σ_{i∈d̂k} μ_{ℓ+i} A''ᵀ e_R̂`
-      - `v2''`: `Σ_i Σ_j μ_iγ_{i,j} r₂,j* − Σ_{i∈d̂k} μ_{ℓ+i} B''ᵀ e_R̂`
-      - `v3''`: `Σ_i Σ_j μ_iγ_{i,j} r₃,j* + Σ_{i∈d̂k} μ_{ℓ+i} A₃''ᵀ e_R̂`
-      - `t'`:   `Σ_i Σ_j μ_iγ_{i,j} r_t,j*`
-      - `m'_sm`: `Σ_i Σ_j μ_iγ_{i,j} r_sm,j* + Σ_{i∈d̂k} μ_{ℓ+i} D'_smᵀ e_R̂`
-      - conjugate halves of the above: **zero**.
-      - `y3` block: `−Σ_i μ_iγ_{i,261}·1_{R̂k̂}` ... and the binariness/approx-range linear blocks:
-        the **`y3` coupling** `Σ_i μ_i Σ_j γ_{i,j} e_j*`, the tag/msg binariness linear terms
-        `−Σ_i μ_iγ_{i,261}·1_{R̂k̂}` and `−Σ_i μ_iγ_{i,262}·1_{R̂k̂m_sm}`.
-      - `g` block: `[μ_1 | … | μ_ℓ]ᵀ`.   trailing zero blocks `0_{256/n̂}`, `0_ℓ`.
+12. Recast as `ŝ^T F ŝ + f^T ŝ + f = 0 (mod q̂R)` — **the build transcribes Eq 7.11 VERBATIM from the PDF**;
+    the map below fixes the layout (P1.2). `ŝ = [s1 | s1* | m̂ | m̂*]`, `s1 = (v1'',v2'',v3'',t',m'_sm)`,
+    `m̂ = [y3 | g]`. **Packing dims (thesis p.190):** `|v1''|=2d̂k̂+1`, `|v2''|=kd̂k̂+1`, `|v3''|=kk̂+1`,
+    `|t'|=k̂`, `|m'_sm|=k̂·m_sm` (each `vj''` carries its OWN four-square slack +1; **v3'' uses `kk̂+1`,
+    NOT the v2'' dim** — P1.2a).
+    - **`F''` (scalar-family quadratic, the `(s1, s1*)` cross-block, diag over `γ`):**
+      `Σ_i μ_i · diag( γ_{i,257}·I_{2d̂k̂+1}, γ_{i,258}·I_{kd̂k̂+1}, γ_{i,259}·I_{kk̂+1},
+      (γ_{i,260}+γ_{i,261})·I_{k̂}, γ_{i,262}·I_{k̂·m_sm} )` — norms 3.2b–3.4b, tag (3.5b `w`+3.6b),
+      message (3.7b). Note the tag block carries `γ260+γ261` (norm + binariness on the same `t'`).
+    - **`F'` (SEP quadratic `t'·G''·v2''`):** `Σ_{i∈d̂k̂} μ_{ℓ+i}·G''_i` at the `(t', v2'')` cross-position
+      (zeros elsewhere) — `sep_bilinear`'s `G''_i`.
+    - **`f` (linear) — EXACT block order over `ŝ` (P1.2b):**
+      | block | value |
+      |---|---|
+      | `v1''` | `Σ_iΣ_j μ_iγ_{i,j} r₁,j* + Σ_{i∈d̂k̂} μ_{ℓ+i} A''ᵀe_R̂` |
+      | `v2''` | `Σ_iΣ_j μ_iγ_{i,j} r₂,j* − Σ_{i∈d̂k̂} μ_{ℓ+i} B''ᵀe_R̂` |
+      | `v3''` | `Σ_iΣ_j μ_iγ_{i,j} r₃,j* + Σ_{i∈d̂k̂} μ_{ℓ+i} A₃''ᵀe_R̂` |
+      | `t'` | `Σ_iΣ_j μ_iγ_{i,j} r_t,j*` |
+      | `m'_sm` | `Σ_iΣ_j μ_iγ_{i,j} r_sm,j* ± Σ_{i∈d̂k̂} μ_{ℓ+i} D'_smᵀe_R̂` (**sign — P1.2c below**) |
+      | `v1''*`,`v2''*`,`v3''*` | **0** |
+      | `t'*` | `−Σ_i μ_iγ_{i,261}·1_{R̂k̂}` (tag binariness 3.6b — on the **conjugate**, not `y3`) |
+      | `m'_sm*` | `−Σ_i μ_iγ_{i,262}·1_{R̂k̂m_sm}` (msg binariness 3.7b — on the **conjugate**) |
+      | `y3` (in `m̂`) | `Σ_i μ_i Σ_j γ_{i,j} e_j*` (approx-range coupling 3.1b) |
+      | `g` (in `m̂`) | `[μ_1 \| … \| μ_ℓ]ᵀ` |
+      | `m̂*` (= `y3*`,`g*`) | **0** |
+    - **`D'_sm` sign (P1.2c):** Eq 7.10's SEP relation is `… − D'_sm·m'_sm − u' = 0`, but the extracted
+      Eq 7.11 `m'_sm`-block shows `+D'_smᵀe_R̂`. CONVENTION: **store the SEP `D'_sm` block pre-negated**
+      (so `sep_linear` already yields `−D'_sm·m'_sm`), and the `f`-block uses `+D'_smᵀe_R̂` consistently —
+      verified by a smoke test that the honest witness gives `ŝ^TFŝ+f^Tŝ+f = 0`. Do NOT leave implicit.
     - **scalar `f`:** `−Σ_i μ_i( Σ_j γ_{i,j} z3,j + γ_{i,257}B1'² + γ_{i,258}B2² + γ_{i,259}B3² +
-      γ_{i,260}w + h_i ) − Σ_{i∈d̂k} μ_{ℓ+i} u'_i`.
-    The `r_{·,j}` are defined by `r_j*·s1 = r₁,j*·v1'' + r₂,j*·v2'' + r₃,j*·v3'' + r_t,j*·t' +
-    r_sm,j*·m'_sm` (Eq 7.10, the approx-range `R`-row split across the witness blocks).
+      γ_{i,260}w + h_i ) − Σ_{i∈d̂k̂} μ_{ℓ+i} u'_i`.
+    The `r_{·,j}` split `r_j*·s1 = r₁,j*·v1'' + r₂,j*·v2'' + r₃,j*·v3'' + r_t,j*·t' + r_sm,j*·m'_sm`
+    (Eq 7.10, the approx-range `R`-row lifted + split across the witness blocks).
 13. Garbage with `y = [y1 | y1* | −B_{y,g}y2 | −(B_{y,g}y2)*]` (**Eq 7.12**):
     `e0 = y^T F y`, `e1 = ŝ^T F y + y^T F ŝ + f^T y`. Commit `t0 = b^T y2 + e0`, `t1 = b^T s2 + e1`
     (`b ∈ crs`, ONE row — the SINGLE garbage commitment for everything).
@@ -141,7 +151,8 @@ garbage masks). `*` = the conjugate automorphism `σ_{-1}` (our `conjugate()`).
 ## 3. Soundness / ZK (Lemmas 7.5–7.7)
 
 - **Soundness** `ε = 2/|C| + q_min^{−n̂/κ} + q_min^{−ℓ} + 2^{−128} + ε_{M-SIS}` (Lemma 7.6, β =
-  `8η√((c·σ1√(n̂m1))² + (c·σ2√(n̂m2))²)`). The `q̂ > max(B², 82/√26·n̂m1·B256, 2B256²/13 − B256)` bound is our
+  `8η√((c_{n̂m1}·σ1·√(n̂m1))² + (c_{n̂m2}·σ2·√(n̂m2))²)` — the Gaussian-tail constants `c_{n̂m1}/c_{n̂m2}`,
+  NOT the challenge). The `q̂ > max(B², 82/√26·n̂m1·B256, 2B256²/13 − B256)` bound is our
   HYP-330 calibration (`q̂≈2^57.7` clears it; this is the SAME bound `proof_params::zk_bound` encodes).
 - **ZK** (Lemma 7.7, simulator on p.189): one garbage set, `g_i` masks the `h_i`, `t_B` hides `m̂` via
   knapsack-M-LWE, `t0/t1` hide `e0/e1`. **No cross-proof difference exists** (single proof) ⇒ the §0 gap
