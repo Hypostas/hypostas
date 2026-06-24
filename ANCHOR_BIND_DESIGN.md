@@ -80,11 +80,19 @@ For round `j ∈ [0, κ)` (one shared FS challenge yields all `c_j` and binds ev
   needed if the EC equation uses `g_i = 2^i·g` directly, as `bind.rs` does).
 - **Range/binariness** of `b_i` comes from the reused `proof_range` proof (lattice side), so the
   shared `τ0(Z_{j,i})` are genuinely bit-responses, not arbitrary.
+- ⚠️ **Canonical `Fr`-range (REQUIRED, P1, DESIGN-review round 2 2026-06-15).** The EC digit equation
+  only constrains `Σ_i 2^i·b_i ≡ w (mod r)` where `r = Fr::MODULUS` (BLS12-381 scalar order, ≈2^255).
+  If the reconstructed value could reach `r`, the SAME `C_r` would bind two distinct lattice messages
+  (`w` and `w−r`) — a soundness break. So the bind MUST enforce the reconstructed digit value
+  `< Fr::MODULUS`. Concretely: the `proof_range` bound `2^L ≤ Fr::MODULUS` (i.e. `L ≤ 254`) makes the
+  decomposition canonical for free (no extra proof). The implementer MUST assert `L ≤ 254` (a
+  `debug_assert!`/param guard, mirroring `norm_bounds_provable`) — never silently allow `L > 254`. `w`
+  (the SEP identity message) is far smaller than `2^254` in practice, so this is a guard, not a limit.
 
 Soundness: `2^−κ` (κ ≈ 128 ⇒ negligible). Both equations forced to agree on every `τ0(Z_{j,i})` ⇒
-the committed proof-ring `w` and the `C_r` `w` decompose to the same bits ⇒ same `w` (mod the shared
-`2^i` reconstruction). ZK: the masks `y_{j,i}`/`s_{j,i}` are uniform; rejection sampling on `Z`
-(deferred to §C-iv's masking pass, consistent with the rest of the show).
+the committed proof-ring `w` and the `C_r` `w` decompose to the same bits ⇒ same `w` (canonical, since
+`L ≤ 254 < log2 r` removes the `w` vs `w−r` ambiguity). ZK: the masks `y_{j,i}`/`s_{j,i}` are uniform;
+rejection sampling on `Z` (deferred to §C-iv's masking pass, consistent with the rest of the show).
 
 ## 4. Witness layout & types (build sketch)
 

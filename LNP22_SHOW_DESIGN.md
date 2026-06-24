@@ -131,9 +131,13 @@ The framework proves, for committed `s₁` (short) and `m` (arbitrary), statemen
 - **(f) Fiat–Shamir** — non-interactive in the ROM; repeats until a non-aborting transcript (rejection
   sampling). Yields a signature-of-knowledge (binds the message/epoch/C_r).
 
-The proof modulus is `q̂ = q·q1` (thesis Ch8: `q=425837` the SEP modulus, `q1≈2^19=524269`,
-`q̂≈2^37.7`); proof-system ring degree `n̂=64`, subring embedding `k̂=4`, Ajtai rank `d̂≈20`; mask
-widths `σ1,σ2,σ3`; transcript ≈ 80 KB. All PROVISIONAL (HYP-330).
+The proof modulus is `q̂ = q·q1` (thesis Ch8: `q=425837` the SEP modulus). ⚠️ **The SHOW requires
+`q1=549755813869≈2^39` ⇒ `q̂≈2^57.7`** (Table 7.1 / §5.6 — the mask widths `σ1,σ2,σ3` and ZK norm
+bounds are sized for this). The current build is bootstrapped over the **issuance** modulus
+`q1=524269≈2^19` (`q̂≈2^37.7`) **as scaffolding only** (caps provable dims via
+`proof_show::norm_bounds_provable`'s `B²<q̂` guard); the flip to the show modulus is **HYP-330**,
+pre-mainnet. Proof-system ring degree `n̂=64`, subring embedding `k̂=4`, Ajtai rank `d̂≈20`; transcript
+≈ 80 KB. All PROVISIONAL (HYP-330).
 
 ---
 
