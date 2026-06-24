@@ -9,7 +9,11 @@ external audit is the pre-mainnet backstop, not a substitute.
 
 ## 1. What must be proven
 
-The C3 vouch's introducer identity `w` is committed in two domains that must attest the *same* `w`:
+The **member/prover scalar** `w` — the credential holder's committed secret, encoded as `m = bits(w)`
+and used as the **nullifier key** `N = round_p(a_epoch·w)` (terminology per `LNP22_SHOW_DESIGN §1`; the
+*introducer* is the epoch anchor `a_epoch`/`ipk*`, NOT `w` — tying the bind to `w` ties it to the
+credential holder, which is what one-show requires) — is committed in two domains that must attest the
+*same* `w`:
 
 - **EC Pedersen anchor** `C_r = w·g + r·h` (`bridge.rs`, BLS12-381 G1) — the value the BBS half and the
   whole vouch hang off.
@@ -121,7 +125,12 @@ the masks `y_{j,i}`/`s_{j,i}` are uniform; rejection sampling on `Z` (deferred t
 - `AnchorBindProof { c_r: G1Affine, w_c: Vec<ProofRingElem> /*lattice opening announcement A1·y1+A2·y2,
   per round*/, challenge: Vec<bool> /*κ*/, z1: Vec<Vec<ProofRingElem>> /*FULL opening over ALL s1
   coords, per round*/, z2: Vec<Vec<ProofRingElem>> /*opening over s2 randomness, per round*/, z_r:
-  Vec<Fr>, range: proof_range::RangeProof }`.
+  Vec<Fr>, binariness: ConstraintProof /*b_i∈{0,1}*/, canonical: LtConstProof /*the <Fr::MODULUS
+  gadget, chunk 0*/ }`.
+  ⚠️ **Do NOT carry `proof_range::RangeProof` (P2, round 6):** it embeds the wide recomposition
+  `Σ2^i·b_i=w` which over `R̂_q̂` proves only a residue mod `q̂` (or rejects honest 255-bit `w`). Carry
+  the binariness sub-proof + the separate `< Fr::MODULUS` gadget ONLY; the recomposition is the EC
+  digit equation's job, never the lattice side's.
   ⚠️ **P1 (DESIGN-review 2026-06-15): carry the FULL ABDLOP opening, not just digit columns.** `t_A`
   commits the *whole* show witness `s1`, so the lattice check `A1·Z1 + A2·Z2 = w_c + c_j·t_A` needs
   `Z1` over ALL `s1` coordinates plus `Z2` over the commitment randomness `s2`. The per-digit responses
