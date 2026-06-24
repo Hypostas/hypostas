@@ -450,7 +450,10 @@ shared `A` to the shipped sampler. The norm checks are **ℓ₂** (not ℓ∞) �
    ℓ₂-norm. This is `Prove`/`Verify` (Alg 7.2) and the long pole. Fetch 2022/284 next (same GitHub
    Pages route if eprint blocks).
 4. **Blind issuance** ← Alg 7.1/7.5 (incl. issuance-time registration `D_s·s=upk`). 5. **Cross-domain
-   bind + `w`-keyed nullifier** ← our `bind.rs`/`nullifier.rs`.
+   bind + `w`-keyed nullifier** ← the NEW PQ lattice-PRF nullifier `nullifier_lwr.rs` (Q6 decision;
+   `N=round_p(a_epoch·w)`) + the cross-ring anchor bind (`ANCHOR_BIND_DESIGN.md`, `bind.rs` as the
+   template). ⚠️ NOT the classical-only EC `nullifier.rs` — Q6 supersedes it for C3 (it gives no PQ
+   one-show soundness); `nullifier.rs` remains only the EC/BBS-half reference.
 6. **Issuer-hiding wrapper (HYP-324)** — the gate for live use; the public-`vk_pub` core is TEST-ONLY
    until this lands (else a live vouch verifies against a named key, revealing the introducer). 7.
    **Compose + wire into `vouch.rs`** (HYP-343) — ONLY after the issuer-hiding wrapper. ⚠️ The detailed
