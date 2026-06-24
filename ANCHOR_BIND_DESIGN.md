@@ -79,12 +79,18 @@ For round `j ∈ [0, κ)` (one shared FS challenge yields all `c_j` and binds ev
 
 ### 3.2 Verifier checks
 
-- **Lattice opening** (per round): the ABDLOP opening `A1·Z1 + A2·Z2 = w_c + c_j·t_A` holds with the
-  reconstructed `Z` (mirror `proof_linear`). This ties `τ0(Z_{j,i})` to the committed bits in `s1`.
-- **EC digit equation** (per round): `Σ_i τ0(Z1[bit_idx_i])·g_i + z_{r,j}·h == A_j-aggregate + c_j·C_r`
-  where `A_j-aggregate` is the round's combined EC announcement and `τ0(Z1[bit_idx_i])` is the
-  **projection of the SAME full lattice opening `Z1`** checked above (NOT a standalone value) — that
-  shared projection is precisely what forces `C_r`'s digits to equal the bits committed in `t_A`.
+Realized via FS compression (§4 layout): the verifier **reconstructs** each round's announcements from
+the responses, recomputes `c`, and checks `c == proof.challenge` + the response norm bounds. The two
+logical equations it thereby enforces are:
+- **Lattice opening** (per round): `w_c_j := A1·Z1_j + A2·Z2_j − c_j·t_A` is the reconstructed ABDLOP
+  announcement (mirror `proof_linear`); hashing it into `c` ties `τ0(Z1_j[bit_idx_i])` to the committed
+  bits in `s1` (a cheating opening changes `c` ⇒ recomputation fails).
+- **EC digit equation** (per round): `A_j := Σ_i τ0(Z1_j[bit_idx_i])·g_i + z_{r,j}·h − c_j·C_r` is the
+  reconstructed EC announcement, where `τ0(Z1_j[bit_idx_i])` is the **projection of the SAME full
+  lattice opening `Z1_j`** (NOT a standalone value) — that shared projection, also hashed into `c`,
+  forces `C_r`'s digits to equal the bits committed in `t_A`.
+- **Norm bound**: every `Z1_j`/`Z2_j` response coordinate within the rejection box (range comparison,
+  not `.abs()`, so a malformed `i64::MIN` can't overflow — `bind.rs` gate-P2).
 - **Link**: `C_r − Σ_i 2^i·D_i = δ·h` is implicit in the digit-base aggregation (no separate `D_i`
   needed if the EC equation uses `g_i = 2^i·g` directly, as `bind.rs` does).
 - **Binariness only** of `b_i` is reused from `proof_range`'s binariness sub-proof (each `b_i ∈ {0,1}`),
@@ -122,11 +128,19 @@ the masks `y_{j,i}`/`s_{j,i}` are uniform; rejection sampling on `Z` (deferred t
 
 - `AnchorBindParams { bridge: BridgeParams, g_pow: Vec<G1Affine>, kappa: usize }` (mirror
   `bind.rs::BindParams` but proof-ring side instead of SIS).
-- `AnchorBindProof { c_r: G1Affine, w_c: Vec<ProofRingElem> /*lattice opening announcement A1·y1+A2·y2,
-  per round*/, challenge: Vec<bool> /*κ*/, z1: Vec<Vec<ProofRingElem>> /*FULL opening over ALL s1
-  coords, per round*/, z2: Vec<Vec<ProofRingElem>> /*opening over s2 randomness, per round*/, z_r:
-  Vec<Fr>, binariness: ConstraintProof /*b_i∈{0,1}*/, canonical: LtConstProof /*the <Fr::MODULUS
-  gadget, chunk 0*/ }`.
+- `AnchorBindProof { c_r: G1Affine, challenge: Vec<bool> /*κ*/, z1: Vec<Vec<ProofRingElem>> /*FULL
+  opening over ALL s1 coords, per round*/, z2: Vec<Vec<ProofRingElem>> /*opening over s2 randomness,
+  per round*/, z_r: Vec<Fr>, binariness: ConstraintProof /*b_i∈{0,1}*/, canonical: LtConstProof /*the
+  <Fr::MODULUS gadget, chunk 0*/ }`.
+  ⚠️ **Fiat–Shamir COMPRESSION — announcements are RECONSTRUCTED, not stored (P2, DESIGN-review round
+  11 2026-06-15).** The proof carries NO announcements (neither `w_c_j` nor the EC `A_j`). The verifier
+  RECONSTRUCTS them deterministically per round from the responses + the public statement:
+  `w_c_j = A1·z1_j + A2·z2_j − c_j·t_A` (lattice) and `A_j = Σ_i τ0(z1_j[bit_idx_i])·g_i + z_r_j·h −
+  c_j·C_r` (EC), then recomputes `c = FS(C_r, t_A, {w_c_j}, {A_j}, g_i, h, public stmt)` and checks
+  `c == proof.challenge`. This is exactly `bind.rs`'s compressed FS-with-aborts (it stores only
+  `{c_r, t, challenge, z, z_r, range}` and reconstructs `w_lat`/`t_ec` in `verify`). The round-5 P1
+  ("`w_c` MUST be in the transcript") is satisfied by hashing the RECONSTRUCTED `w_c_j` — binding holds
+  because a cheating `w_c_j` would change `c` and fail the recomputation.
   ⚠️ **Do NOT carry `proof_range::RangeProof` (P2, round 6):** it embeds the wide recomposition
   `Σ2^i·b_i=w` which over `R̂_q̂` proves only a residue mod `q̂` (or rejects honest 255-bit `w`). Carry
   the binariness sub-proof + the separate `< Fr::MODULUS` gadget ONLY; the recomposition is the EC
