@@ -256,12 +256,21 @@ indices `[2m1 .. 2m1+4)`, the `g_i` at `[2m1+4 .. 2m1+4+ℓ)`.
 - `γ` now has `ℓ·(256 + n_f)` scalars: `γ_{i,j}` for `j∈[0,256)` (approx-range) + `j∈[256,256+n_f)` (the
   scalar families). FS domain unchanged (`gamma/v1`), just a longer draw.
 
-### 7.4 The `h_i` (now includes the approx-range family)
+### 7.4 The `h_i` — FULL RING (DESIGN-review R1 P1)
+`h_i` is a FULL ring element (NOT the scalar), so the Eq-7.10 well-formedness cancels in EVERY coefficient
+(matches our C2c, which already builds `h` via `family.eval_ring(s1)` — a full ring element):
 ```
-h_i = g_i + Σ_{j<256} γ_{i,j}·( τ(y3)_j + (R·τ(s1))_j − z3_j )   [= Σγ·0 for a valid prover]
-          + Σ_{f<n_f} γ_{i,256+f}·family_f(s1)
+h_i = g_i + Σ_{j<256} γ_{i,j}·( e_j*·Y + r_j*·s1 − z3_j·1_R̂ )      [= Σ_b conj(Γ_{i,b})·Y_b
+                                                                    + Σ_β conj(ρ_{i,β})·s1_β − (Σγz3)·1]
+          + Σ_{f<n_f} γ_{i,256+f}·family_f.eval_ring(s1)
 ```
-`τ0(h_i)=0` still holds for valid (each approx term is 0, each family τ0 is 0). `b4` unchanged.
+The approx-range part of `h_i` reuses the SAME `conj(Γ)/conj(ρ)` ring elements as the §7.5 `f`-terms
+(applied to the witness `Y_b`/`s1_β`), minus the `Σγz3` constant. For a valid prover `τ0(e_j*·Y + r_j*·s1 −
+z3_j) = τ(y3)_j + (Rτ(s1))_j − z3_j = 0`, so `τ0(h_i)=0`; `g_i` (τ0=0) masks the non-`τ0` coefficients of the
+revealed `h_i` (the §C-iv masking — they depend on the secret `y3`/`s1`). `b4: τ0(h_i)=0` is sound ONLY
+together with the Eq-7.10/7.11 `t0`-reconstruction (which proves the published `h_i` ARE these full ring
+expressions) — `b4` alone is not sufficient. (All `r_j`/`ρ` signs are defined relative to Eq. 7.9's `z3 =
+τ(y3)+Rτ(s1)`, NOT Figure 7.2's prose minus.)
 
 ### 7.5 The added `F`/`f` terms (LINEAR — no new quadratic block)
 The approx-range is linear in `(y3, s1)`, so it adds ONLY to `f` (and `cst`); `F` (quad) is unchanged.
