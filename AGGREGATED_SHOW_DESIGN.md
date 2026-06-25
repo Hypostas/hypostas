@@ -230,3 +230,73 @@ garbage masks). `*` = the conjugate automorphism `σ_{-1}` (our `conjugate()`).
 
 *Faithful transcription of thesis Figure 7.2 / Eq 7.9–7.12. No rolled crypto. Behind
 `experimental-unaudited`. HYP-330 external audit re-checks σ/B256 pre-mainnet.*
+
+---
+
+## 7. Implementation addendum — the approx-range f-coupling (enhancement #1)
+
+The aggregated show (C1→C5) is complete + leak-free WITHOUT this leg (the linear-opening `z1`-bound gives a
+sound, looser witness-shortness). This addendum wires Eq 3.1b into the F-relation for the TIGHTER thesis
+bound. Maps the §2-step-9/Eq-7.11 `e_j*/r_j*` terms onto our code (`proof_agg_show` + `proof_show §G`).
+
+### 7.1 Key identity (coefficient extraction via the conjugate)
+For ring elements `A, B ∈ R̂`: the **constant coefficient** of `A*·B` (conjugate product) is the integer inner
+product `⟨τ(A), τ(B)⟩ = Σ_k A[k]·B[k]`. (Whereas `A·B`'s const coeff is the negacyclic convolution at 0 — NOT
+the inner product. So every coefficient-level linear form below uses `A*·B`, i.e. `conj(A)·B`.)
+
+### 7.2 m̂ layout (extends C2a's `m̂ = [g]`)
+`m̂ = [ Y_0, Y_1, Y_2, Y_3 | g_1, …, g_ℓ ]`, `params.ell = 256/n̂ + ℓ = 4 + ℓ`. `Y_b ∈ R̂` packs the
+approx-range mask `y3 ∈ Z^256`: `τ(Y_b)[c] = y3[b·n̂ + c]` (`y3 ← D_{σ3}^256`). In `ŝ`: the `Y_b` are at
+indices `[2m1 .. 2m1+4)`, the `g_i` at `[2m1+4 .. 2m1+4+ℓ)`.
+
+### 7.3 The challenge `γ` and `z3`
+- `R = R0 − R1 ∈ {−1,0,1}^{256×N}` (`N = m1·n̂`), FS-derived (`proof_approx_range::derive_projection`).
+- `z3 = τ(y3) + R·τ(s1) ∈ Z^256`, **revealed** in the proof (a new `ShowAggProof.z3` field). Verifier check
+  `b3: ‖z3‖₂ ≤ c_256·σ3·√256` (`proof_approx_range::verify`'s bound; the i128/overflow-safe path).
+- `γ` now has `ℓ·(256 + n_f)` scalars: `γ_{i,j}` for `j∈[0,256)` (approx-range) + `j∈[256,256+n_f)` (the
+  scalar families). FS domain unchanged (`gamma/v1`), just a longer draw.
+
+### 7.4 The `h_i` (now includes the approx-range family)
+```
+h_i = g_i + Σ_{j<256} γ_{i,j}·( τ(y3)_j + (R·τ(s1))_j − z3_j )   [= Σγ·0 for a valid prover]
+          + Σ_{f<n_f} γ_{i,256+f}·family_f(s1)
+```
+`τ0(h_i)=0` still holds for valid (each approx term is 0, each family τ0 is 0). `b4` unchanged.
+
+### 7.5 The added `F`/`f` terms (LINEAR — no new quadratic block)
+The approx-range is linear in `(y3, s1)`, so it adds ONLY to `f` (and `cst`); `F` (quad) is unchanged.
+Let `Γ_{i,b} ∈ R̂` have `τ(Γ_{i,b})[c] = γ_{i, b·n̂+c}` (the γ for `Y_b`'s coeffs), and let `ρ_{i,β} ∈ R̂`
+have `τ(ρ_{i,β})[c] = Σ_{j<256} γ_{i,j}·R[j][β·n̂+c]` (the γ-weighted R-column for `s1` block β). Then:
+
+| `ŝ` block | `f`-addend (ADDED to the existing C2c term) |
+|---|---|
+| `Y_b` (in m̂) | `Σ_i μ_i · conj(Γ_{i,b})`  — so `Σ_b f_{Y_b}·Y_b` const = `Σ_iμ_i Σ_{j} γ_{i,j}·τ(y3)_j` |
+| `s1` block β | `+ Σ_i μ_i · conj(ρ_{i,β})`  — so its const = `Σ_iμ_i Σ_j γ_{i,j}·(R·τ(s1))_j` |
+| `cst` | `− Σ_i μ_i Σ_{j<256} γ_{i,j}·z3_j` |
+| `g_i`, `Y_b*`, `g_i*` | unchanged / 0 (per Eq 7.11; `m̂*` block is 0) |
+
+Note `conj(Γ)·Y` const = `⟨Γ,Y⟩ = Σγ·τ(y3)` (7.1), and `conj(ρ)·s1` const = `⟨ρ,s1⟩ = Σ_j γ_j (Rτ(s1))_j`
+(since `⟨ρ_β, s1_β⟩ = Σ_c (Σ_j γ_j R[j][β n̂+c])·τ(s1)_{β n̂+c}`, summed over β = `Σ_j γ_j (Rτ(s1))_j`). ✓
+
+### 7.6 Build chunks
+- **A1:** `pack_y3` (Z^256 → 4 `R̂`) + the `m̂ = [Y | g]` layout + `ShowAggProof.z3`. Smoke: pack/unpack.
+- **A2:** `Γ_{i,b}` + `ρ_{i,β}` builders (the conj-γ and γ-weighted-R-column ring elements). Unit: const-coeff
+  identities (7.1) — `conj(Γ)·Y` const = `Σγ·τ(y3)`; `conj(ρ)·s1` const = `Σγ·(Rτ(s1))`.
+- **A3:** extend `agg_show_relation` with the §7.5 `f`/`cst` addends + the approx-range `h_i` term; extend
+  `prove_show_agg`/`verify_show_agg` to compute `z3`, pack `y3`, check `b3`. Capstone: full show WITH
+  approx-range verifies; a too-long `s1` (whose `z3` can't be bounded) is rejected; tampered `z3` rejected.
+
+### 7.7 Open points for DESIGN-review
+- **O1 — `y3` rejection inside the masked quad:** `proof_approx_range::prove` rejects `y3` until `‖z3‖₂≤B256`.
+  But here `y3` lives in `m̂` (committed in `t_B` BEFORE the FS `γ`/`R`)... ACTUALLY `R = chal1` depends on
+  `msg1=(t_A,t_B,w)`, so `t_B` (hence `y3`) is committed BEFORE `R`. So `z3 = τ(y3)+Rτ(s1)` is computed
+  AFTER `R`, and Rej1 resamples `y3` → but `y3` is already committed in `t_B`. **CONTRADICTION** to resolve:
+  the thesis commits `t_B` in round 1 then computes `z3` in round 2 and rejects — re-running round 1 on
+  reject (the whole `keep`-loop in Fig 7.2 wraps rounds 1–5). So our `prove_show_agg` must wrap the WHOLE
+  proof in the rejection loop (resample `s2,y1,y2,y3,g` on any reject), not just `y3`. Confirm.
+- **O2 — `b3` and the masked-opening:** `z3` is revealed in the clear (Fig 7.2 `msg2`), bound by `b3`; the
+  F-relation binds it to the committed `y3`/`s1`. Confirm no additional masking of `z3` is needed (it is the
+  rejection-masked response, already ZK by Rej1).
+- **O3 — `N`-overflow:** `ρ_{i,β}` coeffs are `Σ_{j<256} γ_{i,j}·R[j][·]`, `γ<q̂≈2^57.7`, `R∈{−1,0,1}` ⇒
+  `|coeff| ≤ 256·q̂ ≈ 2^65.7` — exceeds i64. Accumulate ρ in i128, reduce mod q̂ (canonical) before building
+  the ring element. Same for the `cst` (`Σγ·z3`, `z3` up to ~`σ3·16≈2^31`, `×256×q̂`).
