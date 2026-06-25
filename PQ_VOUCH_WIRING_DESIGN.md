@@ -90,8 +90,11 @@ not a formality; the M-SIS dimensions + `B²<q̂` guard must be re-validated at 
 
 ## 3. The reconciliation proofs (the new code) — every form derived from `w_bits`
 
-All four are **const-coefficient / linear constraints over the one committed `s1`**, expressed as
-`AffineConstraint` families and **folded into the aggregated show's one masked quadratic** exactly like
+All four are **const-coefficient constraints over the one committed `s1` — a mix of linear** (the
+recompositions / rounding) **and quadratic** (the `b²−b=0` binariness on every bit block; omitting it
+would let non-binary witnesses satisfy the linear recompositions and reopen the non-canonical-`w` /
+wrong-`N` cases). They are `AffineConstraint` + binariness families **folded into the aggregated show's
+one masked quadratic** exactly like
 the existing norm/binariness/approx-range families (`agg_show_relation`) — **no new garbage
 commitment** (this is the §6 fold-in requirement made concrete). The selector primitive is the
 conjugate const-coeff extraction the show already uses: `const_coeff(conj(X^j)·x) = x.coeff[j]`
@@ -157,8 +160,8 @@ pub struct PqBlindedVouch {
 ```
 
 R1–**R5** — including the **nullifier** (rounding relation + `e`-range) — live **inside `show.agg`**
-(folded families / linear terms over the one garbage commitment; no separate proof object, no own
-garbage; P1 fix #3). The **anchor is the one separate proof** (cross-group; §6). There is no
+(folded `FQuadForm` families — linear + quadratic binariness — over the one garbage commitment; no
+separate proof object, no own garbage; P1 fix #3). The **anchor is the one separate proof** (cross-group; §6). There is no
 `NullifierProof` type in the vouch — `N` is a public field, FS-bound into the show's transcript and
 checked by R5.
 
