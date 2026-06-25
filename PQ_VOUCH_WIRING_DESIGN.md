@@ -134,9 +134,11 @@ borrow-subtraction gadget proves `w < Fr::MODULUS` via the `MODULUS−1 − w` c
 auxiliaries `ltc_borrow[0..255]` — **now committed in `s1` (§2)**, so the gadget is expressible folded
 and stays bound to the same `t_A` as `w_bits` (was the P1: nowhere to put them). R4 folds as:
 binariness + zero-pins on `ltc_borrow` + the per-bit borrow recurrence as **quadratic** `FQuadForm`
-constraints (each step is an AND/OR boolean transition of `(w_i, MODULUS-bit_i, borrow_{i−1})` — when
-the constant `MODULUS` bit is 0 it's an OR, when 1 an AND; **NOT** an affine recurrence; gate P1) + the
-final-borrow `= 0` pin. Closes the non-canonical malleability (LNP22_SHOW R8 P1: two bit-strings ≡ same
+constraints (each step is an AND/OR boolean transition of `(w_i, (MODULUS−1)_bit_i, borrow_{i−1})` —
+**the comparison constant is `Fr::MODULUS − 1`, NOT `Fr::MODULUS`**: the gadget proves `w ≤ MODULUS−1`
+⟺ `w < MODULUS`; using `MODULUS`'s bits would accept `w == MODULUS` (≡ 0, a non-canonical encoding) and
+reopen the collision. When the `(MODULUS−1)` bit is 0 it's an OR transition, when 1 an AND; **NOT** an
+affine recurrence; gate P1) + the final-borrow `= 0` pin. Closes the non-canonical malleability (LNP22_SHOW R8 P1: two bit-strings ≡ same
 `Fr` ⇒ collision).
 
 **(R5) nullifier `N = round_Δ(a_epoch·w_ring)` — folded, with committed e-range (P1 fixes #2/#3).** Two
