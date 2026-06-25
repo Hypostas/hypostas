@@ -1,11 +1,13 @@
 # PQ_VOUCH_WIRING_DESIGN — wiring the LNP22 credential show into the C3 BlindedVouch
 
-**Status:** design-first proposal (HYP-352 item 1, the PQ-soundness *wiring*). **Revision 2** —
-addresses the 4 P1 + 1 P2 from Codex DESIGN-review R1 (and a concurrent self-audit): the nullifier
-`w` is a coefficient-wise-rounded *ring element* (not a single 255-bit coordinate), so the
-recomposition is per-coefficient limbs; R3 needs an explicit conjugate-coefficient selector + padding
-pins; only true algebraic fold-in preserves the leak-free invariant; the binding web needs the full
-checklist. To be re-reviewed clean before any code, per the convention loop and the lesson that this
+**Status:** design-first proposal (HYP-352 item 1, the PQ-soundness *wiring*). **Revision 3.**
+R2 addressed the 4 P1 + 1 P2 from Codex DESIGN-review R1 (nullifier `w` is a coefficient-wise-rounded
+*ring element*, not a 255-bit coordinate, so recomposition is per-coefficient limbs; R3 needs an
+explicit conjugate-coefficient selector + padding pins; leak-free composition; the full binding web).
+**Revision 3 resolves the two carried-open points:** Q1′ — the anchor is cross-group, so it is a
+*separate* Schnorr proof (not a fold-in), leak-free in composition by independent masking, **NOT** a
+§C-iv shared-garbage case (§6); and Q-θ — the exact `proof_subring::embed` decimation map for R3,
+verified against the code. To be re-reviewed clean before any code, per the lesson that this
 cross-domain binding is the arc's highest-risk component (ANCHOR_BIND_DESIGN took 13 rounds).
 
 **Scope.** Turn the *classically*-sound foundation `BlindedVouch` (commitment-opening `bind`,
@@ -82,16 +84,17 @@ for the non-LSB coefficient positions of each used limb slot if any (here each l
 coefficient, so just the `k≥L` pins). Together: `w_ring` is exactly the limb-packing of `w_bits`,
 fully pinned. (`B=50, L=6` ⇒ 6 limb relations + `NHAT−6 = 58` zero pins.)
 
-**(R3) `m = repack(w_bits)` — explicit selector + padding (the P1/Q4 fix).** `m`'s `M_MSG=2`
-`SepRingElem` are `θ`-embedded; `θ` (`proof_subring::embed`) is decimation: `coeff_v(θ(m_b)[i]) =
-coeff_{k̂·v + i}(m_b)`, and `m_b`'s coefficients are the message bits. For each `w`-bit `i<255` at SEP
-position `(b, c) = (i / 256, i % 256)` mapping (via decimation `i' = c`, `i'' = k̂·v+i_sub`) to
-`s1` element `θ(m_b)[i_sub]` coefficient `v`: the relation
-`const_coeff(conj(X^v)·θ(m_b)[i_sub]) − τ0(w_bits[i]) = 0`. **Plus padding:** every SEP message
-coefficient NOT carrying a `w`-bit (the `M_MSG·256·k̂ − 255` unused slots) is pinned `= 0`
-(`const_coeff(conj(X^v)·θ(m_b)[i_sub]) = 0`). The exact `pos(i)` map is `proof_subring::embed`'s
-decimation — to be transcribed into a table + an off-by-one/wrong-position regression test (a permuted
-map must reject). This is what makes "the credential signed *this* `w`."
+**(R3) `m = repack(w_bits)` — explicit selector + padding (the P1/Q4 fix; map verified, Q-θ).** `m`'s
+`M_MSG=2` `SepRingElem` (256 coeffs each = 512 bit-slots) are `θ`-embedded; `θ`
+(`proof_subring::embed`, read + verified) is decimation `θ(m_b)[i].coeff[j] = m_b.coeff[k̂·j + i]` with
+`k̂ = 4`, and the centering step is a **no-op for binary `m`** (bits 0/1 < p/2), so
+`coeff_j(θ(m_b)[i])` equals the bit directly. Inverting the decimation: SEP coefficient position `c` of
+message element `b` lives at `s1` element `θ(m_b)[c mod 4]`, coefficient `c div 4`. So for each `w`-bit
+`i < 255` at `(b, c) = (i / 256, i % 256)`:
+`const_coeff(conj(X^{c div 4})·θ(m_b)[c mod 4]) − τ0(w_bits[i]) = 0`. **Padding:** the `512 − 255 =
+257` SEP message slots not carrying a `w`-bit are pinned `= 0` (same const-coeff form), so `m` is
+*exactly* `bits(w)`-then-zeros — no malleable message coefficient. A permuted `pos` map must reject
+(off-by-one regression test). This is what makes "the credential signed *this* `w`."
 
 **(R4) `w` canonical (`< Fr::MODULUS`).** `proof_ltconst` (the `< Fr::MODULUS` borrow-subtraction
 bit-gadget, already built for the anchor) over `w_bits` — closes the non-canonical malleability
@@ -153,35 +156,50 @@ Under M-SIS (binding of `t_A`/`t_B`) + SEP unforgeability (M-SIS) + BBS (q-SDH, 
 - **One-show.** `verify_nullifier` ⇒ `N = round_Δ(a_epoch·w_ring)` with the per-coefficient `e∈[0,Δ)`
   + `n∈[0,q1)` ranges (unique `N` per `(w,epoch)`); R2 ties `w_ring` to the canonical `w`. PQ-hiding
   (ring-LWR), Q6=(ii).
-- **Anonymity.** The show is statistical-ZK with ONE garbage commitment (§C-iv fix). IF R1–R4 + anchor
-  + nullifier are all folded into that one masked relation (§6), no additional garbage is revealed ⇒
-  no new leak. `w, w_bits, m, t, v, r` never revealed. Issuer-hiding is the HYP-324 epoch-key layer
-  (out of scope; core verifies under public `vk`).
+- **Anonymity.** The show is statistical-ZK with ONE garbage commitment (§C-iv fix). R1–R4 + the
+  nullifier fold into that one masked relation (no additional garbage revealed). The anchor is a
+  separate cross-group Schnorr proof composed leak-free by independent masking (§6), checked by the
+  composed-transcript statistical-ZK test. So `w, w_bits, m, t, v, r` are never revealed. Issuer-hiding
+  is the HYP-324 epoch-key layer (out of scope; core verifies under public `vk`).
 
 ---
 
-## 6. The leak-free composition — fold-in ONLY (the P1/Q2 fix)
+## 6. The leak-free composition — resolved (the P1/Q2 fix + Q1′)
 
-R1 confirmed the §C-iv hazard precisely: *separate masked Σ-protocols sharing one `t_B`/`s2` but
-committing their own garbage leak `s1`'s covariance through the garbage difference.* The **only**
-structure that preserves the proven one-garbage-commitment / statistical-ZK property is **true
-algebraic fold-in**: R1–R4 **and** the anchor's per-round relations **and** the nullifier's relation
-are all expressed as terms of the **single** aggregated masked quadratic (`agg_show_relation`'s
-`FQuadForm` families + linear terms), verified through the one `(t0,t1)`.
+The §C-iv hazard is *specific*: separate masked sub-proofs that **each BDLOP-commit their own garbage
+into the shared `t_B`/`s2`** leak `s1`'s covariance through the garbage difference (`t1_i − t1_j =
+e1_i − e1_j` — the shared `b·s2` cancels, exposing `e1_i − e1_j` which correlates with `s1`). The fix
+was ONE garbage commitment. The composition here splits cleanly into two classes, only one of which
+touches `t_B`:
 
-- **R1–R4:** already const-coeff/linear families — direct fold-in (the existing mechanism). ✔ tractable.
-- **Anchor + nullifier:** currently standalone Σ-protocols. They must be **refactored to EMIT fold-in
-  terms** (their relation as `FQuadForm` contributions over the shared `s1`) rather than commit their
-  own garbage. This is the real build cost of this issue. The anchor's κ binary-challenge structure
-  and the nullifier's `a_epoch·z_w − z_e − c·NΔ = g0` relation must be re-cast as families/linear
-  terms of the aggregated relation, or — if a clean fold-in is infeasible for the κ-round anchor — a
-  separate **explicit joint-simulation ZK proof** (independent masks, no shared raw garbage) with a
-  statistical-ZK test. **Standalone-masked sharing `t_B` is rejected.**
+**(a) Ring-relation proofs → fold into the ONE masked quadratic.** R1, R2, R3, R4 **and the nullifier
+relation** (`a_epoch·w − e − N·Δ = 0` + the `e∈[0,Δ)` range) are all const-coeff / linear relations
+over the proof ring. They become `FQuadForm` families / linear terms of the SINGLE aggregated masked
+quadratic (`agg_show_relation`), verified through the ONE garbage commitment `(t0,t1)` — exactly the
+existing norm / binariness / approx-range mechanism, already proven leak-free (with one garbage
+commitment, no inter-proof garbage difference exists). Build cost: extend `agg_show_relation` with the
+R1–R4 + nullifier families; refactor `nullifier_lwr` to EMIT its relation as a family rather than
+commit its own `g0`.
 
-**DESIGN-review Q1 (carry-over):** confirm the anchor's κ-round binary-challenge protocol can be
-folded into the single masked quadratic (it uses a different challenge structure than the show's
-self-conjugate `c`); if not, specify the joint-simulation argument + its statistical-ZK test. This is
-the highest-uncertainty remaining point.
+**(b) The anchor → a separate cross-GROUP Schnorr proof, leak-free by independent masking.** The
+anchor's binding `Σ_i 2^i·bit_i·g = C_r`'s `w` is an equation in the BLS12-381 group **G1** — it
+cannot be a proof-ring quadratic (different algebraic domain), so it is *irreducibly* a separate
+proof. **But it is NOT a §C-iv hazard:** `proof_anchor_bind` is a Schnorr-style Σ-protocol with
+**fresh independent masks each round** (`y1_j, y2_j, ρ_r_j`) and **no BDLOP garbage commitment** — it
+never touches `t_B`. Composition with the show is HVZK by the standard hybrid/simulation argument:
+`s1` is opened by the show once (`z = y + c·s1`) and by the anchor κ times (`z1_j = y1_j + c_j·s1`),
+all with independent, rejection-bounded masks; the κ+1 openings are jointly simulatable (FS-fix the
+challenges, sample each `z / z1_j` from its mask distribution, solve the announcements from the
+verification equations) and statistically `s1`-independent — the masks are unknowns of dimension `m1`,
+so the linear system in `s1` is underdetermined. **The §C-iv leak required a shared garbage commitment
+with per-sub-proof garbage differences; the anchor has neither.**
+
+**Q1′ resolves favorably:** no exotic joint-simulation re-derivation is needed — standard Σ-protocol
+HVZK + the hybrid composition argument suffice, PROVIDED (i) the anchor's masks are fully independent
+of the show's and rejection-bounded (current `proof_anchor_bind` does this), and (ii) the anchor
+commits no garbage into `t_B` (it does not). The remaining obligation is a **statistical-ZK regression
+test on the composed (show + anchor) transcript** — functional tests + the Codex gate are blind to a
+ZK leak, so that test is the §6 build gate.
 
 ---
 
@@ -198,13 +216,18 @@ the highest-uncertainty remaining point.
 - ~~Q5~~ binding web: full verify checklist (§4: same `t_A`+`t_B`, params, offsets, `vk`, `a_epoch`,
   `N`, codec version) + the headroom note below.
 
-**Still open (gate before code):**
-- **Q1′ (§6):** can the κ-round anchor fold into the single masked quadratic, or does it need a joint-
-  simulation ZK proof? (highest uncertainty.)
+**Resolved (R3, this revision):**
+- ~~Q1′~~ anchor composition (§6): cross-group ⇒ a SEPARATE Schnorr proof (independent masks, no `t_B`
+  garbage) → leak-free by the standard hybrid argument, NOT a §C-iv shared-garbage case. Build
+  obligation: the composed-transcript statistical-ZK test.
+- ~~Q-θ~~ the `embed` map: decimation `θ(m_b)[i].coeff[j] = m_b.coeff[k̂·j+i]`, `k̂=4`, centering a
+  no-op for binary `m` ⇒ bit `c` of message `b` sits at `s1` elem `θ(m_b)[c mod 4]` coeff `c div 4`
+  (folded into §3 R3 + the `pos(i)` table).
+
+**Still open (build-time check, not a design gap):**
 - **Q4′:** finalized norm/headroom — `s1` grows by `255 + 1 + NHAT` coords; confirm M-SIS binding +
-  the `B²<q̂` `norm_bounds_provable` guard still hold at the show modulus (may need HYP-330 headroom).
-- **Q-θ:** verify the exact `proof_subring::embed` decimation indices for the R3 `pos(i)` table
-  against the code before coding (a wrong map silently binds the wrong bits).
+  the `B²<q̂` `norm_bounds_provable` guard still hold at the show modulus (HYP-330 calibration; step-2
+  of the build surfaces it concretely as a `norm_bounds_provable` assertion).
 
 ---
 
@@ -217,7 +240,7 @@ the highest-uncertainty remaining point.
    recomposes; wrong `w_ring` rejects; no wrap at `w=r−1`; padding pin rejects nonzero high coeff).
 3. **R3** — conjugate-selector family over the `θ` table + padding pins; test (`m`↔`w_bits` honest
    binds; mismatched `m` rejects; permuted `pos` rejects).
-4. **Fold R1–R4 into `agg_show_relation`**; then the anchor/nullifier fold-in (or joint-sim) per Q1′.
+4. **Fold R1–R4 + the nullifier relation into `agg_show_relation`** (ring relations — extend `families`; refactor `nullifier_lwr` to emit a family, not its own `g0`). Keep the anchor as the separate `proof_anchor_bind` Schnorr proof (independent masks, no `t_B`); add the composed-transcript **statistical-ZK test** (§6) as the leak-freeness gate.
 5. **Compose `PqBlindedVouch::{prove,verify}`** + the §4 binding web; new `pq_vouch.rs` (keep
    `vouch.rs` as the classical foundation until HYP-343 retires it).
 6. **Tests (rule 27):** integration — real SEP + real BBS credential, full
