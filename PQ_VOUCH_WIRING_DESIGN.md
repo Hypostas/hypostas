@@ -222,9 +222,12 @@ was ONE garbage commitment. The composition here splits cleanly into two classes
 touches `t_B`:
 
 **(a) Ring-relation proofs → fold into the ONE masked quadratic.** R1, R2, R3, R4 **and the nullifier
-relation** (`a_epoch·w − e − N·Δ = 0` + the `e∈[0,Δ)` range) are all const-coeff / linear relations
-over the proof ring. They become `FQuadForm` families / linear terms of the SINGLE aggregated masked
-quadratic (`agg_show_relation`), verified through the ONE garbage commitment `(t0,t1)` — exactly the
+relation** (`a_epoch·w − e − N·Δ = 0` + the `e∈[0,Δ)` range) are all proof-ring relations expressible
+as `FQuadForm` families — **a mix of linear** (the rounding equation, the limb / borrow / bit
+recompositions) **AND quadratic** (the `b²−b=0` binariness on `w_bits` / `ltc_borrow` / `e_bits`, which
+the `e∈[0,Δ)` range and canonicality *depend on* — emitting only linear/affine families would let a
+prover put `e` outside `[0,Δ)` and pass a wrong `N`). They fold as terms of the SINGLE aggregated
+masked quadratic (`agg_show_relation`), verified through the ONE garbage commitment `(t0,t1)` — the
 existing norm / binariness / approx-range mechanism, already proven leak-free (with one garbage
 commitment, no inter-proof garbage difference exists). Build cost: extend `agg_show_relation` with the
 R1–R4 + nullifier families; refactor `nullifier_lwr` to EMIT its relation as a family rather than
