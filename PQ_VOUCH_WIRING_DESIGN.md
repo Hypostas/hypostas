@@ -41,9 +41,14 @@ and every other form is a *derived, in-circuit-proven function* of it.**
 
 ## 2. The unified witness `s1` and the canonical `w_bits`
 
-One ABDLOP commitment over a single packed `s1`. The show layout
-`[θ(v1) | θ(v2) | θ(m) | θ(tag) | z(carry) | slack1 | slack2]` (`proof_show::pack_show_witness`) is
-**appended** with the canonical-`w` blocks:
+One ABDLOP commitment over a single packed `s1`. ⚠️ **The box below is ILLUSTRATIVE** — the actual show
+witness order is whatever the **current** `proof_show::pack_show_witness` / aggregated show emits (per
+AGGREGATED_SHOW_DESIGN that is `(v1'', v2'', v3'', t', m'_sm)` with per-witness slack folded into those
+blocks, NOT the loose `[…|slack1|slack2]` order drawn here). **All offsets — existing AND appended —
+MUST be derived from the live `pack_show_witness` layout, never hardcoded from this box; in particular
+R3's `m`/`tag` coordinate map (§3) comes from the real packed `m`/`m'_sm` position, else honest proofs
+reject or the signed message isn't the one `w_bits` constrains (gate P2).** The canonical-`w` blocks
+are appended after whatever that layout is:
 
 ```
 s1 = [ θ(v1) | θ(v2) | θ(m) | θ(tag) | z | slack1 | slack2 |       ← unchanged show witness
@@ -55,11 +60,13 @@ s1 = [ θ(v1) | θ(v2) | θ(m) | θ(tag) | z | slack1 | slack2 |       ← uncha
 - **`w_bits[0..255]`** — the **canonical source of truth**: 255 coordinates, each a *constant* poly
   whose `τ0 = bit_i ∈ {0,1}` (all other coeffs pinned 0 by R1). Exactly what `proof_anchor_bind`
   consumes (`bit_idx = w_bits_off .. +255`). LSB-first; `w = Σ_i 2^i·bit_i`.
-- **`w_ring`** — the nullifier's identity ring element. Its coefficients hold `w` as `L = ⌈255/B⌉`
-  **B-bit limbs in the low positions, zero above** (`B = 50` ⇒ each limb `< 2^50 < q̂`, ample no-wrap
-  headroom; `L = 6`): `w_ring.coeff[k] = Σ_{j : Bk+j < 255} 2^j·bit_{Bk+j}` for `k<L` (the **top limb
-  `k=5` is partial** — only bits 250..254, i.e. `j<5`; never index `w_bits` past 254),
-  `w_ring.coeff[k] = 0` for `k ≥ L`. This is the form `nullifier_lwr` consumes; rounds coeff-wise.
+- **`w_ring`** — the nullifier's identity ring element. Its coefficients hold `w` as **small `B=4`-bit
+  limbs, one per coefficient across all `L = ⌈255/4⌉ = 64 = NHAT` coefficients**. `B` MUST be small so
+  each limb `≤ 2^4−1 = 15` and `w_ring` stays a *short* M-SIS witness: a 50-bit limb would give
+  coeff² ≈ `2^100 ≫ q̂` and blow the `B²<q̂` exact-ℓ2 norm / no-wrap guard (gate P1).
+  `w_ring.coeff[k] = Σ_{j : 4k+j < 255} 2^j·bit_{4k+j}` for `k < 64` (the **top limb `k=63` is partial**
+  — bits 252..254, `j<3`; never index `w_bits` past 254). `‖w_ring‖² ≤ 64·15² ≈ 2^13.8`, negligible vs
+  `q̂`. This is the form `nullifier_lwr` consumes; rounds coeff-wise.
 - **`e_null`** — **ONE** ring coordinate: the nullifier remainder ring element `e`
   (`a_epoch·w_ring = N·Δ + e`), whose `NHAT` coefficients are the per-coefficient remainders. `e_bits`
   (below) range-decomposes each of those `NHAT` coefficients; R5's recomposition ties them back to this
@@ -94,15 +101,14 @@ conjugate const-coeff extraction the show already uses: `const_coeff(conj(X^j)·
 `τ0(w_bits[i]) ∈ {0,1}` AND every non-const coefficient = 0 (the family pins all coeffs; the "pure
 constant" part matters so `bit_i` is exactly `τ0`, not smuggled into higher coeffs). Reused primitive.
 
-**(R2) `w_ring` = limb-pack(`w_bits`) — per-coefficient, no wrap.** For each `k < L`:
-`coeff_k(w_ring) − Σ_{j : Bk+j < 255} 2^j·τ0(w_bits[Bk+j]) = 0` (the top limb `k=5` sums only `j<5`, so
-`w_bits` is never indexed past 254), a const-coeff relation
-`const_coeff(conj(X^k)·w_ring − Σ_j 2^j·w_bits[Bk+j]) = 0`. Each limb sum `< 2^B = 2^50 < q̂` so the
-equality is over the integers, **not** mod q̂ (the P1/Q3 fix — limbs are bounded, no huge `2^254`
-weight ever appears). For each `k ≥ L`: `coeff_k(w_ring) = 0` (padding pin), AND `coeff_j(w_ring)=0`
-for the non-LSB coefficient positions of each used limb slot if any (here each limb occupies one
-coefficient, so just the `k≥L` pins). Together: `w_ring` is exactly the limb-packing of `w_bits`,
-fully pinned. (`B=50, L=6` ⇒ 6 limb relations + `NHAT−6 = 58` zero pins.)
+**(R2) `w_ring` = limb-pack(`w_bits`) — per-coefficient, no wrap, SHORT.** For each `k < 64`:
+`coeff_k(w_ring) − Σ_{j : 4k+j < 255} 2^j·τ0(w_bits[4k+j]) = 0` (`B=4`-bit limbs; the top limb `k=63`
+sums only `j<3`, so `w_bits` is never indexed past 254), a const-coeff relation
+`const_coeff(conj(X^k)·w_ring − Σ_j 2^j·w_bits[4k+j]) = 0`. Each limb sum `≤ 15 < q̂`, so the equality
+is over the integers, **not** mod q̂ (the Q3 fix), AND `w_ring` stays short (the gate-P1 fix — a 50-bit
+limb would blow `B²<q̂`). All `64 = NHAT` coefficients carry a limb (no padding coefficients).
+Together: `w_ring` is exactly the 4-bit limb-packing of `w_bits`, fully pinned (64 limb relations, no
+zero pins needed).
 
 **(R3) `m = repack(w_bits)` — explicit selector + padding (the P1/Q4 fix; map verified, Q-θ).** `m`'s
 `M_MSG=2` `SepRingElem` (256 coeffs each = 512 bit-slots) are `θ`-embedded; `θ`
@@ -249,7 +255,7 @@ ZK leak, so that test is the §6 build gate.
 ## 7. DESIGN-review status
 
 **Resolved in R2 (this revision):**
-- ~~Q3~~ R2 no-wrap: per-coefficient B-bit limbs (`B=50<log₂q̂`), integer (not mod-q̂) equalities; no
+- ~~Q3~~ R2 no-wrap: per-coefficient small `B=4`-bit limbs (keep `w_ring` short; gate-P1), integer (not mod-q̂) equalities; no
   `2^254` weight. No public limb reductions (all committed) ⇒ no `w` leak.
 - ~~Q4~~ R3 selector: explicit conjugate const-coeff extraction over the `θ`-decimation map + padding
   pins on all unused message coeffs + a wrong-position regression test.
