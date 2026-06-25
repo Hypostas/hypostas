@@ -100,9 +100,13 @@ commitment** (this is the §6 fold-in requirement made concrete). The selector p
 conjugate const-coeff extraction the show already uses: `const_coeff(conj(X^j)·x) = x.coeff[j]`
 (`proof_quadratic`/`proof_constraint`).
 
-**(R1) `w_bits` binary + pure-constant.** `aggregated_binariness` over `w_bits[0..255]`: each
-`τ0(w_bits[i]) ∈ {0,1}` AND every non-const coefficient = 0 (the family pins all coeffs; the "pure
-constant" part matters so `bit_i` is exactly `τ0`, not smuggled into higher coeffs). Reused primitive.
+**(R1) `w_bits` binary + pure-constant — binariness AND explicit zero-pins.** `aggregated_binariness`
+proves only `τ0(w_bits[i]) ∈ {0,1}` (the **constant** coefficient) — it does NOT constrain the higher
+coefficients (gate P2). Since R2/R3/anchor read only `τ0(w_bits[i])`, a prover could otherwise smuggle
+arbitrary data into coeffs `1..NHAT−1` while we claim a pure constant. So R1 = binariness **plus
+explicit affine zero-pin families** `coeff_j(w_bits[i]) = 0` for every `j ∈ [1, NHAT)`, making each
+`w_bits[i]` a pure constant whose value is exactly `τ0`. **The same binariness + zero-pin pair applies
+to every bit block** (`ltc_borrow`, `e_bits`).
 
 **(R2) `w_ring` = limb-pack(`w_bits`) — per-coefficient, no wrap, SHORT.** For each `k < 64`:
 `coeff_k(w_ring) − Σ_{j : 4k+j < 255} 2^j·τ0(w_bits[4k+j]) = 0` (`B=4`-bit limbs; the top limb `k=63`
@@ -128,9 +132,12 @@ message element `b` lives at `s1` element `θ(m_b)[c mod 4]`, coefficient `c div
 **(R4) `w` canonical (`< Fr::MODULUS`) — with committed auxiliaries (P1 fix #1).** The `proof_ltconst`
 borrow-subtraction gadget proves `w < Fr::MODULUS` via the `MODULUS−1 − w` chain with per-bit borrow
 auxiliaries `ltc_borrow[0..255]` — **now committed in `s1` (§2)**, so the gadget is expressible folded
-and stays bound to the same `t_A` as `w_bits` (was the P1: nowhere to put them). R4 folds as: binariness
-on `ltc_borrow` + the per-bit borrow recurrence (const-coeff relations) + the final-borrow `= 0` pin.
-Closes the non-canonical malleability (LNP22_SHOW R8 P1: two bit-strings ≡ same `Fr` ⇒ collision).
+and stays bound to the same `t_A` as `w_bits` (was the P1: nowhere to put them). R4 folds as:
+binariness + zero-pins on `ltc_borrow` + the per-bit borrow recurrence as **quadratic** `FQuadForm`
+constraints (each step is an AND/OR boolean transition of `(w_i, MODULUS-bit_i, borrow_{i−1})` — when
+the constant `MODULUS` bit is 0 it's an OR, when 1 an AND; **NOT** an affine recurrence; gate P1) + the
+final-borrow `= 0` pin. Closes the non-canonical malleability (LNP22_SHOW R8 P1: two bit-strings ≡ same
+`Fr` ⇒ collision).
 
 **(R5) nullifier `N = round_Δ(a_epoch·w_ring)` — folded, with committed e-range (P1 fixes #2/#3).** Two
 parts, both folded into the one masked quadratic — **NO standalone `NullifierProof`, NO own garbage**:
