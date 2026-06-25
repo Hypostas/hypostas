@@ -7,8 +7,12 @@ explicit conjugate-coefficient selector + padding pins; leak-free composition; t
 **Revision 3 resolves the two carried-open points:** Q1′ — the anchor is cross-group, so it is a
 *separate* Schnorr proof (not a fold-in), leak-free in composition by independent masking, **NOT** a
 §C-iv shared-garbage case (§6); and Q-θ — the exact `proof_subring::embed` decimation map for R3,
-verified against the code. To be re-reviewed clean before any code, per the lesson that this
-cross-domain binding is the arc's highest-risk component (ANCHOR_BIND_DESIGN took 13 rounds).
+verified against the code. **Revision 4** addresses 3 P1 from the inline `codex exec review` gate: the
+R4 `< Fr::MODULUS` borrow auxiliaries (`ltc_borrow`) and the nullifier `e`-range bits (`e_bits`) are
+now committed in `s1` (they had nowhere to live), and the standalone `NullifierProof` is removed — the
+nullifier (rounding + `e`-range) folds into the show as R5. To be re-reviewed clean before any code,
+per the lesson that this cross-domain binding is the arc's highest-risk component (ANCHOR_BIND_DESIGN
+took 13 rounds).
 
 **Scope.** Turn the *classically*-sound foundation `BlindedVouch` (commitment-opening `bind`,
 PQ-forgeable) into a *post-quantum*-sound vouch by consuming the built LNP22 credential show
@@ -42,8 +46,10 @@ One ABDLOP commitment over a single packed `s1`. The show layout
 **appended** with the canonical-`w` blocks:
 
 ```
-s1 = [ θ(v1) | θ(v2) | θ(m) | θ(tag) | z | slack1 | slack2 |   ← unchanged show witness
-       w_bits[0..255] | w_ring | e_null[0..NHAT] ]            ← appended (this design)
+s1 = [ θ(v1) | θ(v2) | θ(m) | θ(tag) | z | slack1 | slack2 |       ← unchanged show witness
+       w_bits[0..255] | w_ring | e_null[0..NHAT] |                 ← canonical w + nullifier value/remainder
+       ltc_borrow[0..255] |                                       ← R4: < Fr::MODULUS borrow-chain auxiliaries
+       e_bits[0..NHAT · 2·ceil_log2(Δ)] ]                         ← nullifier: per-coeff e-range bit-decomposition
 ```
 
 - **`w_bits[0..255]`** — the **canonical source of truth**: 255 coordinates, each a *constant* poly
@@ -52,13 +58,22 @@ s1 = [ θ(v1) | θ(v2) | θ(m) | θ(tag) | z | slack1 | slack2 |   ← unchanged
 - **`w_ring`** — the nullifier's identity ring element. Its coefficients hold `w` as `L = ⌈255/B⌉`
   **B-bit limbs in the low positions, zero above** (`B = 50` ⇒ each limb `< 2^50 < q̂`, ample no-wrap
   headroom; `L = 6`): `w_ring.coeff[k] = Σ_{j<B} 2^j·bit_{Bk+j}` for `k<L`, `w_ring.coeff[k] = 0` for
-  `k ≥ L`. (`Bk+j ≥ 255` ⇒ the bit is 0, so the top limb is partial — fine.) This is the form
-  `nullifier_lwr` consumes (`w_blk = w_ring_off`); the nullifier rounds it coefficient-wise.
-- **`e_null[0..NHAT]`** — the nullifier remainder ring element `e` (`e_blk = e_null_off`), part of the
-  nullifier sub-proof's witness; `0 ≤ e.coeff[i] < Δ` (range-proven, `proof_range`, already built).
+  `k ≥ L`. This is the form `nullifier_lwr` consumes; the nullifier rounds it coefficient-wise.
+- **`e_null[0..NHAT]`** — the nullifier remainder ring element `e` (`a_epoch·w = N·Δ + e`).
+- **`ltc_borrow[0..255]`** — **(P1 fix #1)** the auxiliary borrow/prefix bits of the `proof_ltconst`
+  `< Fr::MODULUS` gadget (one per `w`-bit; borrow-subtraction `MODULUS−1 − w` chain). R4 is otherwise
+  *inexpressible* folded — its constraints reference these committed auxiliaries, so canonicality stays
+  bound to the same `t_A` as `w_bits`. Boolean (R4 pins them ∈{0,1}).
+- **`e_bits[0..NHAT·2·ceil_log2(Δ)]`** — **(P1 fix #2)** the per-coefficient range decomposition of
+  `e`. `e∈[0,Δ)` is NOT a linear relation: for each of the `NHAT` coefficients, the two-range
+  bit-decomposition (`e[i] = Σ2^j b_{i,j}` AND `(Δ−1)−e[i] = Σ2^j b'_{i,j}`, `Δ=p≈2^18.7` ⇒ ~19 bits
+  each ⇒ ~38·NHAT bits) is committed here, with binariness + recomposition as folded families. Without
+  these a prover picks `e = prod − N·Δ mod q̂` outside `[0,Δ)` and a wrong `N` passes (gate P1).
 
 All appended blocks are committed in the SAME `t_A` as the show witness, so every sub-proof's linear
-opening binds them under one M-SIS commitment.
+opening binds them under one M-SIS commitment. ⚠️ `s1` now grows by `255 + 1 + NHAT + 255 + 38·NHAT ≈
+255+1+64+255+2432 ≈ 3007` proof-ring coords — the norm/headroom check (Q4′, §7) is now load-bearing,
+not a formality; the M-SIS dimensions + `B²<q̂` guard must be re-validated at this size (HYP-330).
 
 ---
 
@@ -96,9 +111,21 @@ message element `b` lives at `s1` element `θ(m_b)[c mod 4]`, coefficient `c div
 *exactly* `bits(w)`-then-zeros — no malleable message coefficient. A permuted `pos` map must reject
 (off-by-one regression test). This is what makes "the credential signed *this* `w`."
 
-**(R4) `w` canonical (`< Fr::MODULUS`).** `proof_ltconst` (the `< Fr::MODULUS` borrow-subtraction
-bit-gadget, already built for the anchor) over `w_bits` — closes the non-canonical malleability
-(LNP22_SHOW R8 P1: two bit-strings ≡ same `Fr` ⇒ nullifier/credential collision).
+**(R4) `w` canonical (`< Fr::MODULUS`) — with committed auxiliaries (P1 fix #1).** The `proof_ltconst`
+borrow-subtraction gadget proves `w < Fr::MODULUS` via the `MODULUS−1 − w` chain with per-bit borrow
+auxiliaries `ltc_borrow[0..255]` — **now committed in `s1` (§2)**, so the gadget is expressible folded
+and stays bound to the same `t_A` as `w_bits` (was the P1: nowhere to put them). R4 folds as: binariness
+on `ltc_borrow` + the per-bit borrow recurrence (const-coeff relations) + the final-borrow `= 0` pin.
+Closes the non-canonical malleability (LNP22_SHOW R8 P1: two bit-strings ≡ same `Fr` ⇒ collision).
+
+**(R5) nullifier `N = round_Δ(a_epoch·w_ring)` — folded, with committed e-range (P1 fixes #2/#3).** Two
+parts, both folded into the one masked quadratic — **NO standalone `NullifierProof`, NO own garbage**:
+- the per-coefficient rounding relation `a_epoch·w_ring − e − N·Δ = 0` (linear over `s1`; `N` is public,
+  FS-bound), and
+- the per-coefficient `e∈[0,Δ)` range — `e∈[0,Δ)` is NOT linear, so it uses the committed `e_bits`
+  (§2): binariness on `e_bits` + the two recompositions `e[i] = Σ2^j b_{i,j}` and `(Δ−1)−e[i] =
+  Σ2^j b'_{i,j}` (const-coeff families). The `N[i]∈[0,q1)` range is a plaintext check on public `N`.
+`nullifier_lwr` is refactored to EMIT these families rather than commit its own `g0` (the §6 fold-in).
 
 **Consistency web:** `w_bits` —R1→ binary; —R4→ canonical; —anchor→ `C_r` (EC, group order, no
 limbs); —R3→ `m` (SEP credential's signed message); —R2→ `w_ring` (nullifier). The BBS half opens the
@@ -110,25 +137,30 @@ same `C_r`. So one `w_bits` ⇒ one `w` across all four forms.
 
 ```rust
 pub struct PqBlindedVouch {
-    pub bbs:    BoundPresentation,             // BBS cred on w, opens C_r           (unchanged)
-    pub show:   ShowAggProof,                  // SEP cred possession on m + R1–R4 folded in
-    pub anchor: AnchorBindProof,               // w_bits[0..255] ↔ C_r
-    pub null:   nullifier_lwr::NullifierProof, // N = round(a_epoch·w_ring), e in-range
-    pub commitment: AbdlopCommitment,          // the shared (t_A, t_B)
+    pub bbs:    BoundPresentation,    // BBS cred on w, opens C_r                          (unchanged)
+    pub show:   ShowAggProof,         // SEP possession on m + R1–R5 (incl. nullifier) folded in
+    pub anchor: AnchorBindProof,      // w_bits[0..255] ↔ C_r   (separate cross-group Schnorr proof)
+    pub n:      ProofRingElem,        // the posted nullifier N (PUBLIC; verified via R5 inside `show`)
+    pub commitment: AbdlopCommitment, // the shared (t_A, t_B)
 }
 ```
 
-R1–R4 live **inside `show.agg`** (folded families/linear terms — no separate objects, no extra
-garbage commitment). The anchor + nullifier are the open items of §6 (must also fold in, or carry an
-explicit joint-ZK argument).
+R1–**R5** — including the **nullifier** (rounding relation + `e`-range) — live **inside `show.agg`**
+(folded families / linear terms over the one garbage commitment; no separate proof object, no own
+garbage; P1 fix #3). The **anchor is the one separate proof** (cross-group; §6). There is no
+`NullifierProof` type in the vouch — `N` is a public field, FS-bound into the show's transcript and
+checked by R5.
 
-**`prove`** (member): pack the unified `s1` (§2) from the SEP signature + `w`; one `commit_witness`;
-`present_bound` (BBS, draws `r`, forms `C_r`); `prove_show_agg` with R1–R4 folded; `prove`(anchor) over
-`bit_idx = w_bits` range, same `(t_A,s1,s2,C_r,r)`; `prove_nullifier` over `w_blk=w_ring`,
-`e_blk=e_null`. All share `t_A`, `t_B`, `s2`, `C_r`.
+**`prove`** (member): pack the unified `s1` (§2) from the SEP signature + `w` (incl. `ltc_borrow` +
+`e_bits` auxiliaries); one `commit_witness`; `present_bound` (BBS, draws `r`, forms `C_r`);
+`prove_show_agg` with **R1–R5** folded (the refactored `nullifier_lwr` emits its families here);
+`prove`(anchor) over `bit_idx = w_bits` range, same `(t_A,s1,s2,C_r,r)`. All share `t_A`, `t_B`, `s2`,
+`C_r`. `N` is computed from `(a_epoch, w_ring)` and posted.
 
 **`verify`** — AND-verify + the FULL binding web (the P2/Q5 fix). All must hold:
-1. `verify_bound` (BBS) ∧ `verify_show_agg` (incl. R1–R4) ∧ `verify`(anchor) ∧ `verify_nullifier`.
+1. `verify_bound` (BBS) ∧ `verify_show_agg` (incl. R1–**R5** — the nullifier rounding + `e`-range
+   folded) ∧ `verify`(anchor). The public `N` is FS-bound into the show transcript and checked by R5;
+   the ledger rejects a repeated `N`. (No separate `verify_nullifier`.)
 2. **Same commitment object:** every sub-proof references the SAME `commitment.t_A` AND `t_B` (not just
    equal `t_A` — the same `(t_A,t_B)` pair; the show's garbage rides `t_B`).
 3. **Same anchor:** `bbs.c_r == anchor.c_r`, and the BBS-opened `C_r` is the anchor's `C_r`.
@@ -224,10 +256,20 @@ ZK leak, so that test is the §6 build gate.
   no-op for binary `m` ⇒ bit `c` of message `b` sits at `s1` elem `θ(m_b)[c mod 4]` coeff `c div 4`
   (folded into §3 R3 + the `pos(i)` table).
 
+**Resolved (R4 / v4 — inline `codex exec review` gate):**
+- ~~P1 #1~~ R4 canonicality auxiliaries (`ltc_borrow[255]`) now committed in `s1` (§2) — the borrow
+  gadget is expressible folded + bound to `t_A`.
+- ~~P1 #2~~ nullifier `e`-range: the per-coefficient `e∈[0,Δ)` bit-decomposition (`e_bits`, ~38·NHAT)
+  is committed in `s1` + folded as binariness + recomposition families (R5) — not modeled as linear.
+- ~~P1 #3~~ standalone `NullifierProof` removed; the nullifier folds into `show` (R5); `N` is a public
+  field FS-bound + checked there (no separate proof object, no own garbage).
+
 **Still open (build-time check, not a design gap):**
-- **Q4′:** finalized norm/headroom — `s1` grows by `255 + 1 + NHAT` coords; confirm M-SIS binding +
-  the `B²<q̂` `norm_bounds_provable` guard still hold at the show modulus (HYP-330 calibration; step-2
-  of the build surfaces it concretely as a `norm_bounds_provable` assertion).
+- **Q4′ (now load-bearing):** `s1` grows by ~`3007` coords (`255 w_bits + 1 w_ring + NHAT e_null + 255
+  ltc_borrow + 38·NHAT e_bits`). Confirm M-SIS binding + the `B²<q̂` `norm_bounds_provable` guard hold
+  at this size + the show modulus — likely needs the de-provisionalized M-SIS dimensions (HYP-330).
+  The build surfaces it concretely as a `norm_bounds_provable` assertion; if it fails, the nullifier
+  coefficient count / `e`-range packing is the first dial to turn.
 
 ---
 
