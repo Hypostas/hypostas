@@ -305,7 +305,10 @@ ZK leak, so that test is the §6 build gate.
 7. **Codec v2** — append `show`/`anchor`/`null`/`commitment` under a bumped `VOUCH_CODEC_VERSION`.
 
 σ/B/c_256 stay PROVISIONAL → HYP-330 (calibration manifest filed there). The vouch stays behind
-`experimental-unaudited` until params land + HYP-343 wires it into `protocol_core`.
+`experimental-unaudited` until **ALL THREE** land: (i) HYP-330 params, (ii) HYP-343 trait wiring, AND
+(iii) the **HYP-324 issuer-hidden wrapper** — without which a live public-`vk` vouch leaks *which*
+introducer signed in a multi-introducer epoch. Dropping the gate before HYP-324 is a release error
+(an anonymity break), not a params question — the public-`vk` core is test-only until then.
 
 ---
 
@@ -314,7 +317,12 @@ ZK leak, so that test is the §6 build gate.
 - **Blind issuance** (Fig 7.1 `OblSign`) — member obtains the SEP credential on `m=bits(w)` without
   the coalition learning `w`. Own design-first pass; PQ blind sigs research-adjacent
   (`reference_pq_blind_sig_landscape`). The show here assumes an already-issued credential.
+- **HYP-324 issuer-hidden wrapper** — **a release gate, not just out-of-scope.** The public-`vk`
+  verification core here is TEST-ONLY; a live vouch under a named `vk` leaks which introducer signed in
+  a multi-introducer epoch. The HYP-324 wrapper (shared epoch key / committed-key + accumulator) must
+  gate the core before any live wiring. `experimental-unaudited` MUST NOT drop without it.
 - **HYP-343** trait reshape — `PqBlindedVouch` behind `protocol_core::{VouchIssuer,VouchVerifier}`,
   retire `StubVouchScheme`. Gated on this wiring + issuance + params.
-- **HYP-330** — external audit calibrates the provisional constants (manifest filed on HYP-330); the
-  `experimental-unaudited` gate drops only after.
+- **HYP-330** — external audit calibrates the provisional constants (manifest filed on HYP-330). The
+  `experimental-unaudited` gate drops only after **all of**: HYP-330 (params) ∧ HYP-324 (issuer hiding)
+  ∧ HYP-343 (trait wiring). Missing any one is a release error.
