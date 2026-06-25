@@ -47,7 +47,7 @@ One ABDLOP commitment over a single packed `s1`. The show layout
 
 ```
 s1 = [ θ(v1) | θ(v2) | θ(m) | θ(tag) | z | slack1 | slack2 |       ← unchanged show witness
-       w_bits[0..255] | w_ring | e_null[0..NHAT] |                 ← canonical w + nullifier value/remainder
+       w_bits[0..255] | w_ring | e_null |                         ← canonical w + nullifier value + remainder (1 ring coord each)
        ltc_borrow[0..255] |                                       ← R4: < Fr::MODULUS borrow-chain auxiliaries
        e_bits[0..NHAT · 2·ceil_log2(Δ)] ]                         ← nullifier: per-coeff e-range bit-decomposition
 ```
@@ -60,7 +60,10 @@ s1 = [ θ(v1) | θ(v2) | θ(m) | θ(tag) | z | slack1 | slack2 |       ← uncha
   headroom; `L = 6`): `w_ring.coeff[k] = Σ_{j : Bk+j < 255} 2^j·bit_{Bk+j}` for `k<L` (the **top limb
   `k=5` is partial** — only bits 250..254, i.e. `j<5`; never index `w_bits` past 254),
   `w_ring.coeff[k] = 0` for `k ≥ L`. This is the form `nullifier_lwr` consumes; rounds coeff-wise.
-- **`e_null[0..NHAT]`** — the nullifier remainder ring element `e` (`a_epoch·w = N·Δ + e`).
+- **`e_null`** — **ONE** ring coordinate: the nullifier remainder ring element `e`
+  (`a_epoch·w_ring = N·Δ + e`), whose `NHAT` coefficients are the per-coefficient remainders. `e_bits`
+  (below) range-decomposes each of those `NHAT` coefficients; R5's recomposition ties them back to this
+  same `e`. (Not `NHAT` separate coordinates — one ring element with `NHAT` coeffs.)
 - **`ltc_borrow[0..255]`** — **(P1 fix #1)** the auxiliary borrow/prefix bits of the `proof_ltconst`
   `< Fr::MODULUS` gadget (one per `w`-bit; borrow-subtraction `MODULUS−1 − w` chain). R4 is otherwise
   *inexpressible* folded — its constraints reference these committed auxiliaries, so canonicality stays
@@ -72,8 +75,8 @@ s1 = [ θ(v1) | θ(v2) | θ(m) | θ(tag) | z | slack1 | slack2 |       ← uncha
   these a prover picks `e = prod − N·Δ mod q̂` outside `[0,Δ)` and a wrong `N` passes (gate P1).
 
 All appended blocks are committed in the SAME `t_A` as the show witness, so every sub-proof's linear
-opening binds them under one M-SIS commitment. ⚠️ `s1` now grows by `255 + 1 + NHAT + 255 + 38·NHAT ≈
-255+1+64+255+2432 ≈ 3007` proof-ring coords — the norm/headroom check (Q4′, §7) is now load-bearing,
+opening binds them under one M-SIS commitment. ⚠️ `s1` now grows by `255 + 1 + 1 + 255 + 38·NHAT ≈
+255+1+1+255+2432 ≈ 2944` proof-ring coords — the norm/headroom check (Q4′, §7) is now load-bearing,
 not a formality; the M-SIS dimensions + `B²<q̂` guard must be re-validated at this size (HYP-330).
 
 ---
@@ -172,7 +175,11 @@ checked by R5.
    proof. (Omitting the auxiliary offsets would let R4/R5 reference wrong coordinates, reopening the
    non-canonical-`w` / wrong-`N` cases.)
 5. **Same context:** issuer `vk`, `epoch` ⇒ `a_epoch = epoch_base(epoch)`, the posted nullifier `N`,
-   and the FS transcript domain separators are identical inputs to every sub-proof.
+   and the FS transcript domain separators are identical inputs to every sub-proof. ⚠️ **The public-`vk`
+   verification path is TEST-ONLY** — a public `vk` reveals *which* introducer signed when an epoch has
+   >1 introducer. Production wiring MUST go through the HYP-324 issuer-hidden wrapper (shared epoch key
+   / committed-key + accumulator), exactly as the LNP22 show design gates it; the core here verifies
+   under public `vk` only for tests, never for a live vouch.
 6. **Codec version** matches (§8.7).
 
 Returns `N` on success.
@@ -269,7 +276,7 @@ ZK leak, so that test is the §6 build gate.
   field FS-bound + checked there (no separate proof object, no own garbage).
 
 **Still open (build-time check, not a design gap):**
-- **Q4′ (now load-bearing):** `s1` grows by ~`3007` coords (`255 w_bits + 1 w_ring + NHAT e_null + 255
+- **Q4′ (now load-bearing):** `s1` grows by ~`2944` coords (`255 w_bits + 1 w_ring + 1 e_null + 255
   ltc_borrow + 38·NHAT e_bits`). Confirm M-SIS binding + the `B²<q̂` `norm_bounds_provable` guard hold
   at this size + the show modulus — likely needs the de-provisionalized M-SIS dimensions (HYP-330).
   The build surfaces it concretely as a `norm_bounds_provable` assertion; if it fails, the nullifier
@@ -280,8 +287,10 @@ ZK leak, so that test is the §6 build gate.
 ## 8. Build order (after re-review clean)
 
 0. **Resolve Q1′/Q4′/Q-θ** in review; pin the anchor fold-in (or joint-sim) + the `pos(i)` table.
-1. **Packing** — `pack_pq_vouch_witness` (append `w_bits`/`w_ring`/`e_null`); canonical LSB-first
-   `w→bits→limbs` encoder; offsets + length guards (Codex P2 discipline).
+1. **Packing** — `pack_pq_vouch_witness` (append `w_bits` / `w_ring` / `e_null` / `ltc_borrow` /
+   `e_bits` — ALL the R4/R5 auxiliaries, else canonicality + the `e`-range have nothing to bind to);
+   canonical LSB-first `w→bits→limbs` encoder + the borrow chain + the per-coeff `e`-range
+   bit-decomposition; offsets + length guards (Codex P2 discipline).
 2. **R2** (the delicate one) — per-coefficient limb const-coeff family; standalone test (known `w`
    recomposes; wrong `w_ring` rejects; no wrap at `w=r−1`; padding pin rejects nonzero high coeff).
 3. **R3** — conjugate-selector family over the `θ` table + padding pins; test (`m`↔`w_bits` honest
