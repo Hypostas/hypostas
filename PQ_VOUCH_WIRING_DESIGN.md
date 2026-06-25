@@ -57,8 +57,9 @@ s1 = [ θ(v1) | θ(v2) | θ(m) | θ(tag) | z | slack1 | slack2 |       ← uncha
   consumes (`bit_idx = w_bits_off .. +255`). LSB-first; `w = Σ_i 2^i·bit_i`.
 - **`w_ring`** — the nullifier's identity ring element. Its coefficients hold `w` as `L = ⌈255/B⌉`
   **B-bit limbs in the low positions, zero above** (`B = 50` ⇒ each limb `< 2^50 < q̂`, ample no-wrap
-  headroom; `L = 6`): `w_ring.coeff[k] = Σ_{j<B} 2^j·bit_{Bk+j}` for `k<L`, `w_ring.coeff[k] = 0` for
-  `k ≥ L`. This is the form `nullifier_lwr` consumes; the nullifier rounds it coefficient-wise.
+  headroom; `L = 6`): `w_ring.coeff[k] = Σ_{j : Bk+j < 255} 2^j·bit_{Bk+j}` for `k<L` (the **top limb
+  `k=5` is partial** — only bits 250..254, i.e. `j<5`; never index `w_bits` past 254),
+  `w_ring.coeff[k] = 0` for `k ≥ L`. This is the form `nullifier_lwr` consumes; rounds coeff-wise.
 - **`e_null[0..NHAT]`** — the nullifier remainder ring element `e` (`a_epoch·w = N·Δ + e`).
 - **`ltc_borrow[0..255]`** — **(P1 fix #1)** the auxiliary borrow/prefix bits of the `proof_ltconst`
   `< Fr::MODULUS` gadget (one per `w`-bit; borrow-subtraction `MODULUS−1 − w` chain). R4 is otherwise
@@ -91,7 +92,8 @@ conjugate const-coeff extraction the show already uses: `const_coeff(conj(X^j)·
 constant" part matters so `bit_i` is exactly `τ0`, not smuggled into higher coeffs). Reused primitive.
 
 **(R2) `w_ring` = limb-pack(`w_bits`) — per-coefficient, no wrap.** For each `k < L`:
-`coeff_k(w_ring) − Σ_{j<B} 2^j·τ0(w_bits[Bk+j]) = 0`, a const-coeff relation
+`coeff_k(w_ring) − Σ_{j : Bk+j < 255} 2^j·τ0(w_bits[Bk+j]) = 0` (the top limb `k=5` sums only `j<5`, so
+`w_bits` is never indexed past 254), a const-coeff relation
 `const_coeff(conj(X^k)·w_ring − Σ_j 2^j·w_bits[Bk+j]) = 0`. Each limb sum `< 2^B = 2^50 < q̂` so the
 equality is over the integers, **not** mod q̂ (the P1/Q3 fix — limbs are bounded, no huge `2^254`
 weight ever appears). For each `k ≥ L`: `coeff_k(w_ring) = 0` (padding pin), AND `coeff_j(w_ring)=0`
