@@ -292,13 +292,16 @@ ZK leak, so that test is the §6 build gate.
 
 ## 8. Build order (after re-review clean)
 
-0. **Resolve Q1′/Q4′/Q-θ** in review; pin the anchor fold-in (or joint-sim) + the `pos(i)` table.
+0. **Build-time only:** the Q4′ headroom check (§7) + derive the live `pos(i)` table from
+   `pack_show_witness` (§2). Q1′/Q-θ are resolved (§6/§7): the anchor stays a **separate** Schnorr
+   proof (no fold-in) — the only anchor obligation is the composed-transcript ZK regression gate.
 1. **Packing** — `pack_pq_vouch_witness` (append `w_bits` / `w_ring` / `e_null` / `ltc_borrow` /
    `e_bits` — ALL the R4/R5 auxiliaries, else canonicality + the `e`-range have nothing to bind to);
    canonical LSB-first `w→bits→limbs` encoder + the borrow chain + the per-coeff `e`-range
    bit-decomposition; offsets + length guards (Codex P2 discipline).
-2. **R2** (the delicate one) — per-coefficient limb const-coeff family; standalone test (known `w`
-   recomposes; wrong `w_ring` rejects; no wrap at `w=r−1`; padding pin rejects nonzero high coeff).
+2. **R2** (the delicate one) — per-coefficient 4-bit-limb const-coeff family (all 64 coeffs, no padding
+   coords); standalone test (known `w` recomposes; wrong `w_ring` rejects; no overflow at `w=r−1`; top
+   limb `k=63` uses only `j<3`).
 3. **R3** — conjugate-selector family over the `θ` table + padding pins; test (`m`↔`w_bits` honest
    binds; mismatched `m` rejects; permuted `pos` rejects).
 4. **Fold R1–R4 + the nullifier relation into `agg_show_relation`** (ring relations — extend `families`; refactor `nullifier_lwr` to emit a family, not its own `g0`). Keep the anchor as the separate `proof_anchor_bind` Schnorr proof (independent masks, no `t_B`); add the composed-transcript **statistical-ZK test** (§6) as the leak-freeness gate.
