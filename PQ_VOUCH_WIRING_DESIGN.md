@@ -214,9 +214,9 @@ Under M-SIS (binding of `t_A`/`t_B`) + SEP unforgeability (M-SIS) + BBS (q-SDH, 
   bits; R1/R4 ⇒ canonical binary; the anchor ⇒ `w_bits` = `C_r`'s `w`. A forged vouch needs a forged
   SEP credential on the bits of some `w` it can also open in `C_r` — PQ-hard. BBS adds the classical
   leg (C3: either-half-unforgeable ⇒ unforgeable).
-- **One-show.** `verify_nullifier` ⇒ `N = round_Δ(a_epoch·w_ring)` with the per-coefficient `e∈[0,Δ)`
-  + `n∈[0,q1)` ranges (unique `N` per `(w,epoch)`); R2 ties `w_ring` to the canonical `w`. PQ-hiding
-  (ring-LWR), Q6=(ii).
+- **One-show.** `verify_show_agg` (the folded **R5**, not a standalone `verify_nullifier`) ⇒ `N =
+  round_Δ(a_epoch·w_ring)` with the per-coefficient `e∈[0,Δ)` + `n∈[0,q1)` ranges (unique `N` per
+  `(w,epoch)`); R2 ties `w_ring` to the canonical `w`. PQ-hiding (ring-LWR), Q6=(ii).
 - **Anonymity.** The show is statistical-ZK with ONE garbage commitment (§C-iv fix). R1–R4 + the
   nullifier fold into that one masked relation (no additional garbage revealed). The anchor is a
   separate cross-group Schnorr proof composed leak-free by independent masking (§6), checked by the
