@@ -166,9 +166,11 @@ checked by R5.
 2. **Same commitment object:** every sub-proof references the SAME `commitment.t_A` AND `t_B` (not just
    equal `t_A` — the same `(t_A,t_B)` pair; the show's garbage rides `t_B`).
 3. **Same anchor:** `bbs.c_r == anchor.c_r`, and the BBS-opened `C_r` is the anchor's `C_r`.
-4. **Same ABDLOP params** (`seed`, `d,m1,m2,ℓ`) across all sub-proofs; **same fixed layout offsets**
-   (`w_bits_off`, `w_ring_off`, `e_null_off`, the show blocks) — offsets are public constants derived
-   from `vk`, re-checked, never trusted from the proof.
+4. **Same ABDLOP params** (`seed`, `d,m1,m2,ℓ`) across all sub-proofs; **same fixed layout offsets** —
+   `w_bits_off`, `w_ring_off`, `e_null_off`, **`ltc_borrow_off`, `e_bits_off`** (the R4/R5 auxiliaries),
+   and the show blocks — all public constants derived from `vk`, re-checked, never trusted from the
+   proof. (Omitting the auxiliary offsets would let R4/R5 reference wrong coordinates, reopening the
+   non-canonical-`w` / wrong-`N` cases.)
 5. **Same context:** issuer `vk`, `epoch` ⇒ `a_epoch = epoch_base(epoch)`, the posted nullifier `N`,
    and the FS transcript domain separators are identical inputs to every sub-proof.
 6. **Codec version** matches (§8.7).
