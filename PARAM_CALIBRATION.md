@@ -161,8 +161,29 @@ Until then `1.2` is conservative ⇒ β slightly above the thesis's ⇒ security
 181/165 *from the tail alone* — but the dominant width gain (5a) is landed, so the residual tail gap is
 small.
 
-**Remaining execution:** (a) the L2_TAIL measure-then-pin above; (b) recompute β❶ at the pinned width+tail
-and confirm ≥165 core-SVP; (c) Codex-gate; (d) drop `experimental-unaudited`.
+### 5c. FINDING (2026-06-26): the gadget BASE differs (k=19 base-2 vs thesis k=5 base-16) — 181/165 is NOT inherited
+
+Running the β-clears-165 check surfaced a second, more important mismatch. Thesis Thm 6.3 (L14191/L14218)
+sets the forgery hardness as `M-SIS_{n,d,2d+k+m+1,q,β❶}` with `β❶ = √((B1+ndB2)² + B3² + nm + 1)`, and the
+thesis's SEP⋆ 128-bit set uses **k=5** (L14218: λ=128, n=256, d=4, **k=5**, Q=2³²). Our `sep_gadget`
+uses a **base-2** gadget, `KG = ⌈log₂ p⌉ = 19` (`g=(1,2,…,2¹⁸)`); the thesis's `k=5 = ⌈log₁₆ p⌉` is a
+**base-16** gadget. The gadget base differs ⇒ the M-SIS *width* (`2d+k+m+1`) and the gadget width `α`
+differ ⇒ **our k=19 credential does NOT inherit the thesis's 181/165 core-SVP** — my earlier "params match
+⇒ security inherited" (§4 step 3) was over-optimistic: it checked n, p, d but NOT the gadget base.
+
+Base-2 is a deliberate, valid, gate-clean choice (Dilithium uses base-2; smaller per-digit `α`, more digits),
+NOT a bug — but its security is a *different point* on the size/security curve and must be **computed at
+k=19**, not borrowed. The sampler-width fix (5a) is unaffected (it tightened the width at whatever base);
+only the *security-level claim* needs the actual core-SVP at the shipped (n=256, d=4, k=19, q=425837, β❶).
+
+So the honest residual is a genuine **core-SVP computation** (not a transcription): assemble B1/B2/B3 at the
+shipped params, form β❶, run the §9 core-SVP estimate (0.2924·b classical / 0.2570·b quantum, δ₀↔b via
+Chen), and report the actual bits — then decide if base-2/k=19 clears the target or the gadget rebases to
+k=5 to inherit 181/165 cleanly. This is Codex-verifiable arithmetic (Codex re-ran the `s₁` check the same
+way), so it is checkable, not free-handed — but it IS the security-critical number, so it gets a careful pass.
+
+**Remaining execution:** (a) compute the actual core-SVP at k=19 (above); (b) the L2_TAIL measure-then-pin;
+(c) decide k=19-as-is vs rebase-to-k=5; (d) Codex-gate; (e) drop `experimental-unaudited`.
 
 Until (1)–(5) + §5 land, the lattice half stays gated; the BBS half remains real BLS12-381. HYP-343 (trait
 reshape, retire `StubVouchScheme`) unblocks at the end of (5) — it was only ever gated on "real params."
