@@ -133,12 +133,36 @@ distribution; Cholesky-failure ⇒ a caught panic — there is no silent wrong-d
 d=4 smoke (`production_size_…`) re-verifies honest sigs against the tightened bounds. So this is a
 test-validated change, not the uncatchable-insecurity class.
 
-**The execution (the one remaining input):** pull the thesis's **exact Alg 4.5 width formula** (the PSD
-margin above the bare spectral bound — the code's `+2` is a placeholder; Alg 4.5 specifies the real margin),
-then: (a) `sep_trapdoor.rs:252` → `α·(√(N·m1)+√(N·dk)+t + margin)`; (b) `sep_sig.rs` `s_pre` → match;
-(c) `L2_TAIL` → the Lemma 1.26 `c`; (d) run the d=4 smoke (Cholesky PSD + honest-verify validate the width
-+ bounds); (e) recompute β❶ and confirm ≥165 core-SVP; (f) Codex-gate. This is now a precise, scoped,
-thesis-grounded change against a single line + its matching bounds — not an open frontier.
+### 5a. LANDED (commit 26e9c3d, Codex-clean): the sampler-width swap
+
+`sep_trapdoor.rs` + `sep_sig.rs` now use `s₁_bound = √(N·m1)+√(N·dk)+T_SPECTRAL` (T=5.5) for both the
+sampler width and the matching acceptance bound, replacing the Frobenius norm. **Validated:** 48 fast sep
+tests (Cholesky PSD + honest-verify at d=1), the d=4 production smoke (52s), full 373-test suite, clippy
+clean. **Codex gate independently confirmed it** by computing the actual `s₁(M_τ(R))` over 200 random d=4
+keys: max 161.1 vs bound 190.2, **0/200 over-bound** (+ 0 fails across four other shapes) — the Heuristic
+1.1 bound holds empirically with margin. This is the dominant ≈2× gain; the credential now runs at the
+thesis's Alg 4.5 width.
+
+### 5b. FINDING (2026-06-26): the L2_TAIL is NOT the bare Lemma 1.26 minimum
+
+Attempted `L2_TAIL 1.2 → the per-dimension Lemma-1.26 minimum c` (≈0.58 at d=1 v1). **The d=1
+`sign_verifies` test FAILED** — honest sigs no longer fit. Reason: Lemma 1.26's `c` is the tail of a
+*clean* width-`s₁` discrete Gaussian over the full lattice, but the verification checks `‖v1‖`/`‖v2‖`
+*separately*, and these sub-vectors are **marginals** of the SamplePre output — they run wider than
+`s₁·√dim` predicts (the gadget block `v2` especially). So the bound tail is NOT the bare Lemma 1.26 min;
+it's the thesis's **Thm 6.3 SamplePre-output** bound, which is larger. The empirical `1.2` absorbs this and
+is correct-and-conservative; the true thesis `c` lies in `(0.58, 1.2)`. **Reverted** to `1.2` (the test
+caught the over-tightening — the rule-1 safety net working as designed; the validated 5a change stands).
+
+The L2_TAIL exact-match is therefore a **measure-then-pin** follow-up, not a transcription: instrument the
+d=4 smoke to record `max ‖v1‖/(s₁√(m1·N))` and `max ‖v2‖/(s_pre√(dk·N))` over many sigs, then set each
+per-part tail just above the observed max with a `2^(−λ)` margin (or pull the exact Thm 6.3 closed form).
+Until then `1.2` is conservative ⇒ β slightly above the thesis's ⇒ security slightly *under* the exact
+181/165 *from the tail alone* — but the dominant width gain (5a) is landed, so the residual tail gap is
+small.
+
+**Remaining execution:** (a) the L2_TAIL measure-then-pin above; (b) recompute β❶ at the pinned width+tail
+and confirm ≥165 core-SVP; (c) Codex-gate; (d) drop `experimental-unaudited`.
 
 Until (1)–(5) + §5 land, the lattice half stays gated; the BBS half remains real BLS12-381. HYP-343 (trait
 reshape, retire `StubVouchScheme`) unblocks at the end of (5) — it was only ever gated on "real params."
