@@ -15,13 +15,14 @@ and the show's binary/range/linear blocks.
 yet. The standing constraints hold: faithful transcription, never approximate crypto from memory;
 provisional params → HYP-330; behind `experimental-unaudited`.
 
-**STATUS — pre-decision proposal.** This doc PROPOSES the issuance models; the Q1 model choice (§1) is
-Josh's and is not yet made, so **no code and no other spec change lands from this doc yet**. The repo's
-authoritative show relation remains `LNP22_SHOW_DESIGN.md` §1 (`[s|m]`); the real **drift** between the
-spec (`[s|m]`) and the built code (message-only) is acknowledged (§1 / Model C) and is resolved *as part
-of* whichever model Q1 selects — Model C ⇒ update §1 to message-only-as-built; Model B ⇒ extend the code
-to `[s|m]`. So there is no standalone merge of a contradictory target: the §1 reconciliation is bound to
-the Q1 decision, not to this doc.
+**STATUS — Model B DECIDED (Q1, §1; Josh 2026-06-25).** The build path is fixed: extend the credential +
+show to the `[s|m]` relation (§5.0), then `OblSign` with `upk` rate-limiting (§2–§4). This reconciles the
+spec/code drift by **extending the code up to `LNP22_SHOW_DESIGN.md` §1 (`[s|m]`)** — §1 stays the
+authoritative target; the message-only code moves to meet it. The `[s|m]` show extension deliberately
+re-opens the gate-clean show (new witness `s`, new relation term `D_s·s`, new binariness/registration
+constraints), so it is its **own gated sub-arc (§5.0)** that must land + re-green the existing 16
+vouch/show tests BEFORE `OblSign` proper begins. (Models A and C below are retained only as the rejected
+/ deferred alternatives that motivated the decision.)
 
 ---
 
@@ -79,21 +80,19 @@ unlimited credentials (Sybil at issuance). Acceptable only if rate-limiting is e
 gate (e.g. the introduction-record ledger / web-of-trust caps issuance out-of-band), with the nullifier
 still bounding one *show* per epoch.
 
-### Recommendation
-**Decide by threat model, but my lean is C now → B later, explicitly tracked — NOT A.**
-- A undercuts the privacy arc's premise (THREAT_MODEL.md: 6 properties × 4 tiers, mixnet-grade): an
-  issuer that learns every `w` is a single point of deanonymization. Reject A as the *end state*.
-- B is the right end state but it re-opens the gate-clean show — a large, careful change that deserves
-  its own design+build arc, not a tail-end rush. It is the natural home of the existing `s`/`upk`
-  scaffolding already threaded through `LNP22_SHOW_DESIGN.md` §1.
-- C delivers the **novel mechanism** (lattice oblivious signing: user-commit → blind preimage → unblind)
-  over the *existing* credential, provable + gateable now, with the honest gap (issuance Sybil) named
-  and pushed to an external rate-limit + a tracked B follow-up. It is the rule-#5 "implement what's
-  buildable now, track the rest" path.
+### DECISION (Josh, 2026-06-25) — **Model B**
+Issuance Sybil-resistance **must be cryptographic at issuance**: the issuer never learns `w` and
+rate-limits by `upk = D_s·s`. This is the strongest model and the privacy-arc-aligned end state (an
+issuer that can enumerate `w` — Model A — is a single deanonymization point; rejected). Iris's working
+lean had been C-now-→-B-later (defer the show re-open); Josh chose **B now**, accepting that the
+gate-clean show is re-opened to carry the user key `s`. The `s`/`upk` scaffolding already threaded
+through `LNP22_SHOW_DESIGN.md` §1 is the home for this — the credential + show move from message-only
+(`u + D·m`) to the full `[s | m]` relation (`u + D_s·s + D·m`), **reconciling §1 with the code by
+extending the code to §1** (not by retagging §1 to message-only).
 
-**Open question for Josh:** is issuance Sybil-resistance required *cryptographically at issuance* (⇒ B
-now, accept the show re-open), or can it be enforced by the membership ledger / web-of-trust gate (⇒ C
-now, B tracked)?
+⇒ The build is the **Model B path (§5)**: extend `sep_sig` + the show to `[s|m]` FIRST, then `OblSign`
+with `D_s·s`/`upk` live. The `[s|m]` show extension is a sub-design in its own right (§5.0) — it changes
+the SEP relation, the show witness/commitment, the vouch families, and the codec.
 
 *(The rest of this doc specifies the mechanism common to B and C, and flags the `[s|m]` deltas where B
 diverges, so the chosen model just selects which parts build.)*
@@ -218,29 +217,50 @@ message; tracked, not built.)*
 
 ---
 
-## 5. Build order (once the model is chosen)
+## 5. Build order — Model B (DECIDED)
 
-**Model C path (recommended-now):**
-1. `obl_sign` module — the SEP `OblSign` over `c_u = A·ru + D·m`: `user_commit`, `issuer_blind_sign`
-   (reuses `apply_tagged_with`), `user_unblind` + the reject loop. **Smoke:** unblinded `σ` passes
-   `sep_sig::verify`. (No `π` yet — `issuer_blind_sign` takes a *trusted* commit, gated as a step.)
-2. `π` well-formedness (π-a) — fold opening+binary+range over `[ru|m]`; the issuer verifies before
-   signing. **Integration:** a malformed `m` (non-binary / non-canonical) ⇒ `π` rejects ⇒ no signature.
-3. Blind-BBS (§4) — user Pedersen-commits the BBS messages + a Schnorr PoK of *that opening only*,
-   issuer blind-signs, user unblinds. **No issuance-time same-`w` tie** (§4/Q5: equality is show-time
-   only, via the `C_r` anchor).
-4. `BlindIssuance::{request, issue, finalize}` end-to-end: a member with no credential → blind requests →
-   gets `(SepSignature, BbsSignature)` on a hidden `w` → builds a `PqBlindedVouch` that verifies. The
-   capstone rule-27 test: **issuance never saw `w`, yet the vouch verifies.**
-5. Codec + the issuance-Sybil gap documented (external rate-limit) + the **Model B** follow-up issue
-   filed (extend `[s|m]` + the show).
+### 5.0 The `[s|m]` extension — re-open the credential + show (the prerequisite sub-arc)
+A sub-design in its own right; the faithful relation deltas (thesis §6/§7 with `D_s`, `UKeyGen` §7.1.1)
+are the **first build-design step** before any code. **Key tractability fact:** `D_s·s` is a *public
+matrix × a single committed witness* = a **linear** term — NOT a witness×witness product like `tG·v₂`.
+So the show's quadratic machinery (the one masked quadratic, R1–R5 fold) is **unchanged**; the extension
+is *witness growth + extra linear/binariness rows*, not a new quadratic. Deltas:
+- **`sep_sig` (0a):** keygen adds the key matrix `D_s` (`d×2d`); `UKeyGen`: `s ← T₁^{2d}`, `upk = D_s·s`.
+  Sign/verify gain the term: `c = A·r + D_s·s + D·m`, `A_t·v = u + D_s·s + D·m`; `s` binary (`s∘s=s`).
+  *Migration:* the message-only path is the `s = 0` / `D_s = 0` degenerate case — keep a note so the
+  reconciliation with `LNP22_SHOW_DESIGN.md` §1 is explicit. **Smoke:** an `[s|m]` credential
+  signs+verifies.
+- **`proof_show` (0b):** the SEP relation row gains the linear `D_s·s`; the witness/commitment gain `s`
+  (`2d` ring elems) + an `s`-binariness family (reuse the pure-const/`s∘s=s` block); `pq_layout`, the
+  families, `PqBlindedVouch`, and codec v* grow to carry `s`. **Integration:** the **16 existing
+  vouch/show tests re-green** with `[s|m]` credentials; a `[s|m]` vouch proves+verifies end-to-end.
+- **Registration tie (0c):** the show does NOT re-check `D_s·s = upk` (that would de-anonymize, §1.5) —
+  it only proves `s` is the SAME `s` bound under the signature (implied by the relation carrying `s`).
+  `upk` enforcement is issuance-only (§2 step 3).
 
-**Model B path** prepends: 0a. extend `sep_sig` to `[s|m]`; 0b. extend `proof_show` + the vouch families
-+ codec to the `[s|m]` relation; then 1–5 with the `D_s·s`/`upk` rows live.
+### 5.1 `OblSign` proper (over the `[s|m]` credential)
+1. `obl_sign` module — `user_commit` (`c_u = A·ru + D_s·s + D·m`), `issuer_blind_sign` (verify `π`;
+   `SamplePre` via `apply_tagged_with`; the `(upk, nonce)` quota lock + deterministic preimage, §2
+   accounting), `user_unblind` (`v = v' − [ru;0]`) + the reject loop. **Smoke:** unblinded `σ` passes the
+   `[s|m]` `sep_sig::verify`.
+2. `π` well-formedness (π-a) — fold opening + `m,s` binary + `m = bits(w)` canonical + the mod-`p`
+   quotient `z_c` + `D_s·s = upk` over `[ru | m | s]`. **Integration:** a malformed `m`/`s`, a
+   non-canonical `w`, or a wrong `upk` ⇒ `π` rejects ⇒ no signature.
+3. Blind-BBS (§4) — user-commit + Schnorr-PoK of *that opening only*, issuer blind-signs, user unblinds.
+   No issuance-time same-`w` tie (§4/Q5).
+4. `BlindIssuance::{register, request, issue, finalize}` end-to-end + the `(upk, nonce)` quota:
+   a member registers `upk`, blind-requests, gets `(SepSignature[s|m], BbsSignature)` on a hidden `w`,
+   builds a `PqBlindedVouch` that verifies. **Capstone (rule 27): the issuer never saw `w`, the `upk`
+   quota is enforced, yet the vouch verifies.**
+5. Codec for the issuance transcript + the `upk` ledger interface; file the HYP-330 param items (`[s|m]`
+   norms, `z_c`/`B_ru` bounds, the reject-loop restart test).
+
+*(Models A and C — the rejected / deferred alternatives — are retained in §1 only as the motivation for
+the Model B decision.)*
 
 ## 6. Open questions (for Codex DESIGN-review + Josh)
-- **Q1 (Josh, §1):** Model B-now vs C-now? = is issuance Sybil-resistance required cryptographically, or
-  ledger-enforced?
+- **Q1 (RESOLVED, Josh 2026-06-25): Model B.** Issuance Sybil-resistance is required cryptographically
+  (issuer never learns `w`, rate-limits by `upk`); the credential + show extend to `[s|m]` (§5.0).
 - **Q2:** `π` construction — π-a (reuse the aggregated-show fold) vs π-b (bespoke). Lean π-a.
 - **Q3:** the user-side reject loop termination at provisional `s2`/`B1`/`B2` (restart-test + → HYP-330).
 - **Q4:** blind-BBS — compose from `schnorr_pok` + arkworks (sovereign, no new C dep) vs a docknetwork
