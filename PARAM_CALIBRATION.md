@@ -143,6 +143,13 @@ keys: max 161.1 vs bound 190.2, **0/200 over-bound** (+ 0 fails across four othe
 1.1 bound holds empirically with margin. This is the dominant ≈2× gain; the credential now runs at the
 thesis's Alg 4.5 width.
 
+**CONFIRMED thesis-faithful (not just test-passing):** thesis L12973 gives its sampler width literally as
+`s ← s_G·(√(nm1) + √(ndk) + t) + 1` — exactly our new structure `α·(√(N·m1)+√(N·dk)+t)+2` (`s_G`=our `α`;
+the `+2` margin is marginally more conservative than the thesis's `+1`). L9587 confirms `‖R‖₂ ≤
+√(nm1)+√(ndk)+t` is the thesis's own spectral bound, and L8544 gives `A_T ∈ R_q^{d×(m1+kd)}` (gadget block
+width `kd = k·d`). The Frobenius form we replaced was never the thesis's; the spectral form matches it
+line-for-line.
+
 ### 5b. FINDING (2026-06-26): the L2_TAIL is NOT the bare Lemma 1.26 minimum
 
 Attempted `L2_TAIL 1.2 → the per-dimension Lemma-1.26 minimum c` (≈0.58 at d=1 v1). **The d=1
