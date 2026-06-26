@@ -58,9 +58,14 @@ constraint `s∘s=s`); (ii) extend the **show** to prove possession on `[s|m]` (
 codec, the vouch); (iii) the `OblSign` protocol (§2–§3); (iv) blind-BBS (§4).
 
 ### Model C — message-only blind issuance (a first cut of B without `upk`)
-`OblSign` over the **message-only** commitment `c_u = A·ru + D·m` (matches the built credential/show —
-**no `s`, no show changes**). The issuer signs a hidden `m` and never learns `w`. **Medium build:** just
-§2–§4 over the existing credential, no `[s|m]` extension.
+`OblSign` over the **message-only** commitment `c_u = A·ru + D·m`.
+⚠️ **Doc/code reconciliation (DESIGN-review P2):** the *built* `sep_sig` + `proof_show` are ALREADY
+message-only (`A_t·v = u + D·m`); `LNP22_SHOW_DESIGN.md` §1's `[s|m]` relation (`… + D_s·s`) is **unbuilt
+aspiration** — spec and code have drifted. So Model C matches the **built** show with **no code changes**,
+but adopting it as the end state requires **updating §1 to record message-only-as-built** (and re-tagging
+the `[s|m]`/`s`/`upk` material there as the Model-B-future), so the spec stops claiming a relation the
+code does not implement. The issuer signs a hidden `m` and never learns `w`. **Medium build:** §2–§4 over
+the existing credential **+ the §1 doc update**, no `[s|m]` code extension.
 **Weakness:** without `upk` the issuer has **no issuance rate-limit** — one registrant can obtain
 unlimited credentials (Sybil at issuance). Acceptable only if rate-limiting is enforced by an *external*
 gate (e.g. the introduction-record ledger / web-of-trust caps issuance out-of-band), with the nullifier
