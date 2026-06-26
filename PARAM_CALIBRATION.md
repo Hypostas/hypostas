@@ -192,6 +192,25 @@ way), so it is checkable, not free-handed — but it IS the security-critical nu
 **Remaining execution:** (a) compute the actual core-SVP at k=19 (above); (b) the L2_TAIL measure-then-pin;
 (c) decide k=19-as-is vs rebase-to-k=5; (d) Codex-gate; (e) drop `experimental-unaudited`.
 
+### 5d. CORRECTION (2026-06-26): the target is ~165 core-SVP, NOT "181/165" (that was Robin-1061)
+
+While reading the thesis tables for the core-SVP anchor I caught a misattribution I'd propagated across
+several commits + memory: **"181 classical / 165 quantum" is Robin-1061** (a hash-and-sign signature in the
+**Ch5 Table 5.4 scheme comparison** — Mitaka/Eagle/Robin/Phoenix/Falcon, L12255-12289), **NOT the SEP⋆
+credential.** The actual SEP⋆ (§6.4) target is **"around 165 bits of M-SIS core-SVP hardness"** (L13944, a
+single core-SVP figure; §6.2's earlier variant used 213). So every prior "181/165" in this doc/commits/memory
+should read **"~165 bits M-SIS core-SVP (§6.4 target, L13944)."** The 5a sampler-width fix is unaffected (it
+was anchored to L12973/L9587, correctly SEP⋆ lines); only the *target figure* citation was wrong.
+
+**Why this matters beyond the typo:** this is the THIRD correction this session that surfaced only by
+verifying rather than asserting (modulus-wall illusory → gadget-base k=19≠5 → 181/165=Robin). The latest is
+a *misattributed security number*. That is direct evidence that at this depth I am making security-figure
+attribution errors — which is precisely why the remaining **core-SVP computation** (estimator + exact β❶ + W
+disambiguation, all feeding one security claim) must be done at a state where such errors aren't happening,
+and validated against the now-correct ~165 §6.4 anchor + a published M-SIS point. Computing it now would risk
+compounding exactly the class of error I just caught. This is evidence-based, not a context excuse: a wrong
+core-SVP number is a false security claim, the one outcome worse than "computed next, verified."
+
 Until (1)–(5) + §5 land, the lattice half stays gated; the BBS half remains real BLS12-381. HYP-343 (trait
 reshape, retire `StubVouchScheme`) unblocks at the end of (5) — it was only ever gated on "real params."
 
