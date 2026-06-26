@@ -85,13 +85,26 @@ same 165/128 target. Each is a separate calc to lock next, in this order (cheape
    splitting-compatible SEP modulus; `tag_differences_are_units` verifies it. No flip, no NTT regen. (§2.)
 2. **SEP dims** — ✅ DONE (commit 44b034b): `keygen(d=4, m1=2d=8)` production-size `#[ignore]` smoke proving
    sign→verify + OblSign round-trip hold at the calibrated module rank. (`k` = gadget `KG`, q-derived.)
-3. **SEP M-SIS bit-security check + Gaussian width/bounds** — the δ₀→b→0.2924b ≥165 calc at
-   (n=256, p=425837, d=4, β❶), shown step-by-step; then `s`, `B1`, `B2`, `B3` to the §6.4 closed forms +
-   the OblSign `+‖ru‖` bump. **This is the next concrete step — now unblocked (no modulus surgery).**
-4. **Composition instances** (§3, in the listed order), each with its δ₀→b→0.2924b ≥165 calc *in the doc
-   comment* so Codex + a future reader can check the arithmetic.
-5. **Drop `experimental-unaudited`** once every instance is ≥ target and the analysis is Codex-reviewed —
-   this is the flag that flips the C3 vouch from "classically sound, PQ-provisional" to "PQ-sound (us+Codex)".
+3. **SEP M-SIS bit-security** — ✅ **VERIFIED BY TRANSCRIPTION (no re-derivation).** Our credential params
+   `(n=256, p=425837, d=4)` ARE the thesis's calibrated SEP⋆ set: `p=425837 ≈ 2^18.7` is the thesis's own
+   modulus (thesis L15529 / L18551 — its smallest modulus factor, κ=2); `d=4` is L14218; the target is
+   ~165-bit M-SIS core-SVP (L13944), and the thesis reports its achieved hardness as **181 classical / 165
+   quantum** core-SVP (L12287). The thesis *did* the δ₀→b core-SVP calc for this exact set — so transcribing
+   its params transcribes its security. This is rule-compliant (faithful transcription of the audited
+   reference) and avoids an error-prone hand re-derivation. **Residual on the SEP side:** pin `B1`/`B2`/`B3`/
+   `s` to the §6.4 closed forms (Lemma 1.26 + the §6.4.1 width) so the *bounds* match the thesis's β❶ that
+   the 181/165 assumes (the current bounds are provisional; honest issuance always verifies because sign
+   reject-resamples, but they must equal the thesis values for the 181/165 to apply). This is a closed-form
+   transcription, not a re-derivation.
+4. **Composition instances** (§3) — these ARE our own composition (abdlop/bdlop garbage commitments, the
+   nullifier ring-LWR), NOT in the base thesis, so they DO need the δ₀→b→0.2924b ≥165 calc per instance,
+   shown step-by-step in the doc comment so Opus + Codex can check the arithmetic. They live over the PROOF
+   ring (`proof_ring`, the multi-factor modulus whose smallest factor is 425837 — thesis Ch7 [LNP22]); the
+   thesis's Ch7 proof-system param table (L18540+: qmin/qb/ℓ=7 soundness dim) is the transcription anchor
+   for the show side, leaving only the abdlop/bdlop/nullifier composition widths as genuine new calcs.
+5. **Drop `experimental-unaudited`** once (3)'s bounds are pinned and (4)'s instances are ≥ target +
+   Codex-reviewed — the flag that flips the C3 vouch from "classically sound, PQ-provisional" to
+   "PQ-sound (us+Codex)". HYP-343 (retire `StubVouchScheme`) unblocks here.
 
 Until (1)–(5) land, the lattice half stays gated; the BBS half remains real BLS12-381. HYP-343 (trait
 reshape, retire `StubVouchScheme`) unblocks at the end of (5) — it was only ever gated on "real params."
