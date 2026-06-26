@@ -15,6 +15,14 @@ and the show's binary/range/linear blocks.
 yet. The standing constraints hold: faithful transcription, never approximate crypto from memory;
 provisional params → HYP-330; behind `experimental-unaudited`.
 
+**STATUS — pre-decision proposal.** This doc PROPOSES the issuance models; the Q1 model choice (§1) is
+Josh's and is not yet made, so **no code and no other spec change lands from this doc yet**. The repo's
+authoritative show relation remains `LNP22_SHOW_DESIGN.md` §1 (`[s|m]`); the real **drift** between the
+spec (`[s|m]`) and the built code (message-only) is acknowledged (§1 / Model C) and is resolved *as part
+of* whichever model Q1 selects — Model C ⇒ update §1 to message-only-as-built; Model B ⇒ extend the code
+to `[s|m]`. So there is no standalone merge of a contradictory target: the §1 reconciliation is bound to
+the Q1 decision, not to this doc.
+
 ---
 
 ## 0. The one-paragraph mechanism (so the rest has a spine)
@@ -126,6 +134,21 @@ T₁^{2d}`, with `upk = D_s·s` already registered].
 **Norm-budget note (→ HYP-330):** `‖v‖ ≤ ‖v'‖ + ‖ru‖`, the same split `sep_sig::sign` already absorbs
 (`v = SamplePre − [r;0]`), so `B1/B2` need no change — but the user-side reject loop must be proven to
 terminate w.h.p. at the provisional `s2`/`B1`/`B2` (a restart test, rule 27).
+
+**Retry × quota accounting (DESIGN-review P2).** The user-side reject loop (step 4) runs AFTER the issuer
+produced a preimage, so under a per-registrant rate-limit it must be **quota-neutral** — else a norm-tail
+rejection either costs an honest user their quota or lets a user keep requesting until they collect
+multiple credentials. Resolution: (i) size `s2`/`B1`/`B2` so the unblind-reject probability is
+cryptographically **negligible** (the restart test above is the gate → HYP-330) — retries are a safety
+cap, not an operational path; (ii) for rate-limited issuance (Model B `upk`), bind one quota unit to a
+`(upk, request-nonce)` pair and derive the issuer preimage **deterministically** from
+`H(upk, nonce, c_u)` (seeded sampler), so every retry for that nonce returns the SAME `v'` — idempotent:
+one `(upk, nonce)` ⇒ exactly one usable credential ⇒ one quota unit, regardless of retries; a genuine
+(negligible) rejection requires a fresh nonce (a fresh quota unit). For Model C (no `upk`, external
+rate-limit) the retry is a pure correctness loop with no quota interaction. The deterministic preimage is
+the user's secret credential — never revealed (the show proves possession in ZK) — so determinism leaks
+nothing to third parties. *(This accounting is a Model-B build requirement; it does not bite under
+Model C.)*
 
 ---
 
