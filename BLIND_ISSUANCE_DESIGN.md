@@ -163,11 +163,18 @@ known protocol and should mirror the SEP `OblSign` shape so both halves hide `w`
    the blinded signature.
 3. User unblinds with `s_b`.
 
-**Binding (§5):** the SEP `m` and the BBS `messages[BRIDGE_MSG_IDX]` are the **same `w`**. At *show* time
-the cross-group anchor already binds `w_bits ↔ C_r` and the BBS half opens `C_r` — so issuance need only
-ensure both credentials are issued on the same `w` (the user supplies one `w`; `π` ties the SEP `m` to
-`bits(w)` and the Schnorr PoK ties the BBS message to the same `w`). No new cross-domain machinery — it
-reuses the vouch's existing `C_r` binding at show time.
+**Binding — enforced at SHOW, not issuance (DESIGN-review P2).** Issuance does **not** cross-prove that
+the SEP `m` and the BBS `messages[BRIDGE_MSG_IDX]` are the same `w`, and it does not need to. `π` proves
+a lattice bit-decomposition of *some* `w_SEP`; the BBS Schnorr PoK proves an opening of `C_b` to *some*
+`w_BBS` — at issuance these are uncompared, so a client *can* blindly request SEP on `w1` and BBS on
+`w2 ≠ w1`. That is harmless: at **show** time the cross-group anchor binds the SEP `w_bits` (in `t_A`) to
+`C_r` **and** the BBS half opens the same `C_r`, so a vouch verifies ONLY if `bits(w_SEP) = w_BBS`
+(the anchor forces `w1 = w2` against the one shared `C_r`). A mismatched credential pair therefore yields
+**no verifying vouch** — a wasted request, not a security break. So the single same-`w` enforcement point
+is the existing `C_r` binding at show time; no issuance-time equality proof is required. *(If a future
+model wants issuance to refuse mismatched requests up front — e.g. to bind both credentials to one
+registration `upk` under Model B — add an explicit equality commitment tying `c_u`'s `m` to `C_b`'s
+message; tracked, not built.)*
 
 ---
 
@@ -196,6 +203,8 @@ reuses the vouch's existing `C_r` binding at show time.
 - **Q3:** the user-side reject loop termination at provisional `s2`/`B1`/`B2` (restart-test + → HYP-330).
 - **Q4:** blind-BBS — compose from `schnorr_pok` + arkworks (sovereign, no new C dep) vs a docknetwork
   primitive; confirm the cc-free path (the `lib.rs` STRICT-all-Rust constraint).
-- **Q5:** does `OblSign`'s `c_u` need its own commitment binding to the eventual show `t_A`, or is the
-  same-`w` tie at show time (the anchor) sufficient? (Lean: sufficient — issuance and show are separate
-  ceremonies linked only by `w`.)
+- **Q5 (RESOLVED, DESIGN-review P2):** the same-`w` tie is enforced at SHOW time by the cross-group
+  anchor against the one `C_r` (a mismatched SEP/BBS pair yields no verifying vouch). Issuance needs no
+  cross-proof and no `c_u ↔ t_A` binding — issuance and show are separate ceremonies linked only by the
+  member's choice of one `w`. See §4. (Model B may add an up-front equality commitment for `upk`
+  rate-limiting; tracked.)
