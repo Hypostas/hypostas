@@ -43,15 +43,25 @@ binary `ru`, bound `B1 + ‖ru‖`). So we transcribe SEP⋆'s param set directl
 | M-SIS forgery bound | `β❶ = (B1+ndB2)² + B3² + nm + 1` | Thm 6.3 (line 14195) | drives the `b`→165-core-SVP check; `B1,B2` from Lemma 1.26, `B3` the tag part |
 | OblSign bound bump | `‖v1‖₂ ≤ B1 + ‖ru‖₂`, `‖ru‖ ≤ √(2n)` (binary) | line 13959-13964 | `sep_sig` `b1_sq` for the issuance path = `(√B1 + √(2n))²` ✅ matches our `v=v'−[ru;0]` algebra |
 
-### The one genuinely open piece — the modulus `q` (the splitting tension)
-SEP⋆ needs a modulus with **controlled splitting** for the tag arithmetic: thesis line 6219/6234 —
-`q ≡ 1 mod µ`, `ord_ν(q) = ν/µ`, `q > (η·s1(µ))^φ(µ)`, and a *prime* `q = 2κ+1 mod 4κ` (limited splitting,
-small `κ`). Our shipped `sep_ring::P = 8380417` (Dilithium's, q≡1 mod 2n) **splits fully** — incompatible
-with the SEP-tag splitting requirement (already flagged in memory `reference_ring_perturbation_wall` /
-`project_sep_lattice_credential_build`). **Resolution = pick the SEP-credential modulus from the thesis's
-condition** (q ≡ 5 mod 8, low κ), which is a *different* prime than the proof-ring NTT modulus — the two
-rings already differ in the build, so this is a constant choice + an NTT-table regen, not a structural
-change. This is the FIRST constant to flip, because every bound above is taken `mod q`.
+### The SEP modulus — ALREADY CORRECT (corrected 2026-06-26; the earlier "research-wall" framing was an error)
+SEP⋆ needs a modulus with **controlled splitting** for the tag arithmetic (thesis §6.2.2 / Lemma 1.4): a
+prime with `p ≡ 5 mod 8` so the 2-Sylow of `Z_p^×` has order 4 — `i = √−1` exists but no primitive 8th
+root, so `X²⁵⁶+1 = (X¹²⁸−i)(X¹²⁸+i)` splits into **exactly two** degree-128 irreducibles (κ=2). That makes
+every tag AND every difference of distinct tags a **unit** (the unforgeability foundation — no two sigs
+share a tag, matrices differ by an invertible).
+
+**The SEP credential ring ALREADY uses this:** `sep_ring::P = 425837` (prime, `425837 ≡ 5 mod 8`, κ=2 —
+`sep_ring.rs:21` / line 342), and `sep_tag::tag_differences_are_units` **already verifies** distinct-tag
+differences invert. So there is **no modulus flip** and **no NTT-table regen** for the credential — it is
+done. (My earlier note conflated two distinct rings: the `q = 8380417` full-split modulus is the SEPARATE
+**proof ring** `proof_ring` for the LNP22 NTT arithmetic, where full splitting is *fine* — only the SEP
+*credential* needs limited splitting, which `sep_ring` provides.) `p = 425837 ≈ 2^18.7` also sits squarely
+in the thesis's calibrated SEP⋆ modulus regime (Table 3.2 q ≈ 2^17.6–20.8), consistent with d=4. The
+`reference_ring_perturbation_wall` memo is about the *ring SamplePre perturbation sampler* (Genise–
+Micciancio), a separate efficiency item — NOT the modulus.
+
+So the actual remaining SEP-side work is **verifying** the M-SIS core-SVP at (n=256, p=425837, d=4, β❶)
+hits ≥165 (the calc below), and pinning the bounds/width to the §6.4 closed forms — no modulus surgery.
 
 ## 3. The composition instances (same target, derived not transcribed)
 
@@ -71,11 +81,13 @@ same 165/128 target. Each is a separate calc to lock next, in this order (cheape
 
 ## 4. Execution order (constant-flips, each its own gate-clean commit)
 
-1. **SEP modulus** — pick the splitting-compatible prime (§2 condition), regen the NTT/gadget tables, keep
-   tests green. (Unblocks every bound.)
-2. **SEP dims** — `keygen` prod params `(d=4, k=5)`; a `#[ignore]`-able real-size test at (4,5,256) proving
-   sign→verify + OblSign round-trip hold at production size (the toy-param tests stay for CI speed).
-3. **SEP Gaussian width + bounds** — `s`, `B1`, `B2`, `B3` to the §2 closed forms; the OblSign `+‖ru‖` bump.
+1. ~~**SEP modulus**~~ — **DONE / no-op.** `sep_ring::P = 425837` (p≡5 mod 8, κ=2) is already the
+   splitting-compatible SEP modulus; `tag_differences_are_units` verifies it. No flip, no NTT regen. (§2.)
+2. **SEP dims** — ✅ DONE (commit 44b034b): `keygen(d=4, m1=2d=8)` production-size `#[ignore]` smoke proving
+   sign→verify + OblSign round-trip hold at the calibrated module rank. (`k` = gadget `KG`, q-derived.)
+3. **SEP M-SIS bit-security check + Gaussian width/bounds** — the δ₀→b→0.2924b ≥165 calc at
+   (n=256, p=425837, d=4, β❶), shown step-by-step; then `s`, `B1`, `B2`, `B3` to the §6.4 closed forms +
+   the OblSign `+‖ru‖` bump. **This is the next concrete step — now unblocked (no modulus surgery).**
 4. **Composition instances** (§3, in the listed order), each with its δ₀→b→0.2924b ≥165 calc *in the doc
    comment* so Codex + a future reader can check the arithmetic.
 5. **Drop `experimental-unaudited`** once every instance is ≥ target and the analysis is Codex-reviewed —
