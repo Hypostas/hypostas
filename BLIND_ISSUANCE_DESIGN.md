@@ -196,7 +196,9 @@ message; tracked, not built.)*
    `sep_sig::verify`. (No `π` yet — `issuer_blind_sign` takes a *trusted* commit, gated as a step.)
 2. `π` well-formedness (π-a) — fold opening+binary+range over `[ru|m]`; the issuer verifies before
    signing. **Integration:** a malformed `m` (non-binary / non-canonical) ⇒ `π` rejects ⇒ no signature.
-3. Blind-BBS (§4) + the same-`w` Schnorr tie.
+3. Blind-BBS (§4) — user Pedersen-commits the BBS messages + a Schnorr PoK of *that opening only*,
+   issuer blind-signs, user unblinds. **No issuance-time same-`w` tie** (§4/Q5: equality is show-time
+   only, via the `C_r` anchor).
 4. `BlindIssuance::{request, issue, finalize}` end-to-end: a member with no credential → blind requests →
    gets `(SepSignature, BbsSignature)` on a hidden `w` → builds a `PqBlindedVouch` that verifies. The
    capstone rule-27 test: **issuance never saw `w`, yet the vouch verifies.**
