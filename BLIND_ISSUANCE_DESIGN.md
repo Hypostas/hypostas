@@ -135,20 +135,22 @@ T₁^{2d}`, with `upk = D_s·s` already registered].
 (`v = SamplePre − [r;0]`), so `B1/B2` need no change — but the user-side reject loop must be proven to
 terminate w.h.p. at the provisional `s2`/`B1`/`B2` (a restart test, rule 27).
 
-**Retry × quota accounting (DESIGN-review P2).** The user-side reject loop (step 4) runs AFTER the issuer
-produced a preimage, so under a per-registrant rate-limit it must be **quota-neutral** — else a norm-tail
-rejection either costs an honest user their quota or lets a user keep requesting until they collect
-multiple credentials. Resolution: (i) size `s2`/`B1`/`B2` so the unblind-reject probability is
-cryptographically **negligible** (the restart test above is the gate → HYP-330) — retries are a safety
-cap, not an operational path; (ii) for rate-limited issuance (Model B `upk`), bind one quota unit to a
-`(upk, request-nonce)` pair and derive the issuer preimage **deterministically** from
-`H(upk, nonce, c_u)` (seeded sampler), so every retry for that nonce returns the SAME `v'` — idempotent:
-one `(upk, nonce)` ⇒ exactly one usable credential ⇒ one quota unit, regardless of retries; a genuine
-(negligible) rejection requires a fresh nonce (a fresh quota unit). For Model C (no `upk`, external
-rate-limit) the retry is a pure correctness loop with no quota interaction. The deterministic preimage is
-the user's secret credential — never revealed (the show proves possession in ZK) — so determinism leaks
-nothing to third parties. *(This accounting is a Model-B build requirement; it does not bite under
-Model C.)*
+**Retry × quota accounting (DESIGN-review P2).** Step 4's reject loop restarts with a fresh `ru`, which
+**changes `c_u`** — so the quota rule must handle a changed commitment, not assume a fixed one:
+- **Model C (no `upk` quota — external rate-limit):** the fresh-`ru` restart is a pure correctness loop;
+  no quota interaction. Done.
+- **Model B (`upk` quota):** one quota unit = one `(upk, nonce)`, and the issuer **locks** the first
+  `c_u` it signs under that nonce — it **rejects any different `c_u` for the same nonce** — and derives
+  the preimage **deterministically** from `H(upk, nonce, c_u)`. So a `(upk, nonce)` admits exactly one
+  `c_u` and yields exactly one `v'` ⇒ one usable credential ⇒ one quota unit; a same-nonce, same-`c_u`
+  retry returns the identical `v'` (no new candidate, no Sybil). Because the preimage is deterministic, a
+  genuine norm-tail rejection **cannot** be cleared by re-requesting the locked nonce — the fresh-`ru`
+  restart is necessarily a **fresh nonce = a fresh quota unit** (under Model B, fresh `ru` ⇒ fresh quota).
+  This is sound precisely because the params make that rejection **negligible** (the restart test →
+  HYP-330), so honest issuance almost never burns a second unit.
+The deterministic preimage is the user's secret credential — never revealed (the show proves possession
+in ZK) — so determinism leaks nothing to third parties. *(Model-B requirement; does not bite under Model
+C, which has no quota.)*
 
 ---
 
