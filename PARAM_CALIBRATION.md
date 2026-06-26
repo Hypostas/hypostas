@@ -106,7 +106,41 @@ same 165/128 target. Each is a separate calc to lock next, in this order (cheape
    Codex-reviewed — the flag that flips the C3 vouch from "classically sound, PQ-provisional" to
    "PQ-sound (us+Codex)". HYP-343 (retire `StubVouchScheme`) unblocks here.
 
-Until (1)–(5) land, the lattice half stays gated; the BBS half remains real BLS12-381. HYP-343 (trait
+## 5. The calibration crux — LOCATED (2026-06-26): the sampler width, not a bound
+
+The provisional-bound trail bottoms out at **one security-limiting line**, now identified by reading the
+code + the thesis side by side:
+
+**`sep_trapdoor.rs:252` — `let s = alpha * (r_fro_sq.sqrt() + 2.0);`** — the elliptic-sampler preimage
+width uses the **Frobenius** norm `‖R‖_Fro` of the trapdoor. The thesis's Alg 4.5 sampler is parameterised
+by the **spectral** norm `s₁(M_τ(R))`, bounded by **Heuristic 1.1** (thesis p.53):
+`s₁(M_τ(R)) ≤ √(nk) + √(nd) + t`, with `t` s.t. `2n·e^(−πt²) ≤ 2^(−λ)`. For λ=128, n=256:
+`2·256·e^(−πt²) ≤ 2^(−128)` ⇒ `e^(−πt²) ≤ 2^(−137)` ⇒ `t² ≥ 137·ln2/π ≈ 30.2` ⇒ **t ≈ 5.5**.
+
+The gap, at (m1=8, dk=76, N=256): Frobenius `√(m1·dk·N) ≈ 394` worst-case (`~322` typical) vs spectral
+`√(N·m1)+√(N·dk)+t ≈ 45.25 + 139.48 + 5.5 ≈ 190`. **The sampler runs ≈1.7–2× wider than the thesis's
+Alg 4.5**, so the credential is ≈2× larger and the realised M-SIS β is ≈2× the thesis's → the security sits
+**below** the 181/165 the credential params (n=256, p=425837, d=4) are entitled to. The verification bounds
+(`sep_sig.rs:195-199`, `s_pre = α·(Frobenius+2)`, `L2_TAIL = 1.2`) inherit this width and add a loose tail
+(Lemma 1.26 gives the smallest valid `c ≈ 0.49` for these dims at λ=128, not 1.2).
+
+**Why the fix is test-checked, not free-handed (the key realisation):** the Schur-complement elliptic
+sampler (Alg 4.5) produces the correct `D_{Λ,s}` for **any** `s` whose perturbation
+`Σ₁ = s²·I − α²·[R;I][R;I]ᵀ` stays PSD (`cholesky(Σ₁)` succeeds — `sep_trapdoor.rs:306`), with the gadget
+smoothing handled separately by `α` (`SIGMA_FACTOR=5.0`, unchanged). Heuristic 1.1 guarantees
+`s₁ ≤ spectral` w.h.p., so tightening `s` to `α·spectral` keeps Σ₁ PSD. **Cholesky-success ⇒ correct
+distribution; Cholesky-failure ⇒ a caught panic — there is no silent wrong-distribution path.** Plus the
+d=4 smoke (`production_size_…`) re-verifies honest sigs against the tightened bounds. So this is a
+test-validated change, not the uncatchable-insecurity class.
+
+**The execution (the one remaining input):** pull the thesis's **exact Alg 4.5 width formula** (the PSD
+margin above the bare spectral bound — the code's `+2` is a placeholder; Alg 4.5 specifies the real margin),
+then: (a) `sep_trapdoor.rs:252` → `α·(√(N·m1)+√(N·dk)+t + margin)`; (b) `sep_sig.rs` `s_pre` → match;
+(c) `L2_TAIL` → the Lemma 1.26 `c`; (d) run the d=4 smoke (Cholesky PSD + honest-verify validate the width
++ bounds); (e) recompute β❶ and confirm ≥165 core-SVP; (f) Codex-gate. This is now a precise, scoped,
+thesis-grounded change against a single line + its matching bounds — not an open frontier.
+
+Until (1)–(5) + §5 land, the lattice half stays gated; the BBS half remains real BLS12-381. HYP-343 (trait
 reshape, retire `StubVouchScheme`) unblocks at the end of (5) — it was only ever gated on "real params."
 
 ---
