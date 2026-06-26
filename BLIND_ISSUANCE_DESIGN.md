@@ -136,7 +136,17 @@ tricked into signing a message the show would later reject. Reuse, do not reinve
 | `m∘m=m` [`s∘s=s`] (binary) | `proof_quadratic` / the show's pure-const binariness | per ring-elem |
 | `m = bits(w)`, `0 ≤ w < Fr::MODULUS` (canonical 255-bit) | the show's R4 borrow gadget + range (`proof_ltconst`/`proof_range`) | the SAME canonical-range proof as the vouch |
 | `‖ru‖₂ ≤ B_ru` | the show's approx-range (`proof_approx_range`) | bounds the blinding |
-| [Model B: `D_s·s = upk`] | `proof_linear` against the public `upk` | the registration check |
+| `A·ru + D·m [+ D_s·s] − c_u = p·z_c` (mod-`p` lift) | committed quotient `z_c` + its ℓ₂ bound | see below |
+| [Model B: `D_s·s = upk`] | `proof_linear` against the public `upk` (+ its own quotient) | the registration check |
+
+**Mod-`p` → `q̂` lift (DESIGN-review P2 — non-negotiable).** Every linear equality above is over `R_p`,
+but `π` (like the show) runs over `R_q̂ = p·q1`, and `R_p → R_q̂` is **not** a homomorphic embedding. So
+each `R_p` equality must be proven as `LHS − RHS = p·z_c (mod q̂)` for a **committed, bounded quotient
+witness `z_c`** — exactly as the show's signature relation already carries its quotient `z`
+(`LNP22_SHOW_DESIGN.md` §1 R3 P1). The opening becomes `A·ru + D·m [+ D_s·s] − c_u = p·z_c (mod q̂)`, with
+`z_c` joining the committed witness under its own ℓ₂ bound (and a separate quotient for `D_s·s = upk` in
+Model B). Omitting `z_c` either rejects honest openings over `q̂` or proves the wrong ring relation. The
+`z_c` bound is a provisional param → HYP-330.
 
 **Construction options for `π`** (a Codex DESIGN-review question):
 - **(π-a) Reuse the LNP22 aggregated-show harness** — commit `[ru | m (| s)]`, fold the table's
