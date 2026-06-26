@@ -211,6 +211,36 @@ and validated against the now-correct ~165 §6.4 anchor + a published M-SIS poin
 compounding exactly the class of error I just caught. This is evidence-based, not a context excuse: a wrong
 core-SVP number is a false security claim, the one outcome worse than "computed next, verified."
 
+### 5e. RED FLAG (2026-06-26): code-extracted β❶ ≫ q — the reduction may be vacuous at p=425837
+
+Extracting the GROUND-TRUTH bounds from the code (`print_d4_msis_beta_for_coresvp`, d=4) gave: `α=11.18`,
+`B1=1.17e5`, `B2=3.60e5`, modulus `q=425837`. Two alarms:
+
+- **`B2/q = 0.845`** — the per-signature ℓ₂ verification bound on `v2` is **85% of the modulus**. A
+  well-calibrated SIS signature is *short* (`B ≪ q`, typically `B/q ~ 0.01–0.1`); `0.85` is barely-short.
+- **`β❶ ≈ B1 + nd·B2 = 3.69e8`, i.e. `β❶/q ≈ 865`** (`nd = n·d = 1024`). The M-SIS *forgery* target is
+  865× the modulus ⇒ trivially solvable (`(q,0,…)` is a solution) ⇒ **the unforgeability reduction
+  `M-SIS_{…,q,β❶}` is vacuous** at these params.
+
+This is EITHER a real, serious problem — **the credential modulus `p=425837` is too small** (which would
+*contradict* §2's "modulus is already correct" note: 425837 is the thesis's *proof-system* `qmin` (L18551),
+and I may have wrongly adopted it as the *credential* modulus, which the thesis sets larger so that `β❶<q`)
+— OR my forgery-amplification model is wrong (`nd=1024` may overstate it; the tag-difference operator norm
+could be `~√(w·n)` not `n·d`; or the forgery M-SIS is over a different/larger modulus). **I cannot
+confidently distinguish these right now**, and this session has already produced THREE security-relevant
+corrections (modulus-wall, gadget-base, 181/165=Robin), at least one of which (§2) this finding may now
+overturn. Reporting a core-SVP "≥165" or "<165" on top of an unresolved `β❶≫q` would be a fabricated
+verdict about a *possible real vulnerability*.
+
+**This BLOCKS the security claim — correctly.** The `experimental-unaudited` flag must stay; the credential
+is NOT verified secure and may have a too-small modulus. Resolution (careful, rigorous, fresh): (i) pin the
+exact `nd` forgery amplification from the thesis Thm 6.3 proof (operator norm of tag-difference mult);
+(ii) determine the thesis's actual *credential* modulus vs proof `qmin=425837`; (iii) if the modulus is too
+small, raise it (a structural change: new NTT/gadget tables, re-gate the whole stack) — NOT a tail
+refinement. Until then no core-SVP number is meaningful. **The 5a sampler-width fix still stands** (it is the
+thesis's width formula regardless of modulus); but the security *level* is now openly unresolved, which is
+the honest state — better than the false "181/165 inherited" it replaces.
+
 Until (1)–(5) + §5 land, the lattice half stays gated; the BBS half remains real BLS12-381. HYP-343 (trait
 reshape, retire `StubVouchScheme`) unblocks at the end of (5) — it was only ever gated on "real params."
 
