@@ -245,6 +245,33 @@ Until (1)–(5) + §5 land, the lattice half stays gated; the BBS half remains r
 reshape, retire `StubVouchScheme`) unblocks at the end of (5) — it was only ever gated on "real params."
 
 ---
-*Calibration anchors are exact thesis transcriptions (lines cited). The composition derivations (§3) are the
-by-hand core-SVP calcs to perform per the §1 model — the security-critical numeric work, to be shown step-by-
-step in each commit so the arithmetic is auditable by Opus + Codex (the only reviewers).*
+
+## §6. RESOLVED via the official reference implementation (2026-06-27) — supersedes §5e's modulus hypothesis
+
+The whole hand-calc chain above (§5a–5e) is **retired** in favour of porting the **official reference
+implementation** of the construction — `github.com/Chair-for-Security-Engineering/lattice-anonymous-credentials`
+(the C code for ePrint 2024/131, "Practical Post-Quantum Signatures for Privacy", CCS 2024). Reading its
+`code/include/params.h` against our code resolves every open question and **withdraws §5e's "modulus may be
+too small" hypothesis**:
+
+- **The modulus is FINE.** `q = 425801` is the SEP credential modulus; the *proof* modulus is `q·q1 =
+  425801·524201 ≈ 2³⁷·⁷` (ref `PARAM_Q_ISS`/`PARAM_Q1_ISS`). `425837` was never the right value — our
+  hand-built ring drifted.
+- **The real cause of `β❶ ≫ q` is parameter DRIFT, not a vulnerability.** Our SEP⋆ ran at non-validated
+  params end-to-end: `q=425837` (κ=2) vs ref `425801` (κ=4, q≡1 mod 8, factors of degree 64); gadget base-2
+  `k=19` vs ref **base-14 `k=5`**; a **spherical** sampler vs the ref **elliptic** one (`s1≈5854` wide /
+  `s2≈68.17` narrow); `m=2,w=31` vs ref `m=10,w=5`. The reference `B2 = √4886925 ≈ 2211` is SHORT (~0.5% of
+  q); ours was `~0.85q`, because our spherical sampler made `v2` ~130–160× too wide.
+- **`nd` is moot.** No hand "core-SVP" calc is needed — security comes from the reference's `scripts/` +
+  `lattice-estimator`.
+
+**The fix = a coherent port of the SEP⋆ core to the reference (HYP-354):** `sep_params` ✅ (chunk 1, the
+validated constant set, committed `cff50ef`/`f44dc48`) → `sep_ring` (q=425801) → `sep_gadget` (base-14 k=5)
+→ `sep_tag` (w=5, κ=4) → `sep_trapdoor` (elliptic sampler — a spherical→elliptic modification of our existing
+Schur-complement Cholesky, NOT a from-scratch FFT) → `sep_sig` (B1/B2/B3, m=10), validated against the
+reference. The params are coupled, so this is one focused reimplementation, not independently-gateable chunks.
+Full state on HYP-354.
+
+---
+*Historical note: §1–§5e are the hand-derivation that the reference port replaces. They are kept for the
+audit trail of how the red flag was found and why the reference route was chosen; §6 is the operative plan.*
