@@ -409,7 +409,7 @@ Deliverables:
 
 Deliverables:
 - Loopix-style batching/delays on `stego`, `voice`, `LoRa` carriers
-- **Spiral PIR** (per Q3.13) for recipient-anonymous mailbox retrieval. Better bandwidth than SimplePIR; lattice-based. Production-tunable from research code.
+- **Recipient-anonymous mailbox retrieval** (per Q3.13 — full design in `MAILBOX_PIR.md`). The 2026-06-27 research pass **supersedes the original "Spiral PIR" pick**: on the same single-server trust axis YPIR/VIA (2024–25) dominate Spiral (no FHE, lighter edge server), and the Vita Chain's enforced validator-distribution rules (3+ providers / 3+ countries / 33% cap) turn the two-server non-collusion assumption into a deployment invariant. **Chosen: Myco two-server oblivious mailbox (S&P 2025, pure-Rust, polylog) as primary, on a mailbox-server role governed by the distribution rules; single-server sharded YPIR/VIA as the sovereign no-trust fallback, folded into the Full/Limited/Offline degradation ladder.** Composes with the batching above — PIR/ORAM closes the index leak, batching closes the timing leak; both required.
 - Statistical guarantees against GPA, formally analyzed
 - Threat-model verification by external security audit
 
