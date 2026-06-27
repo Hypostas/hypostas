@@ -67,7 +67,13 @@ The two-server model's apparent liability — *who runs two stable, non-colludin
 
 **Not two co-equal stacks — a principled primary with a sovereign fallback, selected by reachability + threat tier, exactly like the privacy-status ladder the stack already exposes (Full / Limited / Offline; COVER_TRAFFIC.md §, THREAT_MODEL.md §).**
 
-### 4.1 Primary — Myco two-server oblivious mailbox
+### 4.0 Foundation (SHIPPED 2026-06-27) — 2-server information-theoretic PIR
+
+The first concrete tier in `mailbox-pir` (HYP-328 foundation) is **not** Myco — it is the **Chor–Goldreich–Kushilevitz–Sudan 2-server XOR PIR** behind the `MailboxRetrieval` trait. Rationale: it is the *simplest correct* 2-server scheme, gives **perfect (information-theoretic) index privacy** under non-collusion with **no computational assumption**, and is the **chain-native** construction — the Vita validator set already replicates state and enforces non-collusion (§3), which is exactly an IT-PIR deployment. It is the right thing to ship first and the right baseline to verify the trait + the "server view independent of index" property against (proven directly in the crate's tests). Its cost is `O(N)` XOR per query per server.
+
+**Myco (§4.1) is the polylog *scale-up* of this same 2-server slot** — adopted when `N` grows so large that the IT-PIR's `O(N)` per-query scan exceeds the edge budget. Same trust model (2 non-colluding servers on the distribution-rule-governed role), better asymptotics, more crypto to port + audit. Until that scale pressure arrives, the IT-PIR foundation *is* the primary tier.
+
+### 4.1 Scale-up primary — Myco two-server oblivious mailbox
 
 Hosted on a **mailbox-server role governed by the validator-distribution rules** (§3). Default path whenever a dyad can reach two non-colluding mailbox-servers. Gives polylog scaling to millions of dyads, asynchronous delivery, and non-collusion *enforced* by the distribution rules. This is the at-scale answer.
 
