@@ -124,24 +124,51 @@ recipient reads slot *i*; the operator transcript is independent of *i* AND of w
 
 ## §5 — Build order (each a gated chunk; integration + smoke tests per rule #27)
 
-> Status (2026-06-27): chunks 1 + 3 are built + gate-clean in `mailbox-pir`, as is the *sync core* of
-> chunk 4 (the dispatch handlers). Chunk 4's *live carrier binding* is designed in §7 and is the next
-> code. Chunk 2 + the live binding + chunk 5 remain.
+> Status (2026-06-28): the network-live Myco implementation is **complete + gate-clean**. Chunks 1, 3,
+> and 4 are built (mailbox-pir + hypostas-network), and chunk 5's two named deliverables (epoch-batching
+> composition + the two-party-on-a-real-carrier test) landed with chunk 4. The only remaining item is
+> chunk 5's *full* §4 privacy assertion, which is gated on the HYP-328c notification-cardinality
+> threat-model decision (below). Chunk 2 (the single-server `PirMailbox` tier) is independent + still open.
 
 1. ✅ **`Mailbox` trait + `MycoMailbox` over the local bridge.** The seam (§2) + the in-process impl
    reusing `local::LocalServer*Access`. *Done — `mailbox-pir/src/mailbox.rs`, gate-clean.*
 2. **`PirMailbox` over `xor_pir` + `DhtMailboxCarrier`.** The single-server tier on the real DHT
-   store. Smoke: malicious-single-server transcript independent of *i*. *Buildable now.*
+   store. Smoke: malicious-single-server transcript independent of *i*. *Buildable now (independent).*
 3. ✅ **`MycoRpc` framing + the dispatch core.** The wire types, version+bincode framing, correlation-id
    framing, chunked S1→S2 transmission with exactly-once `BatchAccept`, and `role::dispatch_s1`/
-   `dispatch_s2` (the sync server-side handlers). *Done — `mailbox-pir/src/myco/{rpc,role}.rs`,
-   gate-clean.*
-4. **Mailbox-server role — live carrier binding (HYP-328d).** The async `Carrier` poll loops + the
-   sync↔async bridge + the `CarrierServer*Access`/`CarrierS1ToS2` + the S1 epoch timer, per **§7**;
-   tier-selection driver wired to the §4.4 privacy-status ladder. *Designed (§7); next code.*
-5. **328e — epoch-batching composition + two-party test on a real carrier.** The timing half (§4).
+   `dispatch_s2`/`dispatch_s2_read` (the sync server-side handlers). *Done — `mailbox-pir/src/myco/{rpc,
+   role}.rs`, gate-clean.*
+4. ✅ **Mailbox-server role — live carrier binding (HYP-328d).** The kind-tagged `CarrierMsg` envelope,
+   the sync↔async client bridge (`carrier_client_access` over `RpcEndpoint`), the unified S2 role
+   (`run_server2`: client reads + the authenticated dedicated-S1↔S2 batch stream) and the S1 role
+   (`run_server1_blocking`: client writes + the epoch timer driving `batch_write` over `CarrierS1ToS2`),
+   per **§7**. *Done — `hypostas-network/src/myco_transport.rs`, gate-clean; smoke + 3-party deposit→
+   retrieve + timeout integration tests pass.* The tier-selection driver wired to the §4.4 ladder
+   remains a small runtime follow-up.
+5. **328e — epoch-batching composition + two-party test on a real carrier.** ✅ *Both named deliverables
+   done with chunk 4:* the epoch-batching composition is `run_server1_blocking`'s epoch timer (deposits
+   accrue, `batch_write` fires on the fixed boundary), and the two-party-on-a-real-carrier test is
+   `e2e_deposit_and_retrieve_over_carrier`. **Remaining:** the full §4 assertion — *operator transcript
+   independent of i AND of write-to-read timing*. The **message** read path is fixed-width by
+   construction (`Client::read` reads one path + `fake_read` fills, regardless of mail), and epoch
+   batching unlinks write-from-read timing. The one open leg is **notification-read cardinality**: the
+   `read_notifs` count is not yet padded (a documented `client.rs` note) — that is the **HYP-328c**
+   threat-model decision (§6 below), not an implementation gap. The §8.5 transcript-invariance
+   regression test should be written once 328c fixes the notification-read width.
 
-The §7 design is the implementation plan for chunk 4 (and the carrier half of chunk 5).
+The §7 design was the implementation plan for chunk 4 (and the carrier half of chunk 5); it is now built.
+
+### §5.1 — Gating item for the full §4 assertion: HYP-328c (notification cardinality)
+
+`Client::read`'s **message**-path read is fixed-width (oblivious), but its **notification** read
+(`read_notifs`) issues a per-epoch location count that today tracks the recipient's actual notification
+count rather than a fixed width — so a malicious operator could in principle infer notification
+cardinality. Padding it to a fixed width (e.g. per-client capacity `Q`, with re-randomized notification
+slots) closes the leak but costs bandwidth; the right width is a **threat-model decision (HYP-328c)** —
+Josh's call (like the other threat-model decisions). Until it is decided + implemented, the §8.5
+"transcript independent of i" regression test cannot be honestly asserted in full, so it is **tracked**,
+not written against the current (knowingly-partial) read width. This is the one place the live Myco tier
+is not yet fully oblivious; everything else in chunks 1–5 is done.
 
 ## §6 — Depth decision (resolved 2026-06-27)
 
