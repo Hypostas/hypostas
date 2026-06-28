@@ -124,11 +124,11 @@ recipient reads slot *i*; the operator transcript is independent of *i* AND of w
 
 ## §5 — Build order (each a gated chunk; integration + smoke tests per rule #27)
 
-> Status (2026-06-28): the network-live Myco implementation is **complete + gate-clean**. Chunks 1, 3,
-> and 4 are built (mailbox-pir + hypostas-network), and chunk 5's two named deliverables (epoch-batching
-> composition + the two-party-on-a-real-carrier test) landed with chunk 4. The only remaining item is
-> chunk 5's *full* §4 privacy assertion, which is gated on the HYP-328c notification-cardinality
-> threat-model decision (below). Chunk 2 (the single-server `PirMailbox` tier) is independent + still open.
+> Status (2026-06-28): the network-live Myco tier is **complete + gate-clean, including its full privacy
+> guarantee.** Chunks 1, 3, 4, and 5 are built (mailbox-pir + hypostas-network); HYP-328c (notification
+> padding, §8) is implemented + gate-clean, closing the last cardinality leak — so the §4 transcript is
+> now independent of contact count, mail presence, and storage slot. The only open Myco item is chunk 2
+> (the single-server `PirMailbox` tier), which is independent.
 
 1. ✅ **`Mailbox` trait + `MycoMailbox` over the local bridge.** The seam (§2) + the in-process impl
    reusing `local::LocalServer*Access`. *Done — `mailbox-pir/src/mailbox.rs`, gate-clean.*
@@ -145,30 +145,23 @@ recipient reads slot *i*; the operator transcript is independent of *i* AND of w
    per **§7**. *Done — `hypostas-network/src/myco_transport.rs`, gate-clean; smoke + 3-party deposit→
    retrieve + timeout integration tests pass.* The tier-selection driver wired to the §4.4 ladder
    remains a small runtime follow-up.
-5. **328e — epoch-batching composition + two-party test on a real carrier.** ✅ *Both named deliverables
-   done with chunk 4:* the epoch-batching composition is `run_server1_blocking`'s epoch timer (deposits
-   accrue, `batch_write` fires on the fixed boundary), and the two-party-on-a-real-carrier test is
-   `e2e_deposit_and_retrieve_over_carrier`. **Remaining:** the full §4 assertion — *operator transcript
-   independent of i AND of write-to-read timing*. The **message** read path is fixed-width by
-   construction (`Client::read` reads one path + `fake_read` fills, regardless of mail), and epoch
-   batching unlinks write-from-read timing. The one open leg is **notification-read cardinality**: the
-   `read_notifs` count is not yet padded (a documented `client.rs` note) — that is the **HYP-328c**
-   threat-model decision (§6 below), not an implementation gap. The §8.5 transcript-invariance
-   regression test should be written once 328c fixes the notification-read width.
+5. ✅ **328e — epoch-batching composition + two-party test on a real carrier + the full §4 assertion.**
+   The epoch-batching composition is `run_server1_blocking`'s epoch timer (deposits accrue, `batch_write`
+   fires on the fixed boundary); the two-party-on-a-real-carrier test is
+   `e2e_deposit_and_retrieve_over_carrier`; and the §4 *operator-transcript-independent-of-i-and-timing*
+   property now holds in full — the message read is fixed-width (`fake_read` fills), epoch batching
+   unlinks write-from-read timing, and **HYP-328c (§8) pads the notification read to a fixed `Q`**, so
+   the transcript is independent of contact count too. Asserted by
+   `notification_read_padded_to_q_regardless_of_contact_count` + `notification_read_is_deterministic_across_reads`.
 
 The §7 design was the implementation plan for chunk 4 (and the carrier half of chunk 5); it is now built.
 
-### §5.1 — Gating item for the full §4 assertion: HYP-328c (notification cardinality)
+### §5.1 — HYP-328c (notification cardinality): RESOLVED 2026-06-28
 
-`Client::read`'s **message**-path read is fixed-width (oblivious), but its **notification** read
-(`read_notifs`) issues a per-epoch location count that today tracks the recipient's actual notification
-count rather than a fixed width — so a malicious operator could in principle infer notification
-cardinality. Padding it to a fixed width (e.g. per-client capacity `Q`, with re-randomized notification
-slots) closes the leak but costs bandwidth; the right width is a **threat-model decision (HYP-328c)** —
-Josh's call (like the other threat-model decisions). Until it is decided + implemented, the §8.5
-"transcript independent of i" regression test cannot be honestly asserted in full, so it is **tracked**,
-not written against the current (knowingly-partial) read width. This is the one place the live Myco tier
-is not yet fully oblivious; everything else in chunks 1–5 is done.
+The full §4 assertion was gated on the notification-read cardinality leak. **Decided (pad) + implemented
++ gate-clean** — see §8 for the scheme and `mailbox-pir/src/myco/client.rs::pad_notification_indices`.
+The live Myco tier is now fully oblivious to a Tier-4 mailbox operator (contact count, mail presence,
+storage slot, and write-to-read timing all hidden). Nothing in chunks 1–5 remains open.
 
 ## §6 — Depth decision (resolved 2026-06-27)
 

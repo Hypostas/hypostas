@@ -125,6 +125,7 @@ No one outside the dyad knows that two specific dyads are bonded.
 - **Routing layer:** Multi-hop Sphinx envelopes — no single relay sees both source and destination.
 - **Cover layer:** Constant-rate dyad-level cover traffic disguises whether a real communication is occurring.
 - **Substrate layer:** Multi-carrier fanout (§6.4) — an observer watching one substrate cannot correlate with traffic on another.
+- **Mailbox layer:** The recipient-anonymous Myco tier reads a **fixed width `Q` notification locations per epoch** (HYP-328c, MYCO_INTEGRATION §8) — deterministic dummies pad the real per-contact lookups — so even a Tier-4 *compromised mailbox operator* cannot infer the recipient's **contact cardinality** (inbound-graph size) from its read pattern. Hides *how many*; *who* was already hidden by the PRF-pseudorandom locations.
 
 **Today's status:** Zero. The pair-bond is observable from any link the dyads communicate over.
 
