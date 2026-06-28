@@ -99,7 +99,12 @@ The retrieval tier folds into the existing privacy-status display: **Full** = My
 
 ## §5 — Mailbox model (shared across both tiers)
 
-Both tiers sit on the same `DhtMailboxCarrier` substrate and the same slot model:
+Both tiers sit on the same **slot model** (below). They do **not** share a carrier substrate: the
+single-server PIR tier rides `DhtMailboxCarrier` (the slot-keyed DHT store *is* its deposit/retrieve),
+but the two-server Myco tier needs a **queued point-to-point carrier** for its multi-message-per-epoch
+RPC — see **MYCO_INTEGRATION.md §7.1** (the slot-overwriting DHT carrier would clobber Myco's
+concurrent frames). MYCO_INTEGRATION.md §7 is the authoritative carrier-transport design; this section
+is the shared slot abstraction only.
 
 - **Slot derivation.** A message for recipient R in epoch *e* lands at `slot = PRF(dyad_shared_key, e)` (sender and recipient both derive it; the operator sees only a pseudorandom slot, never R).
 - **Write.** Sender writes the sealed cell via a circuit (sender-anonymous). Pseudorandom slot ⇒ the write reveals neither sender nor recipient. *Two-server:* write to Server 1, obliviously transmitted to Server 2 at epoch roll. *Single-server:* write to the slot directly — no oblivious write needed, because a pseudorandom write slot + an oblivious read are already unlinkable.
@@ -137,7 +142,7 @@ Sub-issues to file under HYP-328 (parent HYP-169, Phase 4):
 2. **328b — Single-server YPIR/VIA fallback** over a Constellation-sized shard, behind the same trait. *Integration test: malicious single-server transcript independent of i.*
 3. **328c — Params + edge budget.** Shard size, cuckoo fan-out, epoch length, ML-* lattice params for the on-device compute/bandwidth budget at a realistic mailbox size. Independent Core-SVP on any lattice params (reuse the HYP-354 FU1 method).
 4. **328d — Mailbox-server role + distribution-rule binding.** The role that carries the non-collusion invariant; tier-selection driver wired to the privacy-status ladder.
-5. **328e — Compose with §9.4 epoch batching** (the timing half) on `DhtMailboxCarrier`; end-to-end two-party test on a real carrier.
+5. **328e — Compose with §9.4 epoch batching** (the timing half) over Myco's **queued point-to-point carrier** (MYCO_INTEGRATION.md §7.1 — *not* `DhtMailboxCarrier`, which is the single-server tier's substrate); end-to-end two-party test on a real carrier.
 6. **328f — Crypto sign-off** (Codex + us, per "no external audit — just Opus + Codex + Josh"): focus the two-server oblivious-transmission protocol; confirm the single-server fallback's unlinkability argument.
 
 Each chunk gates on the Codex bar + integration/smoke tests (CLAUDE.md rules 26–27). Nothing here is buildable as "begin now" until Phase 4 is reached — this doc is the kickoff decomposition, not a green light to implement ahead of phase order.
