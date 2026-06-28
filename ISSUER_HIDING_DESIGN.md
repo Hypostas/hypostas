@@ -100,16 +100,18 @@ tively unsignable (bounded-harm, documented).
 This is what lands now; it does **not** depend on the §5 setup fork (the core consumes a `B_epoch`
 *whatever* produced it).
 
-- **`EpochIntroducerAnchor` (new type, `vouch-crypto`).** Under (a):
+- **`EpochIntroducerAnchor` (new type, `vouch-crypto`).** Under (a) it carries the per-epoch SHARED
+  verification context for **both** halves of the dual-hybrid vouch — the SEP key AND the BBS issuer
+  key (Codex code-gate P1, §9 R1: anchoring only the SEP key still leaks via a named BBS key):
   ```rust
-  /// HYP-324 issuer-hiding anchor. Candidate (a): the per-epoch SHARED issuer verify key. The vouch
-  /// verifies against this, not a named introducer key, so the verify transcript hides WHICH epoch
-  /// introducer signed (anonymity set = the epoch introducer-set). `epoch` binds the anchor to its
-  /// validity window; `B_epoch` is the shared `SepVerifyKey`. (Candidate (b) would replace `key`
-  /// with a commitment + membership root — see ISSUER_HIDING_DESIGN §7; the enum leaves room.)
+  /// HYP-324 issuer-hiding anchor. Candidate (a): the per-epoch SHARED verification context. The vouch
+  /// verifies against this, not named introducer keys, so the transcript hides WHICH epoch introducer
+  /// signed. `epoch` binds the validity window; `sep_key` is the shared `B_epoch`; `bbs_pk` is the
+  /// shared epoch BBS issuer key (BOTH halves anchored). (Candidate (b) would replace these with a
+  /// commitment + membership root — see ISSUER_HIDING_DESIGN §7; the enum leaves room.)
   pub enum EpochIntroducerAnchor {
-      /// (a) shared epoch key — the live default.
-      SharedKey { epoch: u64, key: SepVerifyKey },
+      /// (a) shared epoch keys — the live default.
+      SharedKey { epoch: u64, sep_key: SepVerifyKey, bbs_pk: G2Affine },
       // (b) Committed { epoch: u64, root: AccumulatorRoot }  // §7, not built
   }
   ```
@@ -162,12 +164,23 @@ The establishment layer is a **runtime/ops contract**, tracked in `RUNTIME_REQUI
 
 ## 6. Build order (each chunk: tests + Codex gpt-5.5/high gate)
 
-1. **`EpochIntroducerAnchor` type + `epoch` binding** — the enum (a-variant), `SepVerifyKey`
-   well-formedness validation, the `epoch`-match guard. Unit tests: well-formed vs malformed key,
-   epoch-mismatch reject.
-2. **`pq_vouch::verify` takes the anchor** — thread `vk_pub` from the anchor; gate the named-key entry
-   behind `#[cfg(test)]`/`_TEST_ONLY`. Integration: same-`B_epoch`/distinct-`R_epoch` both verify; the
-   anonymity statistical-ZK transcript-equality test; wrong-epoch-key reject.
+1. ✅ **DONE — `EpochIntroducerAnchor` type + epoch single-source** (`vouch-crypto/src/issuer_hiding.rs`).
+   The `SharedKey { epoch, key }` enum (the `(b)` `Committed` variant reserved), `epoch()`/`verify_key()`
+   accessors, and `epoch_bytes()` — the canonical big-endian `u64` that single-sources the epoch scope.
+   Improvement on the plan: rather than an `epoch`-*match guard*, the epoch is **single-sourced** from the
+   anchor, so the nullifier base + show scope cannot disagree by construction. Unit tests: accessor
+   round-trip, distinct-epoch ⇒ distinct scope bytes.
+2. ✅ **DONE — `pq_vouch::{from_epoch_anchor, verify_issuer_hidden}`** (`vouch-crypto/src/pq_vouch.rs`).
+   `from_epoch_anchor` builds verifier params from the anchor's shared key; `verify_issuer_hidden` is the
+   live entry — epoch single-sourced from the anchor + a **params↔anchor key-consistency fail-closed
+   check** (`params.sep_vk != anchor.verify_key()` ⇒ reject, no named-key smuggling). `SepVerifyKey` gained
+   `PartialEq` for that check. Integration test `issuer_hidden_round_trip_key_and_epoch_guards`: honest
+   round-trip verifies; a foreign-key anchor fails closed; a wrong-epoch anchor (same key) rejects via the
+   nullifier base. Clippy `-D warnings` clean. **Deviation (tracked):** the named-key `verify` is NOT yet
+   `#[cfg(test)]`-gated (the `blind_issuance` capstones still call it) — its retirement moves to chunk 3.
+   **Follow-up (tracked):** the *two-distinct-`R_epoch`, same-`B_epoch` both-verify* anonymity test needs
+   two trapdoors for one `B` (a `sep_trapdoor` delegation) — deferred; the structural anonymity (no
+   introducer identity anywhere in `verify_issuer_hidden`'s inputs) holds by construction meanwhile.
 3. **`vouch.rs` live path consumes the anchor** (the §1.6 "live path = wrapped only" requirement) —
    the dual-hybrid `verify` AND-checks BBS + the anchor-verified lattice show. (This is also where
    HYP-343's trait reshape will sit; coordinate so HYP-343 wires `EpochIntroducerAnchor` through
@@ -216,4 +229,18 @@ per-introducer revocation becomes a hard requirement.
 
 ## 9. DESIGN-review log
 
-*(to be appended by the Codex gpt-5.5/high DESIGN-review before any code)*
+### Doc review (Codex gpt-5.5/high `review --base`, 2026-06-28)
+Clean — no actionable correctness issue in the design doc (the construction is thin: relation
+unchanged, swap the vk source). Soundness/anonymity claims self-adversarially reviewed (the show is
+statistical-ZK over `(t,v)` with `B_epoch` shared ⇒ transcripts indistinguishable; forging under
+`B_epoch` is SEP EUF-CMA; substitution/freshness fail naturally + are guarded). Proceeded to build the
+core; the implementation is the real soundness gate.
+
+### Code gate R1 (Codex gpt-5.5/high `review --base`, 2026-06-28) — 1×P1, RESOLVED
+- **P1 — the BBS half was not anchored.** The first `verify_issuer_hidden` anchored only the SEP key but
+  still took a caller-supplied `bbs_pk`. The C3 vouch is DUAL-hybrid (AND-verifies SEP **and** BBS), so
+  in a per-introducer-BBS-key epoch, verifying against a named `bbs_pk` re-leaks which introducer signed
+  via the BBS half — defeating the guarantee. **Resolution:** `EpochIntroducerAnchor::SharedKey` now
+  carries `bbs_pk: G2Affine` too; `verify_issuer_hidden` takes NO caller issuer key and checks both
+  halves against the anchor's shared `(sep_key, bbs_pk)`. Regression test (3) added: a foreign BBS key
+  in the anchor rejects. (This corrected §2/§4 above — both halves anchored is now the spec.)
