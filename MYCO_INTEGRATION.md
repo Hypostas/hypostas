@@ -338,3 +338,77 @@ Chunk 5 (328e) then drives the S1 epoch tick from the real cover/epoch clock (CO
 the **queued point-to-point carrier** that carries Myco RPC (§7.1), *not* `DhtMailboxCarrier`, which is
 the single-server `PirMailbox` substrate — and adds the operator-transcript-independent-of-`i`-and-
 timing assertion (§4).
+
+---
+
+## §8 — Notification-read padding (HYP-328c): hiding contact cardinality
+
+> Decision (2026-06-28, Josh): **pad** the notification read to a fixed width. The Myco paper accepts
+> the contact-count leak as in-model, but Hypostas's THREAT_MODEL §4.4 puts a **Tier-4 compromised
+> mailbox operator** in scope, and Myco is the *full-obliviousness* tier whose reason to exist over the
+> single-server fallback is exactly stronger metadata privacy — so accepting a cardinality leak to the
+> adversary this tier defends against contradicts its purpose. A deliberate, documented deviation from
+> the reference (which does not pad). This §8 is the scheme; it is Codex-DESIGN-reviewed before code.
+
+### §8.1 The leak
+
+`Client::prepare_notifications` sends, per looked-back epoch, **one notification location per receiving
+contact** (`l_ntf = PRF(k_s1_t, f_ntf ‖ c_s)`). So S2 observes `receiving_keys.len()` — the recipient's
+**contact count** (not *who*: each `l_ntf` is PRF-pseudorandom and needs the contact's secret
+`k_rk_ntf`, which S2 lacks). The *message* read path is already fixed-width (one path + `fake_read`
+fills), so this is the one remaining cardinality channel. The leak is bounded (`≤ Q = 64`), coarse (a
+count), and identity-free — but visible to a Tier-4 operator and stable across reads, so it fingerprints
+recipients by inbound-graph size.
+
+### §8.2 The scheme — pad to `Q` with deterministic secret dummies
+
+Per looked-back epoch, send **exactly `W = Q` distinct notification locations**: the `k =
+receiving_keys.len()` real ones plus `W − k` **dummy** locations indistinguishable from real to S2.
+
+- **Dummy derivation.** `dummy_j = reduce(PRF(pad_key, epoch ‖ "ntf-pad" ‖ j), NOTIF_LOC_BYTES)` for
+  `j = 0, 1, …` until `W − k` distinct dummies are collected that collide with neither the real set nor
+  each other (skip-on-collision keeps the count exactly `W` distinct even in the small-`NUM_CLIENTS`
+  test regime; for production `NUM_CLIENTS` collisions are negligible and `j` never advances past
+  `W − k`). Deterministic in `(pad_key, epoch)`, so re-derived identically on every read.
+- **`pad_key` is a persistent, contact-independent client secret.** It is added to `Client` (set at
+  construction; the runtime provisions one persistent secret per client, seeded deterministically in
+  tests). It must NOT be derived from the per-contact `k_q`/`receiving_keys` — see §8.3.
+- **Ordering.** The `W` locations are **sorted** before sending, so position carries no real-vs-dummy
+  signal (defense-in-depth; S2 cannot recompute either set regardless).
+- **Capacity invariant.** `k ≤ Q` (Q is the per-client conversation capacity). `k > Q` is a
+  configuration error, rejected — never silently truncated (which would drop real contacts).
+- **Read side unchanged.** `read_notifications` already scans *all* returned buckets for each real
+  contact's expected `ct_ntf`; dummy locations return non-matching buckets and are ignored. Padding
+  therefore cannot change which real notifications are found.
+
+### §8.3 Why it resists correlation (the part the naive version got wrong)
+
+The `client.rs` note flagged that *naive* padding (random dummies) fails: the real indices are
+deterministic, so set-intersecting two reads of one epoch recovers them. This scheme defeats every
+correlation an operator can attempt **only because the dummies are deterministic from a stable, secret,
+contact-independent `pad_key`**:
+
+- **Same-state multi-read** (same contacts, same epoch, repeated): identical `W` locations every time
+  (real deterministic + dummies deterministic) → no intersection signal.
+- **Cross-restart** (operator correlates a client's reads across a process restart): the dummies are
+  re-derived from the *persistent* `pad_key`, so they are byte-identical after restart — hence the
+  pad_key must be persistent, NOT freshly random per session (a session-random key would change all
+  dummies on restart, and the intersection would expose the stable real set).
+- **Contact-set change** (operator correlates reads before/after a contact is added/removed): because
+  the dummy pool is indexed `0..(W−k)`, adding one contact swaps in one real location and drops the
+  highest-index dummy — S2 sees one location added and one removed, both pseudorandom, with the total
+  still `W`; the count change is opaque. Hence the pad_key must be **contact-independent** (deriving it
+  from `k_q` would rotate *all* dummies on a contact change, re-exposing the stable real set).
+
+So `pad_key` must satisfy all three: stable across reads, stable across restarts (persistent), and
+independent of the contact set. A dedicated per-client secret is the only source that does — hence a new
+`Client` field rather than a derivation from existing keys.
+
+### §8.4 Cost + the §4 test it unlocks
+
+Cost: `Q = 64` notification-bucket reads per looked-back epoch regardless of real contact count (the
+inherent price of obliviousness; the single-server tier is the option for clients who won't pay it).
+With this in place, the §4/§8.5 **transcript-invariance** regression test can assert the full property:
+a recipient's S2 read transcript (notification index count per epoch **and** the one fixed-width message
+read) is invariant across (a) contact count, (b) mail presence, and (c) storage slot — so a Tier-4
+operator learns nothing about the recipient from the read pattern.
