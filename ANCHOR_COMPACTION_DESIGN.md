@@ -91,3 +91,41 @@ recursion argument; it does not touch `C_r` or the BBS half.
 rounds)**, optionally stacked with the ρ-bounded-challenge 4× tweak. A's `κ×` ideal is infeasible without
 reshaping `C_r` (which cascades into the BBS half). **This is genuine, soundness-critical lattice-folding
 research (LaBRADOR-class) — design-first → Codex DESIGN-review → build, with fresh focus, not rushed.**
+
+---
+
+## 6. LaBRADOR pulled (2026-06-29) — construction + the anchor-folding sketch
+
+**Refs pulled:** paper = LaBRADOR (Beullens–Seiler, CRYPTO'23, eprint 2022/1341 — eprint is Cloudflare-
+walled to curl/WebFetch; construction obtained from the zksecurity explainer
+`blog.zksecurity.xyz/posts/labrador/`). **Reference Rust impl cloned to `refs/labrador`** (lattirust,
+~2.5k LoC: `prover.rs`/`verifier.rs` + `r1cs/` + `binary_r1cs/`). Other impls: condor-rs (Nethermind),
+Lazarus, LaZeR.
+
+**The LaBRADOR principal relation:** prove knowledge of `r` SHORT vectors `s_i` with `Σ‖s_i‖² ≤ β²`
+satisfying dot-product constraints `f(s) = Σ_{ij} a_{ij}⟨s_i,s_j⟩ + Σ_i⟨φ_i,s_i⟩ − b = 0`.
+
+**The fold (one reduction step):** verifier sends `r` challenges `c_i` (pairwise-invertible differences,
+norm-bounded by rejection); prover sends ONE `z = Σ_i c_i·s_i` + the garbage `g_{ij}=⟨s_i,s_j⟩`,
+`h_{ij}`. Verifier checks `A·z = Σ c_i·t_i` (Ajtai/M-SIS commitment), `⟨z,z⟩ = Σ g_{ij}c_ic_j`,
+`Σ a_{ij}g_{ij}+Σ h_{ii}−b=0`. **Shortness kept by base-`b` decomposing `z = z^(0)+b·z^(1)+…` before
+recursing** (so `‖z^(k)‖ < b`, no norm blow-up). The checks are themselves dot-products ⇒ **recurse**;
+dim shrinks `r^{(i+1)}=O(|s^{(i)}|^{1/3})` ⇒ **O(log n) proof**. Binding = M-SIS on the Ajtai commitment.
+
+**The anchor map (the sketch):** our κ rounds are κ openings `Z1_j = y_j + c_j·s1` of the SAME `t_A` — i.e.
+κ short vectors with the ABDLOP relation as a (linear) dot-product constraint. **Fold them: `Z = Σ_j γ_j·
+Z1_j`, garbage `g_{jk}=⟨Z1_j,Z1_k⟩`, base-`b` decompose, recurse → `log κ` openings instead of κ.** That
+collapses the 88% (κ×891 → ~log κ×891).
+
+**★ THE OPEN DESIGN PROBLEM (cross-domain ∩ folding):** the κ EC equations `A_j = Σ_i τ0(Z1_j[bit_idx_i])·
+g_i + z_{r,j}·h ?= c_j·C_r` must fold TOO. They CAN, because **`τ0(Σ_j γ_j·Z1_j[bit_idx]) = Σ_j γ_j·
+τ0(Z1_j[bit_idx])` when `γ_j` are SCALARS** ⇒ the amortized EC eq reads the FOLDED `Z`'s bit responses
+`τ0(Z[bit_idx])`. **But LaBRADOR's `c_i` are RING elements** (needed for invertible differences/soundness),
+and `τ0` is NOT linear over ring multiplication — so the lattice fold (ring challenges) and the EC-binding
+fold (scalar challenges) want DIFFERENT challenge types. Resolution candidates to design + gate: (i) two
+coordinated folds — scalar `γ_j` for the EC leg, ring `c_i` for the lattice leg, tied by a shared FS
+transcript; (ii) restrict the lattice fold to scalar challenges + prove the ABDLOP fold still extracts
+(scalar diffs invertible mod q̂ w.h.p. — the `5e`-class modulus check applies); (iii) move the EC digit
+check into the lattice relation as a dot-product so ONE fold covers both. **This is the crux of the
+B design — next step: design-first doc (ANCHOR_FOLD_DESIGN) → Codex DESIGN-review → port from
+`refs/labrador`. Soundness-critical; fresh focus.**
