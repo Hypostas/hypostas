@@ -169,4 +169,11 @@ until then `StubVouchScheme` stays as the protocol-test driver and `C3VouchSchem
 
 ## 8. DESIGN-review log
 
-*(to be appended by the Codex gpt-5.5/high DESIGN-review before any code)*
+### Codex gpt-5.5/high `review --base 452c9df` (2026-06-29) — CLEAN, no findings
+Reviewed `ec4de81` (this doc) in isolation. Verdict: "The change only adds a design document, and I did
+not identify any discrete, actionable defect that would break existing behavior or tests." The §1
+FS-context-binding soundness approach (Q1: absorb `context` into the show challenge only, nullifier base
+stays epoch-only) stands — build cleared to proceed. Q2 (unblind-vs-`mint`) leans separate `mint`;
+revisit at chunk 4. (A duplicate doc `VOUCH_TRAIT_RESHAPE_DESIGN.md` was written + reverted same day —
+it inverted the dependency to `protocol-core → vouch-crypto` = a crate cycle; this doc's
+`vouch-crypto → protocol-core` direction is correct.)
