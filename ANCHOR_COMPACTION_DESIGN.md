@@ -59,3 +59,35 @@ of `t_A` (DESIGN R12 P2 — projecting an unverified opening is forgeable). So t
 
 **The crypto built in chunks 1–3 is correct and reusable under any of these** — A/B change the anchor proof
 shape only; the SEP credential, the LNP22 show, the FS record-binding, and the verifier seam stand.
+
+---
+
+## 5. Feasibility analysis of A — the SHORTNESS WALL (2026-06-29, after Josh chose A)
+
+Designing A revealed a fundamental obstacle that **reverses §3/§4's ranking**: A's `~κ×` single-shot
+ambition is blocked, and **B (folding) is the realistic compaction**, not the fallback.
+
+**The shortness wall.** Every lattice opening `Z = y + c·s` must be SHORT (`‖Z‖` bounded) — that shortness
+IS the binding (the SIS extractor needs a short witness). So the challenge `c` MUST be small (ρ-bounded);
+a large `c` makes `c·s` long and the opening unsound. This is why amplification needs *parallel
+repetition* (κ small-challenge rounds), not one big-challenge round. Consequently:
+
+- **"One large scalar challenge" (the obvious A) is unsound** — `c ∈ [0,2^128)` ⇒ `c·s` not short.
+- **"Multi-coefficient extraction" doesn't rescue it** — the EC side commits to a SCALAR `w` (in
+  `C_r = w·g + r·h`), so there is nothing to check the lattice responses' higher coefficients `τ1,τ2,…`
+  *against*. Using them would require restructuring `C_r` into a vector/per-coefficient commitment — which
+  breaks the BBS half's binding to the SAME `C_r` and is a far larger redesign than the anchor itself.
+- **Even the binary→ρ-bounded tweak** (use `c_j ∈ [−8,8]` ⇒ ~4 bits/round ⇒ ~32 rounds, a 4× win) is the
+  most A can plausibly offer, and only if the cross-domain extraction stays clean with non-binary `c_j`
+  (the design chose binary deliberately for a clean `2^−κ`). A 4× win, not κ×.
+
+**B (folding) is feasible and is the real path.** The κ openings are *parallel* SIS relations; fold them
+with SMALL random coefficients (so the folded opening stays short) recursively — exactly LaBRADOR
+(Beullens–Seiler, CRYPTO 2023) / lattice-Bulletproofs. That gives `~O(log κ)`-size (or `~√` for a single
+fold layer): **~57 MB → a few MB** at κ=128. It preserves the existing per-round structure under a
+recursion argument; it does not touch `C_r` or the BBS half.
+
+**Revised recommendation:** the compaction is **B (LaBRADOR-style recursive folding of the κ anchor
+rounds)**, optionally stacked with the ρ-bounded-challenge 4× tweak. A's `κ×` ideal is infeasible without
+reshaping `C_r` (which cascades into the BBS half). **This is genuine, soundness-critical lattice-folding
+research (LaBRADOR-class) — design-first → Codex DESIGN-review → build, with fresh focus, not rushed.**
