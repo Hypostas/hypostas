@@ -129,3 +129,22 @@ transcript; (ii) restrict the lattice fold to scalar challenges + prove the ABDL
 check into the lattice relation as a dot-product so ONE fold covers both. **This is the crux of the
 B design — next step: design-first doc (ANCHOR_FOLD_DESIGN) → Codex DESIGN-review → port from
 `refs/labrador`. Soundness-critical; fresh focus.**
+
+**★ LEADING RESOLUTION (candidate iii, refined) — "fold the lattice, leave the EC binding alone."** Why
+(i)/(ii) struggle: a small RING challenge `c` does NOT give `τ0(c·X)=(scalar)·τ0(X)` (`τ0` of a ring
+product is a convolution, not scalar-linear) ⇒ a ring-challenge fold breaks the EC digit equation; and a
+SCALAR challenge big enough for entropy breaks shortness (`γ·s1` not short) while a small one gives ~4
+bits ⇒ ~4×. The way out: **the EC part is TINY** (`z_{r,j}` = κ EC scalars + κ revealed bit responses
+`τ0(Z1_j[bit_idx])` ≈ a few KB) — only the **lattice openings `Z1_j` are the 88%**. So **keep the κ
+binary-challenge EC equations EXACTLY as today** (they already reveal `τ0(Z1_j[bit_idx])`, a masked
+Schnorr response — no new ZK leak) and **LaBRADOR-fold ONLY the κ lattice openings of the shared `t_A`**,
+adding the *linear* constraints `const_coeff(Z1_j[bit_idx_i]) = (revealed value)` so the fold PINS the
+revealed responses to genuine openings. EC soundness stays `2^−κ` (tiny, unchanged); the lattice 88%
+collapses to `~O(log κ)×891`. No cross-domain challenge conflict — the EC isn't folded, the lattice is, and
+the pinned-revealed bit responses are the bridge.
+
+**Caveat (honest):** leading *candidate*, not proven. Full soundness needs: the LaBRADOR extractor over κ
+openings of ONE commitment `t_A` + the pin-constraints; the norm bookkeeping through the base-`b`
+recursion; and confirming the pins are LaBRADOR-expressible dot-products. **Next: ANCHOR_FOLD_DESIGN
+design-first (this candidate + the extractor) → Codex DESIGN-review → port from `refs/labrador`. Expected
+~`log κ`× (~57 MB → ~3 MB), still paired with out-of-band transport (E).**
