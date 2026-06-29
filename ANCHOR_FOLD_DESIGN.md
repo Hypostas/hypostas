@@ -102,8 +102,10 @@ the introduction record gossips a digest + the vouch is fetched on request regar
 ## 5. Build order (each chunk: tests + Codex gpt-5.5/high gate)
 
 0. **Gate THIS design** — esp. §3(a)–(d). Resolve before code.
-1. **Un-compress the FS** in `proof_anchor_bind.rs`: send `w_{c,j}`, derive `c_j` from them. (Pure
-   refactor; the existing tests must still pass — same soundness, just announcements on the wire.)
+1. **Un-compress the FS** in `proof_anchor_bind.rs`: send the lattice announcements `w_{c,j}` **AND the EC
+   announcements `A_j`**, and derive `c_j` from BOTH (§1 — hashing `A_j` is MANDATORY; deriving `c_j` from
+   `w_{c,j}` alone re-creates the unsound-FS case). Pure refactor; existing tests must still pass — same
+   soundness, both announcements now on the wire.
 2. **Port the LaBRADOR core** from `refs/labrador` into a new `vouch-crypto/src/labrador_fold.rs` over our
    proof ring `R_q̂` (NHAT=64, composite q̂): amortized opening + garbage + base-`b` decomposition + the
    recursion + NormCheck. Gate against transcribed reference vectors (the `refs/labrador` tests).
