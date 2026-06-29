@@ -27,31 +27,40 @@ scalars, digit responses) is KB.
 
 **Un-compress the FS (the one structural change).** Today bind.rs is FS-COMPRESSED: it does NOT send
 `w_{c,j}`; the verifier reconstructs it from `Z1_j`. That is incompatible with folding (the verifier no
-longer has `Z1_j`). So **send the κ announcements `w_{c,j}`** (κ·d ring elems ≈ 64 KB at d=1) and derive the
-FS bits `c_j` from the SENT announcements. Now `c_j` is checkable without the responses, and the responses
-are free to be folded. (This trades ~64 KB of announcements for the ~54 MB the fold removes.)
+longer has `Z1_j`). So **send the κ LATTICE announcements `w_{c,j}` AND the κ EC announcements `A_j`** (the
+pre-challenge EC mask commitments `Σ_i τ0(y1_j[bit_idx_i])·g_i + ρ_{r,j}·h`; κ·d ring elems + κ G1 points ≈
+70 KB at d=1) and derive the FS bits `c_j` from BOTH. **Hashing `A_j` is mandatory** — if `c_j` came only
+from `w_{c,j}`, the EC side would no longer be a sound Schnorr (prover learns `c_j` before committing the EC
+masks), and the `2⁻ᵏ` cross-domain binding would not follow (Codex DESIGN-review P1 #1). Now `c_j` is
+checkable without the responses, and the responses are free to be folded.
 
 ---
 
 ## 2. The fold (LaBRADOR principal step, applied)
 
-Treat the witness as the κ short vectors `s^{(j)} := (Z1_j ‖ Z2_j)` with norm bound `Σ_j‖s^{(j)}‖² ≤ B²`
-(each `‖Z1_j‖, ‖Z2_j‖` already rejection-bounded in bind.rs — sum the squares). The verifier already holds
-the Ajtai-style commitment to them implicitly via `R_j` (a public-linear image of `s^{(j)}` equals
-`w_{c,j}+c_j·t_A`). LaBRADOR step:
+The κ responses are the LaBRADOR WITNESS: κ short vectors `s^{(j)} := (Z1_j ‖ Z2_j)`, `Σ_j‖s^{(j)}‖² ≤ B²`
+(each already rejection-bounded in bind.rs; sum the squares). After the announcements + the FS fix pin
+`c_j`, the verification is a PUBLIC linear system over these short vectors:
 
-1. **Amortize:** verifier sends ring challenges `γ_1..γ_κ` (norm-bounded, pairwise-invertible diffs); prover
-   sends ONE `z = Σ_j γ_j·s^{(j)}` + garbage `g_{jk} = ⟨s^{(j)}, s^{(k)}⟩`, `h`-terms for the linear parts.
-2. **Verify (folded):** `Σ_j γ_j·(A1·Z1_j+A2·Z2_j−c_j·t_A) = Σ_j γ_j·w_{c,j}` reduces to ONE linear check on
-   `z`; the pins fold to `Σ_j γ_j·const_coeff(Z1_j[bit_idx_i]) = Σ_j γ_j·ρ_{j,i}` — also ONE check on `z`
-   (const_coeff is linear over the RING-element `z` here because we are checking a *linear image*, not
-   reading τ0 of a product — the τ0-nonlinearity that blocked §6 was about the EC fold, which we DON'T do).
-3. **Stay short:** base-`b` decompose `z = z^{(0)}+b·z^{(1)}+…` (each `‖z^{(t)}‖<b`), commit, **recurse** on
-   the smaller witness `(z^{(t)}, g, h)`. `O(log κ)` levels; each level's commitment is `O(1)` (M-SIS).
+- **`R_j` (per round):** `A1·Z1_j + A2·Z2_j − c_j·t_A = w_{c,j}` — linear in `s^{(j)}`.
+- **Pins `P_{j,i}`:** `ct(⟨φ_i, Z1_j⟩) = ρ_{j,i}`, where `φ_i` selects the `bit_idx_i` ring element — a
+  `ct` (constant-term) linear functional whose value the EC equation consumes.
 
-Result: the κ openings (κ·m≈114k ring elems) → `O(log κ)` openings + the garbage (`O(κ²)` SCALARS `g_{jk}`,
-but scalars are cheap vs ring elements — and LaBRADOR's recursion amortizes the garbage too). Net target:
-**~57 MB → ~3 MB.**
+**Don't hand-roll the fold — feed this system to LaBRADOR** (port `refs/labrador`). LaBRADOR proves
+knowledge of short witnesses satisfying MANY linear (`⟨φ,s⟩`) + quadratic (`⟨s,s⟩` — here only the norm)
+constraints, **aggregating them all into `O(log)` size** (that is its entire result: 2²⁰ constraints →
+58 KB). Its amortization (random ring `γ_j` → `z = Σ_j γ_j·s^{(j)}` + garbage for the cross terms →
+base-`b` decompose `z` to stay short → recurse) folds the witness AND aggregates the `κ·(1+DIGITS)`
+constraints together.
+
+⚠️ **The pins are `ct`/linear constraints handled BY LaBRADOR — NOT a naive `const_coeff(z) = Σ_j γ_j·
+ρ_{j,i}` check** (Codex DESIGN-review P1 #2: `const_coeff(γ_j·X)` is a convolution, not
+`γ_j·const_coeff(X)`, so that identity is FALSE for ring `γ_j`). LaBRADOR aggregates `ct`-linear
+constraints correctly via its `φ`-inner-product + conjugation (`σ_{-1}`) machinery — the SAME `ct`/
+self-conjugate trick the LNP22 show already uses (`proof_quadratic.rs` / `proof_garbage.rs`). The pins
+ride the aggregation; they are never summed by a hand-rolled coefficient identity.
+
+Result: the κ openings (`κ·m ≈ 114k` ring elems) + the `κ·DIGITS` pins → `O(log)` proof. **~57 MB → ~3 MB.**
 
 ---
 
@@ -105,3 +114,20 @@ the introduction record gossips a digest + the vouch is fetched on request regar
    codec, re-measure the vouch size, full-suite + Codex gate.
 
 Genuine multi-session lattice-folding port; faithful transcription from `refs/labrador`; gate every chunk.
+
+---
+
+## 6. DESIGN-review log
+
+### Codex gpt-5.5/high `review --base` (2026-06-29) — 2×P1, BOTH FIXED in-doc
+- **P1 #1 — FS dropped the EC announcement.** Deriving `c_j` only from `w_{c,j}` would let the prover learn
+  `c_j` before committing the EC masks ⇒ the EC side is no longer a sound Schnorr ⇒ the `2⁻ᵏ` binding fails.
+  **Fixed §1:** the FS now hashes `w_{c,j}` AND the EC announcement `A_j`.
+- **P1 #2 — the pin fold can't be a `const_coeff(z)` sum under ring challenges.** `const_coeff(γ_j·X)` is a
+  convolution, not `γ_j·const_coeff(X)` — false for ring `γ_j`. **Fixed §2:** the pins are `ct`/linear
+  constraints handled BY LaBRADOR's `φ`-inner-product + `σ_{-1}` conjugation aggregation (the LNP22
+  `ct`-trick), not a hand-rolled coefficient identity. (Re-confirms the §6/§5 lesson: the τ0/`ct`
+  nonlinearity is the recurring trap; the fix is always "let the proof system's `ct`-machinery handle it,
+  don't sum coefficients by hand.")
+Remaining = the §3 obligations (extractor over κ openings of one `t_A`; norm propagation; ZK) — for the
+build's per-chunk gates, not pre-resolvable in prose.
