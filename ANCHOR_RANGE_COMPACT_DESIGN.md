@@ -92,14 +92,85 @@ shown infeasible in §5's shortness-wall analysis.)
    `proof_relation` proves an affine-quadratic relation over a SINGLE ABDLOP `t_A = A1·s1 + A2·s2` — it does
    NOT span two commitments. So both X (borrow relation over `w_bits∈t_A` + `range∈t_R`) and Y (equality
    `t_W.w_bits == t_A.w_bits`) need a relation/opening that binds TWO commitments with DIFFERENT opening
-   schedules (`t_A` per-round, `t_R`/`t_W` once). **Precedent: `bind.rs`** already proves a CROSS-domain
-   same-value binding (lattice `W_j` ↔ EC `T_EC_j` commit the same `w`) — its same-value technique is the
-   template for Y's lattice↔lattice equality (`t_W ↔ t_A.w_bits`, likely simpler since both are proof-ring).
-   X's cross-commitment AFFINE borrow relation is the harder variant. This is the soundness-critical core of
-   the build — design-first + DESIGN-review it (do not treat as a mechanical split). Keep the single-commitment
-   `proof_relation` path for the LNP22 show.
+   schedules (`t_A` per-round, `t_R`/`t_W` once). **The right primitive is a SINGLE-ROUND `proof_relation`
+   generalized to a stacked two-commitment witness** (block `[A1 0; 0 A1_W]`, one ring challenge `c`, the
+   garbage-technique degree-2 identity) — see §6 obligation 1. **`bind.rs` is the WRONG template** (it is
+   κ-round binary because its EC side is `τ0`-limited; a κ-round equality would re-open `t_A` κ times and
+   defeat Y). X's cross-commitment AFFINE borrow relation is the same two-commitment `proof_relation`, just a
+   bigger constraint set (the borrow chain over `w_bits∈t_A`, `diff/borrow∈t_R`). This generalized
+   `proof_relation` is the soundness-critical core of the build — design-first + DESIGN-review it. Keep the
+   single-commitment `proof_relation` path for the LNP22 show.
 3. **`proof_anchor_bind` + `pq_vouch` restructure** — the chosen construction; update `prove_full`/`verify_full`
    + `AnchorBindProof`/`…Full` (drop the moved coords from `z1`); the equality proof for Y.
 4. **Integration** — `live_full_width_anchor_bind` at the new layout + a `measure_*` re-run confirming the
    reduction; rule #27 smoke (the real 255-bit `w<r`) + tamper/forgery rejections.
 5. **Wire natural-bit-width serialization** (orthogonal ~3.7×) for the final vouch-size number.
+
+## 6. Y soundness analysis — does the one-time equality overcome option D? (2026-06-30, for DESIGN-review)
+
+Grounded in the ACTUAL bind (`proof_anchor_bind.rs::prove`/`verify`). Per round `j`, with binary `c_j`:
+the prover sends `z1_j = y1_j + c_j·s1`, `z2_j = y2_j + c_j·s2`, `z_{r,j}`; the verifier reconstructs and
+FS-checks BOTH
+
+- **(lattice)** `A1·z1_j + A2·z2_j − c_j·t_A = w_{c,j}` — binds `z1_j` (hence `s1`) to `t_A`, and
+- **(EC)** `ec_digit_comb(τ0(z1_j[bit_idx])) + z_{r,j}·h − c_j·C_r = A_j` — binds `τ0(z1_j[bit_idx])` to `C_r`.
+
+The **same `z1_j`** sits in both, so `t_A`'s value bits = `C_r`'s `w` (`2^−κ` over the κ binary rounds). That
+simultaneity — NOT the full-`s1` opening per se — is the cross-domain binding.
+
+**Construction Y replays the simultaneity on `t_W`:** `z1_j = y1_j + c_j·w_bits` (the `t_W` witness, 255);
+verifier checks (lattice) `A1'·z1_j + A2'·z2_j − c_j·t_W = w_{c,j}` and the SAME (EC) check. The same `z1_j`
+binds `t_W`'s `w_bits` to `C_r` (`2^−κ`). A one-time equality `t_W.w_bits == t_A.w_bits` then gives:
+
+```
+   (κ-round bind on t_W)   t_W.w_bits = C_r.w
+   (one-time equality)     t_W.w_bits = t_A.w_bits          ⟹   t_A.w_bits = C_r.w.
+```
+
+— the SAME end binding as the current scheme, with the per-round opening on the small `t_W` (255) not the
+unified `t_A` (891).
+
+**Why option D's "circular" rejection does not bite.** D ("commit just `w_bits`") was rejected because
+"binding `w_bits` to the show's `t_A` requires opening `t_A` (the full `s1`)." True — but that opening is the
+ONE-TIME equality, not a per-round cost: (i) the equality opens `t_A` once; (ii) the show ALREADY opens `t_A`
+for its own relations, so `t_A`'s per-round-in-the-anchor opening was *redundant* with the show; (iii) the
+anchor needs only `w_bits` (the EC reads `bit_idx` alone) — the rest of `s1` is the show's obligation, proven
+by the show, untouched by Y. So the per-round `t_A` opening is not load-bearing for the anchor beyond `w_bits`;
+moving it to `t_W` + a one-time equality loses nothing the anchor proved.
+
+**Residual obligations the gate + the build must discharge (this is "faithful-core, not done"):**
+1. **The equality MUST be a SINGLE-ROUND `proof_relation` (NOT `bind.rs`'s κ-round technique) — this is the
+   crux of why Y beats D.** `bind.rs`'s same-value is κ binary rounds *because* its EC side reads only `τ0`
+   (the `[−8,8]` constant coeff): the cross-domain shortness wall forces small (binary) challenges + parallel
+   repetition for `2^−κ`. **Y's equality is lattice↔lattice** (`t_W.w_bits == t_A`'s `w_bits` sub-vector, both
+   proof-ring) — NO `τ0` bottleneck — so it is the LNP22 affine-relation proof (`proof_relation`: ONE
+   norm-bounded ring challenge `c`, soundness `≤2/|C|` via the degree-2-in-`c` identity), generalized to a
+   JOINT witness over the two commitments. **If it were built κ-round (the `bind.rs` reflex), it would re-open
+   `t_A` κ times and Y would save nothing — option D's exact trap.** Single-round ⇒ `t_A` opened ONCE ⇒ Y wins.
+   Foundation: extend `proof_relation` from one ABDLOP commitment to a stacked `(t_A, t_W)` witness (block
+   `[A1 0; 0 A1_W]`), affine constraint `w_bits − s1[value_idx] = 0`. FS-bind the joint proof into the record.
+5. **ZK COMPOSITION — the equality must be AGGREGATED into the show's ONE garbage proof, not a separate proof
+   (Codex gate P1, 2026-06-30).** `AGGREGATED_SHOW_DESIGN` §C-iv: two LNP22 relation proofs that SHARE a
+   commitment's `(s2, b)` masking leak via the difference of their garbage commitments. A standalone equality
+   `proof_relation` over `t_A` would reintroduce that leak. `proof_ltconst` already aggregates ALL its
+   borrow/binariness relations into ONE garbage proof — so the equality (Y) / the cross-commitment borrow
+   relation (X) must be ADDED to that single aggregated relation set over the stacked `(t_A, t_W/t_R)` witness,
+   masked once. Equivalently: there is ONE garbage proof for the whole vouch spanning all commitments; the
+   new cross-commitment constraints are extra rows in it, not a second proof. (If a separate proof is
+   unavoidable, it needs a proven independent-masking construction — strictly harder; prefer aggregation.)
+   This makes the stacked-witness `proof_relation` (obligation 1) not just a foundation but THE composition
+   point: the show + range + equality are one masked relation over the block-diagonal commitment.
+2. **`t_W` security parity** — `t_W = ABDLOP(w_bits)` must be Module-SIS-binding at the same λ as `t_A` (size
+   its rank/modulus; the openings are SHORTER so this is easier, not harder).
+3. **The show still fully binds `s1`** (incl. `w_bits`) in `t_A` — unchanged; Y adds the equality, removes
+   nothing from the show.
+4. **No FS-malleability** — the anchor's `fs_rounds` hashes `t_A` today; under Y it must hash `t_W` (the
+   per-round commitment) AND the equality transcript, so a prover can't swap `t_W`/`t_A` post-hoc.
+
+**Verdict (pending gate):** Y is sound + leak-free under ALL of (1)–(5) — the equality opens `t_A` once
+(single-round, obligation 1), so option D's rejection conflated a one-time equality with a per-round opening;
+and obligation 5 keeps it leak-free by aggregating into the show's one garbage proof. The build is BLOCKED on
+all five; none is optional. If the gate disputes (1) — e.g. the lattice↔lattice same-value needs the κ-round
+structure itself, not a single PoK — Y collapses to **X** (≈2.6×, which needs no equality, only the
+cross-commitment borrow relation of §5.2, but still under obligation 5's aggregation requirement). Build the chosen one; do not ship either as "done" until its same-value/cross-
+commitment proof is itself gate-clean.
