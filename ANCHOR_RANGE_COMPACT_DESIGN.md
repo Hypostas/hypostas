@@ -1,6 +1,19 @@
 # ANCHOR_RANGE_COMPACT_DESIGN.md — shrink the κ anchor openings by un-replicating non-EC witness
 
-**Status:** design-first (no code), **needs Codex DESIGN-review** (the §3 reframing of `ANCHOR_COMPACTION_DESIGN`
+**Status: ✅ CONSTRUCTION Y INTEGRATED + LIVE (2026-06-30, gate-clean).** The anchor opens a small
+`t_W = ABDLOP(w_bits, ell=0)` (255 coords/round) instead of the unified `s1` (~891) — the ~3.5× opening cut —
+with the `same_value` equality `t_W.w_bits == t_A.w_bits` folded into the show's ONE masked garbage proof over
+the stacked CRS (obligation 5, no §C-iv leak). Built bottom-up, every chunk Codex gpt-5.5/high-clean:
+`AbdlopParams::stacked` (block-diagonal, per-segment `s1` bounds) → `AffineConstraint::same_value` → the
+cross-commitment equality PoK round-trip → `range_proof_over_stacked` (X mechanism, no code change) → the live
+`pq_vouch` wiring (PqVouchParams `+abdlop_w`, PqBlindedVouch `+commitment_w`, codec v4, prove/verify) → the
+tampered-`t_W` rejection test. 18/18 pq_vouch + 9/9 codec green. **Completeness note:** the SEP approx-range
+`B256` empirically accommodates the appended w_bits (the live round-trip resamples + verifies — option (i), no
+norm-leg change). **Remaining (optional, minor):** construction X (move `ltc_diff/borrow/e_bits` to a one-time
+`t_R`) trims the SHOW's once-opened `s1` ~1.5× more — the `range_proof_over_stacked` mechanism is proven, only
+the pq_vouch packing is unwired. The big κ-replicated win is shipped.
+
+**Original status:** design-first (no code), **needs Codex DESIGN-review** (the §3 reframing of `ANCHOR_COMPACTION_DESIGN`
 option D is soundness-subtle — the bind took **13 design-review iterations** to settle, `ANCHOR_BIND_DESIGN`;
 that is the design-process count, NOT the κ≈128 binary soundness rounds — so do not assume an obvious win). Goal:
 shrink the C3 anchor openings ~2–3.5× by removing witness the cross-domain EC binding does NOT need from the
