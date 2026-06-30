@@ -124,3 +124,98 @@ soundness-critical heart (the norm tracking + the recursion) — slow, every con
 + test. Each sub-chunk is a self-contained, additive, gate-clean commit; nothing in the live C3 path changes
 until `ANCHOR_FOLD_DESIGN` chunk 3 wires the fold into `proof_anchor_bind.rs`. Process: this roadmap →
 Codex DESIGN-review → 2a → … → 2g → fold-wire.
+
+---
+
+## 6. De-risking findings (2026-06-30 parameter study) — the plan is now CONCRETE and simpler than §5 feared
+
+**Done + gate-clean (12 sub-chunks):** 2a (linalg+relation), 2b (balanced decomposition), 2c (challenge
+set + sovereign Jacobi operator-norm + FS sampling), 2d-i (`next_norm_bound_sq`), 2d-ii(a) (sovereign MSIS
+estimator, δ=1.0045), 2d-ii(b1) (`select_params`), 2d-ii(b2) (`next_size`, the `Crs` struct + XOF-derived
+A/B/C/D matrices, `proof_size`/`last_prover_message_size`/`is_base_case`, the recursive `next_crs` chain +
+`InflationPolicy`). Plus `fold_feasibility.rs` — a `#[cfg(test)]` q-parametric mirror of the recursion,
+cross-checked against production at `q=QHAT`, that drove the findings below.
+
+**THREE bugs in the lattirust 0.0.1-alpha reference (it can't compact as-is; do NOT faithfully port these):**
+1. **`recurse()` is inverted.** `last>proof` is its chain TERMINATOR, so it folds only while `last≤proof` —
+   but `last>proof` holds for every realistic instance → it never folds. Corrected: `is_base_case = last≤proof`
+   (fold WHILE compression helps). A free size-opt within the slack budget (every round is independently
+   sound). Already applied in `crs.rs::is_base_case`.
+2. **Norm recurrence is a PRODUCT, must be a SUM.** `next_norm_bound_sq = (2/b²)γ² + γ1²·γ2²`. The folded
+   witness is a CONCATENATION (z,t,g,h) → norm² = `γ1²+γ2²` (triangle inequality). The product over-estimates
+   and explodes ∝ r³ → infeasible before any base case. **NOT yet applied to `crs.rs` — soundness-critical,
+   needs the paper (eprint 2022/1341 §5) to confirm the exact recurrence.**
+3. **`next_size` GROWS r, must keep r SMALL.** It balances the components; LaBRADOR balances next-proof
+   Gram(∝r²) vs witness(∝n) → `r_next ~ total^(1/3)`. With the ref's growth, r explodes → witness never
+   shrinks → no compaction even with bug 2 fixed. **NOT yet applied — same paper-confirm gate as bug 2.**
+
+**Empirical validation (gate-clean, honest raw-tail accounting):** SUM + r^(1/3) packing COMPACTS. On the
+REAL anchor relation estimate (~57MB ≈ 123k ring elements, n~131072, β²~1e12–1e15): **30–57× compaction**.
+**Modulus: ~2^62 suffices** (2^64 → 57×, 20MB→346KB; a SMALLER q compacts BETTER). ⇒ the fold-ring is a
+modest **i64-coefficient / i128-product ring** (same structure as `proof_ring`, just a bigger NTT prime) —
+**NO 2^256 bignum / u256 / RNS** (the earlier fear is dead).
+
+**Revised build order (concrete):**
+- **(P) Paper-confirm** bugs 2+3 vs eprint 2022/1341 §5 (the exact norm recurrence + the (r,n) packing rule).
+  BLOCKING for the production change; un-fetchable in-session (Cloudflare) — needs the PDF in `refs/`.
+- **2x — fold-ring** (`fold_ring.rs`): a `proof_ring`-style ring at a ~2^62 NTT-friendly prime `q≡1 mod 128`
+  (i64 coeffs, i128 products fit since `q²<2^124<i128::MAX`). Mirror `ProofRingElem` (add/sub/mul negacyclic,
+  `sample_uniform`, `conjugate`, `centered_coeffs`). Paper-INDEPENDENT — can build anytime.
+- **2d-fix** — apply bug-2 (sum) to `next_norm_bound_sq` + bug-3 (`r_next~total^(1/3)`) to `next_size`, and
+  re-target `crs.rs` from `QHAT` to the fold-ring modulus. Regression: the fold chain now reaches a base case
+  + the real relation compacts ≥19×.
+- **2e/2f/2g** over the fold-ring (the recursion mechanics, prover, verifier — unchanged plan from above).
+- **ANCHOR_FOLD 1+3+4** — ⚠️ **SUPERSEDED (2026-06-30): the fold is a BASE CASE for the real anchor relation.**
+  Measured `r=κ=128, n≈769, β²≈8.4e14 ⇒ depth=1, ratio=1.0× across q∈{2^58..2^80}` (`proof_anchor_bind::
+  measure_real_anchor_opening_size` + `fold_feasibility::compaction_at_real_anchor_shape`). 114k-element /
+  β²≈8.4e14 relations are below LaBRADOR's useful threshold (per-round overhead ≥ the witness), so the recursive
+  fold does NOT compact the κ openings — do NOT wire it into `pq_vouch`. The structural fold (2e/2f/2g, complete
+  + completeness-proven, `vouch-crypto/src/labrador_fold/`) stays a reusable primitive. The anchor compaction
+  pivoted to shrinking the openings at the source — see `ANCHOR_RANGE_COMPACT_DESIGN.md` (≈2.6–3.5×) +
+  natural-bit-width serialization (~3.7×). The original `57MB→~350KB` target was the (now-disproven) recursive
+  premise.
+
+---
+
+## 7. The folded-norm derivation (the missing soundness proof for the SUM — gates the 2d-fix swap)
+
+*Status: Iris's derivation, pending Codex gate-of-design + (ideally) BS23 §5 confirmation. `next_norm_bound_sq`
+keeps the conservative reference PRODUCT in production until this is confirmed (Codex gate P1, 2026-06-30 —
+the norm bound IS the soundness, so it must not use an unproven smaller estimate). This §7 is the proof the
+gate asked for.*
+
+**Claim.** The per-round folded squared-norm bound is `(2/b²)·γ² + (γ1² + γ2²)` — a **SUM** — not the
+reference's `(2/b²)·γ² + γ1²·γ2²` **PRODUCT**. The product is a transcription bug (`·` for `+`); it has no
+structural justification and explodes ∝ r³, which is why the lattirust `0.0.1-alpha` port never compacts.
+
+**Derivation.** After one LaBRADOR fold, the next round's witness vector is the **concatenation** of the
+balanced-decomposed components the prover commits to:
+- `z` — the amortized witness `z = Σ_i c_i·s_i`, decomposed into `2` parts in base `b`;
+- `t` — the inner commitments `t_i = A·s_i`, decomposed into `t1` parts in base `b1`;
+- `g` — the Gram matrix `g_ij = ⟨s_i, s_j⟩` (i ≤ j), decomposed into `t2` parts in base `b2`;
+- `h` — the linearization vector, decomposed into `t1` parts in base `b1`.
+
+The next witness is `s' = (z‖t‖g‖h)`, an **orthogonal direct sum** (the components occupy disjoint
+coordinates). Hence `‖s'‖² = ‖z‖² + ‖t‖² + ‖g‖² + ‖h‖²` — a SUM with **no cross terms**. Grouping the
+reference's `γ`-variables onto these components:
+- `(2/b²)·γ²` = `‖z-decomposition‖²` (the 2 base-`b` parts of the amortized `z`; `γ² = β²·τ`);
+- `γ1² = b1²·t1/12·(r·k·d) + b2²·t2/12·(r(r+1)/2·d)` = `‖t-decomp‖² + ‖g-decomp‖²`;
+- `γ2² = b1²·t1/12·(r(r+1)/2·d)` = `‖h-decomp‖²`.
+
+So `‖s'‖² = (2/b²)γ² + γ1² + γ2²` — the SUM. ∎
+
+**Resolving the gate's Cauchy–Schwarz P1.** The gate's concern was that `g_ij = ⟨s_i,s_j⟩` is bounded by a
+**product** `‖s_i‖·‖s_j‖ ≤ β²` (Cauchy–Schwarz), so a product term "should" appear. It does — but in the
+**sizing of `b2`**, not in the folded-norm sum. The decomposition base for `g` is chosen as
+`b2 ≈ (g-entry magnitude)^{1/t2} ≈ (β²)^{1/t2}` precisely because each `g_ij ≤ β²` (the Cauchy–Schwarz
+product). The decomposed `g`-parts then have coefficients `≤ b2/2`, contributing `‖g-decomp‖² =
+b2²·t2/12·(r(r+1)/2·d)` to `γ1²` — an **additive** term. The product is fully accounted for by `b2`'s value;
+adding it *again* as `γ1²·γ2²` would double-count it (and is dimensionally a squared-norm times a
+squared-norm — not a norm bound). So the SUM is the correct, tight, **sound** extractor bound: the extracted
+witness `s'` is a concatenation, and its norm is the root-sum-square of the (correctly Cauchy–Schwarz-sized)
+component norms.
+
+**Consequence.** Once this §7 passes the Codex gate-of-design (and/or BS23 §5 confirms the same), the 2d-fix
+swap of `next_norm_bound_sq` to the SUM is justified and re-applied to production with this proof cited
+inline. The `r_next ~ total^(1/3)` packing (bug 3) is independently soundness-neutral (it only reshapes the
+instance; the norm bound is computed correctly for whatever `(r,n)` results), so it can land with the sum.

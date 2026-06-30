@@ -148,3 +148,21 @@ openings of ONE commitment `t_A` + the pin-constraints; the norm bookkeeping thr
 recursion; and confirming the pins are LaBRADOR-expressible dot-products. **Next: ANCHOR_FOLD_DESIGN
 design-first (this candidate + the extractor) → Codex DESIGN-review → port from `refs/labrador`. Expected
 ~`log κ`× (~57 MB → ~3 MB), still paired with out-of-band transport (E).**
+
+---
+
+## 6. RESULT (2026-06-30): B is a BASE CASE — pivot to ANCHOR_RANGE_COMPACT
+
+HYP-358 built the sovereign LaBRADOR fold (option B) end-to-end (complete + completeness-proven) and then
+MEASURED it on the REAL anchor relation (`proof_anchor_bind::measure_real_anchor_opening_size` +
+`labrador_fold::fold_feasibility::compaction_at_real_anchor_shape`): **r=κ=128, n≈769, β²≈8.4e14 ⇒ the fold is
+a BASE CASE — depth=1, ratio=1.0× across q∈{2^58..2^80}.** 114k-element / β²≈8.4e14 relations are below
+LaBRADOR's useful threshold (per-round fold overhead ≥ the witness); the recursive fold does NOT compact this
+relation. **§4/§5's recommendation (B) is superseded.** The built fold stays a reusable primitive under
+`labrador_fold/`.
+
+The realistic compaction (Josh, 2026-06-30 — "shrink openings at the source"): the per-round opening carries
+`s1` witness the EC binding does NOT read (the `w<r`/nullifier range proof ≈548 of 891; option D's `w_bits`-only
+opening reframed via a ONE-TIME equality). Designed in **`ANCHOR_RANGE_COMPACT_DESIGN.md`** (constructions X
+≈2.6× clearly-sound + Y ≈3.5× reframing option D's rejection — Y pending DESIGN-review), composing with
+natural-bit-width serialization (~3.7×, orthogonal). Plus E (out-of-band transport) as the deployment path.
