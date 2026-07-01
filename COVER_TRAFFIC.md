@@ -130,6 +130,39 @@ Per-carrier max-class (also protocol-determined, not user-configurable):
 
 ---
 
+### §2.4 Class dithering — the tunable DP knob (GPA intersection-attack mitigation)
+
+**The residual leak (GPA_ANALYSIS.md §7, finding #1).** Constant-rate cover makes the *within-class* timing signal-free (§4.1 lemma), but the class label itself is emitted **exactly** — the rate *is* the class. So the global passive adversary observes each dyad's class trajectory `c(t)` with no noise, and over many co-active epochs a communicating pair accumulates linkage evidence: the **long-term intersection attack**. Unlike the constant-rate cover *within* a class, this leak has no DP noise — `ε_epoch` is a fixed property of the 4-class ladder, not a knob, so `ε_total = E·ε_epoch` grows with lifetime with nothing to slow it.
+
+**The mechanism.** Add a **per-epoch randomized-response class dither** (à la Karaoke's per-epoch jitter): with probability `γ` the emitted class-bit (active/idle in the elevated class) is **flipped** relative to true activity. This is the standard randomized-response DP mechanism on the class label, so it is `(ε_epoch, 0)`-differentially-private with
+
+> **ε_epoch(γ) = ln((1 − γ) / γ)**
+
+— turning the fixed-ladder leak into a **tunable parameter**. `γ = 0` is the exact-class baseline (`ε_epoch = ∞`, finding #1's leak); `γ → 0.5` is maximum noise (`ε_epoch → 0`, but the class bit becomes uninformative). Composed over `E` active epochs (§5 basic composition), `ε_total = E·ε_epoch(γ)`, which must hold under the Tier-3 budget `ε_total ≤ ln 2`.
+
+- **Up-flips** (idle → emit active): a dyad occasionally runs one class *hotter* than activity demands. Latency-free (hotter = faster slots); costs bandwidth. This is what raises the observed background co-activity that hides the partner among false co-actives.
+- **Down-flips** (active → emit idle): a dyad occasionally runs *cooler*. This is the leg that removes the "partner is active in *every* epoch" perfect distinguisher (the reason a bounded `ε` needs both directions). It costs bounded latency — a real message rides the slower idle-rate slots that epoch — capped by the **volume-ceiling δ**: sustained real traffic force-restores the up-class (§4.1 `δ_epoch`), so the down-flip cannot starve a busy dyad.
+
+**Validated (gpa-sim, HYP-329 harness).** The 329d simulator models the dither (`sim::coactivity_trace` applies the RR flip) and the **Bayes-optimal** adversary for the noised observable (`adversary::posterior_partner_entropy` — the posterior over observed-active *counts*, since a dithered partner no longer sits in the all-E intersection; it degenerates exactly to the intersection attack at `γ = 0`). Result: `ε_total` drops and the realized partner anonymity rises **monotonically** in `γ` — at `γ = 0` the partner is nearly identified (< 1 bit), at `γ = 0.4` the dither restores > 2 bits.
+
+**The honest trade (bandwidth vs. ε), `active = Standard (1 s)`, `idle = Ambient (5 s)`, `E = 8`:**
+
+| γ | ε_epoch | ε_total (E=8) | idle-dyad cover overhead |
+|---|---|---|---|
+| 0.00 | ∞ | ∞ | 0 % |
+| 0.10 | 2.20 | 17.6 | 40 % |
+| 0.20 | 1.39 | 11.1 | 80 % |
+| 0.30 | 0.85 | 6.8 | 120 % |
+| 0.45 | 0.20 | 1.6 | 180 % |
+
+Overhead is `γ·(idle_ms/active_ms − 1)` for an idle dyad up-flipping (`measure::dither_bandwidth_overhead`). **The honest finding:** even `γ = 0.45` leaves `ε_total(E=8) = 1.6 > ln 2` — the dither *slows and makes tunable* the intersection leak, but hitting the full lifetime budget over a large `E` needs near-maximal `γ` (near-constant max cover, forfeiting the adaptive classes) or the composition with the static floors (§4.4 ring `log₂ 1000 ≈ 9.97` bits; §4.3 mix batch). This matches GPA_ANALYSIS's headline: the long-term intersection is a budget-accounting problem, not a solved one.
+
+**Recommended default: `γ = 0.20`** — roughly doubles the per-epoch anonymity vs. the exact-class baseline at a bounded (< 1×) idle-cover overhead, a sane knee-point; deployments that want a tighter lifetime budget raise `γ` (up to ~0.45) at the stated bandwidth cost. The precise default is re-validated against the empirical cover-rate measurement (HYP-171).
+
+**Sovereignty (§2.3 invariant preserved).** The dither is **automatic and protocol-determined**, applied by the scheduler with no user toggle — identical to the no-opt-in privacy-status ladder. There is no "dithering on/off" setting; `γ` is a protocol constant (like the class rates), not a preference. Down-flips never drop a real message (they only slow its slot, bounded by the volume ceiling), so the dither degrades gracefully and never sacrifices delivery for privacy.
+
+---
+
 ## §3 Scheduler architecture
 
 ### §3.1 Per-carrier-per-dyad scheduler
