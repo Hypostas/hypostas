@@ -73,23 +73,29 @@ transform is real:
    impossible). So there are exactly `128·m1` complex degrees of freedom (matching the `m1·N` real DOF: `128
    pairs × m1 × 2 reals = m1·N`).
 3. For each pair `(ℓ, ℓ' = N−1−ℓ)`: draw a fresh standard complex Gaussian `z ∈ ℂ^{m1}` (each entry
-   `(𝒩(0,½)+i𝒩(0,½))`, unit variance per complex coord), set `p̂1(ω_ℓ) = L̂(ω_ℓ)·z + ĉ(ω_ℓ)` and the
-   conjugate `p̂1(ω_{ℓ'}) = conj(p̂1(ω_ℓ))` ONLY for the zero-mean part... — **open Q (resolve in impl):**
-   the mean `ĉ` is NOT conjugate-symmetric-free in general (it's the FFT of a real vector, so `ĉ(ω_{ℓ'}) =
-   conj(ĉ(ω_ℓ))` DOES hold since `mean` is real). So set `p̂1(ω_{ℓ'}) = conj(L̂(ω_ℓ)·z) + ĉ(ω_{ℓ'})` with
-   `ĉ(ω_{ℓ'}) = conj(ĉ(ω_ℓ))` — i.e. the noise conjugates, the mean is already conjugate by realness. Net:
+   `(𝒩(0,½)+i𝒩(0,½))`, so `E[z zᴴ] = I`, unit variance per complex coord), set
+   `p̂1(ω_ℓ) = √N · L̂(ω_ℓ)·z + ĉ(ω_ℓ)` and the conjugate freq to
+   `p̂1(ω_{ℓ'}) = conj(√N·L̂(ω_ℓ)·z) + ĉ(ω_{ℓ'})`. The mean is ALREADY conjugate-symmetric because `mean` is
+   real (`ĉ(ω_{ℓ'}) = conj(ĉ(ω_ℓ))`), so the noise conjugates and the mean self-conjugates ⇒ net
    `p̂1(ω_{ℓ'}) = conj(p̂1(ω_ℓ))`. This guarantees `ifft` returns a real vector.
 4. `p1 = round( ifft_blocks(p̂1) )` (real part; imaginary is ~1e-12 noise). Then `p = [p1 ; p2]` as today.
 
-Variance bookkeeping: `L̂ L̂ᴴ = Σ̂1(ω_ℓ)` gives `p̂1(ω_ℓ)` covariance `Σ̂1(ω_ℓ)`; the conjugate-pair coupling
-reproduces exactly the real covariance `Σ1` after `ifft` (standard real-Gaussian-via-Hermitian-spectrum
-construction). **Confirm the `½`-variance-per-complex-coordinate normalization against `Σ1` in the statistical
-test — the factor-of-2 between complex and real Gaussians is the classic error here.**
+**The `√N` scale (Codex DESIGN-review R1 — the load-bearing normalization).** The transform here is
+UNNORMALIZED: `fft = twist·W` (`W` the DFT, `W Wᴴ = N·I`), `ifft = F⁻¹` carries the `1/N`, and the operator
+identity is `Σ1 = F⁻¹ D F` with `D = blockdiag(Σ̂1(ω_ℓ))` (§3). Sampling `p1 = F⁻¹ g` gives
+`Cov(p1) = F⁻¹ Cov(g) F⁻ᴴ`; setting this equal to `Σ1 = F⁻¹ D F` forces `Cov(g) = D·F Fᴴ = N·D` (since
+`F Fᴴ = twist·W·Wᴴ·twistᴴ = N·I`). So the frequency coefficients need covariance `N·Σ̂1(ω_ℓ)`, i.e. draw
+`√N·L̂·z` — NOT `L̂·z`, which would be too small by exactly a factor `N` in variance (`√N` in std-dev). The
+statistical test below is what CERTIFIES this constant (the `√N` × the complex-`½` × the conjugate-pair
+counting all compound here — the derivation gives `√N`, the test confirms nothing else slipped).
 
-**Chunk-4 validation (statistical — the check the syndrome test can't give):** draw `M ≥ 200,000` samples of
-`p1` at a FIXED small test `R` (e.g. `d=1`, `m1=2`, so `Σ1` is `2N×2N`); form the empirical covariance
-`(1/M)Σ p1 p1ᵀ`; assert it matches the flat `Σ1` (build_sigma1) within a relative Frobenius tolerance that
-shrinks like `1/√M` (`< ~0.03` at `M=2e5`). Zero-mean draw (`p2=0`) isolates the covariance from the mean.
+**Chunk-4 validation (statistical — the check the syndrome test can't give):** draw `M` samples of `p1` at a
+FIXED small test `R` (e.g. `d=1`, `m1=2`, so `Σ1` is `2N×2N`, dim `= 512`); form the empirical covariance
+`(1/M)Σ p1 p1ᵀ`; assert it matches the flat `Σ1` (`build_sigma1`) in relative Frobenius norm. The
+sampling-noise floor is `≈ √(dim/M)` (Codex DESIGN-review R2): at `dim=512` this is `≈ 0.051` for `M=2e5`, so
+use `M ≥ 500,000` (floor `≈ 0.032`) with a `< 0.08` assertion (~2.5× the floor — passes on a correct sampler,
+fails on the `√N`/normalization error which is an `O(1)` relative deviation). Zero-mean draw (`p2 = 0`)
+isolates the covariance from the mean.
 Also keep the existing `sample_pre`/`sign`/production-d4 functional tests green (the syndrome must still hold).
 
 ## 6. Swap-in & chunk plan (each Codex-gated, rule #27)
@@ -107,5 +113,6 @@ Also keep the existing `sample_pre`/`sign`/production-d4 functional tests green 
 Soundness-critical (the credential's Gaussian sampler). Mitigations: reuse the EXACT `rr_{ij}` poly the
 validated flat path builds (no re-derived adjoint); the operator-equivalence gate (chunk 2) + the statistical
 covariance gate (chunk 4) catch the distribution errors the functional tests miss; behind `experimental-unaudited`
-throughout; the precise core-SVP re-check remains HYP-330. Open questions flagged inline in §5 (the `½`-variance
-normalization + the mean conjugate-symmetry) resolve in impl against the statistical test.
+throughout; the precise core-SVP re-check remains HYP-330. The two normalization pitfalls are now RESOLVED in
+§5: the `√N` scale is derived (`F Fᴴ = N·I`, Codex R1) and the mean conjugate-symmetry falls out of `mean` being
+real; the statistical test (`M ≥ 500k`, tol `< 0.08 ≈ 2.5×√(dim/M)`, Codex R2) certifies the compound constant.
