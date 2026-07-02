@@ -71,17 +71,70 @@ sig = (tag t, v1, v2, v3)
    `s1` packing; `v3` is `s2`-short so it joins the norm-proof witness like `v2`.
 3. ~~R_{d+1} distribution~~ — **DISSOLVED**: no `R_{d+1}` in the scheme (proof-only artifact); `A3` is
    uniformly random.
-4. **β❶ recomputation** — add the `B3` leg to the forgery M-SIS norm in `sep_sig.rs:1141` and re-assert
-   β❶ < q (it currently omits `B3`; the doc says B3 is "small", verify numerically).
+4. ~~β❶ recomputation~~ — **RESOLVED**: the forgery M-SIS bound at `sep_sig.rs:1155`
+   (`d4_forgery_bound_beta1_below_modulus`) **already includes the `B3` leg** (`+ b3*b3`, `b3 = √B3_SQ`).
+   Verified numerically 2026-07-01: `B3 = 1242.7`, `β❶ = 199508.6`, `β❶/q = 0.4685 < 1`. The leg's
+   soundness is therefore pre-validated — adding `v3` does NOT push β❶ over the modulus. So chunk 5.3 is
+   already satisfied by the shipped test (it was written B3-inclusive in the HYP-354 resolution / FU4).
 
 ## 5. Chunk plan (each Codex-gate-clean, rule #27 smoke+integration)
 
 - **5.0 (this doc)** — DESIGN + Codex DESIGN-review.
 - **5.1** — `sep_sig` keygen: sample `A3 ← U(R_q^{d×k})` into the signing/verify keys + `pp`; unit test the `d×k` shape + determinism from the NUMS seed. (No `sep_trapdoor` change — A3 is trapdoor-free.)
 - **5.2** — `sep_sig` sign/verify: `v3 ← D_{R^k,s2}` sample + syndrome-adjust (`− A3·v3`) + the `A3·v3` relation leg + `‖v3‖²≤B3_SQ`. Round-trip test (honest sig verifies; tampered `v3` / over-`B3` `v3` reject). 5.1+5.2 may land together since A3 is simple.
-- **5.3** — β❶ recomputation with the `B3` leg; assert β❶ < q at production params.
+- **5.3** — ✅ **DONE** (already shipped): β❶ with the `B3` leg is verified in
+  `sep_sig.rs::d4_forgery_bound_beta1_below_modulus` (β❶/q = 0.4685 < 1, B3-inclusive). No new work — the
+  test was written B3-inclusive in the HYP-354 resolution.
 - **5.4** — `proof_show`: the `v3` leg in the committed witness + opening relation; the show still verifies end-to-end.
 - **5.5** — codec (v3 + A3 serialization + version bump) + the pq_vouch/issuance integration + full gate.
+
+## 5b. Impl map — blast radius + mechanical plan (derived 2026-07-01, rule #6 read-through)
+
+Read the full show machinery (`proof_show.rs` §41–443, the witness layout + relation + carry). The v3 leg
+is a **coupled** change (sig + show move together — appending `v3` to `sig.v` changes
+`ShowWitness::from_signature`'s length check, the packed `s1` layout, `carry_block_offset`, and the LHS at
+once). But it is **bounded and mostly mechanical** — the intricate parts adapt automatically:
+
+- **Carry-lift `z = (lhs−rhs)/p` is computed FROM the blocks** (`compute_carry` in `pack_witness_with_carry`),
+  not hand-derived. Once `sep_lhs_from_blocks` gains the `+ A3·v3` term, `z` absorbs it automatically.
+- **The quadratic part `tag·(G·v2)` is UNTOUCHED** — `v3` has no bilinear term, so `sep_bilinear` and the
+  garbage/quadratic proofs keep their structure; only the LINEAR part gains `A3·v3`.
+- **`v3` is `s2`-short (like `v2`)** ⇒ `‖v3‖∞ ≤ witness_inf_bound` already, so the range/approx-range norm
+  proofs cover it with NO change (confirmed: `proof_range/quadratic/challenge/approx_range` have **0**
+  layout-offset sites — they operate on the generic `s1`/norm, not the SEP block layout).
+
+**Blast radius (grep 2026-07-01):** `proof_show.rs` (140 sites — the core), `proof_agg_show.rs` (10),
+`pq_vouch.rs` (9), `codec.rs` (3), `proof_garbage.rs` (2), `blind_issuance.rs` (2), `scheme.rs` (1). Five
+files of real work, concentrated in `proof_show.rs`.
+
+**Layout decision:** append `v3` to `sig.v` so `v = [v1(m1); v2(d·KG); v3(K)]` stays ONE vector
+(`SepSignature` shape unchanged: `(tag, v)`, `v` just longer). Show witness block layout becomes
+`[v1 | v2 | v3 | m | tag | z]` — `v3` (K blocks) inserts after `v2`, shifting `m`/`tag`/`z` by `K`.
+
+**Mechanical touch-list (in order):**
+1. `sep_sig.rs`: `SepSigKey.a3` + `SepVerifyKey.a3` (`d×K` random); `keygen` samples `A3 ← U(R_q^{d×K})`;
+   `sign` samples `v3 ← D_{R^K,s2}`, sets `syn = u + D_s·s + D·m − A3·v3`, appends `v3` to `v`; `verify`
+   adds `A3·v3` to the LHS + checks `‖v3‖²≤B3_SQ`. (`sep_trapdoor` UNCHANGED.)
+2. `proof_show.rs`: `ShowWitness.v3`; `from_signature` (`expected_v += K`, split `v3=v[m1+dk..]`);
+   `pack_witness`/`unpack_witness` (chain `v3` after `v2`); `carry_block_offset += K`;
+   `expected_sep_s1_len += K`; `sep_lhs_over_proof_ring` + `sep_lhs_from_blocks` + `sep_linear` gain the
+   `A3·v3` term (v3 blocks at `[m1+dk, m1+dk+K)`); shift `m`/`tag`/`z` offsets by `K`. Add `vk.a3()`.
+3. `proof_agg_show.rs` (10 sites): follow the shifted layout.
+4. `codec.rs`: serialize `A3` in the key codec (v3 rides `sig.v` automatically) + wire-version bump.
+5. `pq_vouch.rs`/`blind_issuance.rs`/`scheme.rs`: thread `A3` through key construction; recheck the 9+2+1
+   layout sites.
+
+**Tests (rule #27):** SEP round-trip (honest verifies; tampered/over-B3 `v3` rejects); the ZK show still
+proves+verifies end-to-end (`sep_relation_holds_over_proof_ring` + a full `prove_show`/`verify_show`
+round-trip); `expected_sep_s1_len`/`carry_block_offset` consistency test. Then Codex-gate.
+
+**Sequencing note (2026-07-01):** design + Codex DESIGN-review + soundness-validation (5.3, β❶<q with B3)
+are COMPLETE. The impl above is a bounded-but-deep change to the `[LNP22]` witness layout — the crate's
+most soundness-sensitive machinery. Per rules #1/#6 ("never self-certify soundness / never rush crypto
+understanding") it is sequenced for focused execution rather than a session-tail build; it is Medium-priority
+reference-fidelity (the shipped simplified SEP is already sound, β❶<q) behind `experimental-unaudited`
+(HYP-330-gated regardless), so sequencing costs nothing on the critical path. The map above makes the build
+turn-key.
 
 ## 6. Risk
 
