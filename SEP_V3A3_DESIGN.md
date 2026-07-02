@@ -21,10 +21,11 @@ optimization (`A3` is `d×k`, not the `d×dk` double-trapdoor `AR'`).
 Extra public block, per §5 (line 308, 1700):
 
 ```
-A3 = t_{d+1}·G − A·R_{d+1}        // d×k, a SECOND tagged gadget block using an extra
-                                   // trapdoor column R_{d+1} (the "partial trapdoor")
-A_T = [ A | tG − B | A3 ]         // was [A | tG − B]; B = A·R as today
-v   = [ v1 ; v2 ; v3 ]            // v3 ∈ R^k is the new short component
+A3 = t_{d+1}·G − A·R_{d+1}        // A3 is d×k. A is d×m1, so R_{d+1} is m1×k (⇒ A·R_{d+1}
+                                   // is d×k); G here is the k-column gadget (d×k). R_{d+1}
+                                   // is the extra "partial trapdoor" (a k-column block).
+A_T = [ A | tG − B | A3 ]         // was [A | tG − B]; B = A·R as today (base R is m1×dk)
+v   = [ v1 ; v2 ; v3 ]            // v3 ∈ R^k is the new short component; A3·v3 ∈ R^d
 ```
 
 **Sign** (ref line 1700 — `v3` sampled FIRST, syndrome adjusted, then `SamplePre` for `(v1,v2)`):
@@ -66,7 +67,9 @@ sig = (tag t, v1, v2, v3)
    §4/§5 for whether our single-attribute case collapses `t_{d+1} = t`.
 2. **Does `A3·v3` enter the SHOW's exact-norm/quadratic legs**, or only the linear opening? (Affects
    `proof_show` witness layout + whether `M_MSG`/`v3` widen the approx-range dim.)
-3. **`R_{d+1}` distribution** — same `χ` (`sep_trapdoor`) as the base `R` columns? Confirm dims (`d×k`).
+3. **`R_{d+1}` distribution** — same `χ` (`sep_trapdoor`) as the base `R` columns? Dims are **`m1×k`**
+   (A is `d×m1`, base `R` is `m1×dk`), so `A·R_{d+1}` is `d×k` = `A3`. (Corrected from an earlier `d×k`
+   error — Codex DESIGN-review r1.)
 4. **β❶ recomputation** — add the `B3` leg to the forgery M-SIS norm in `sep_sig.rs:1141` and re-assert
    β❶ < q (it currently omits `B3`; the doc says B3 is "small", verify numerically).
 
