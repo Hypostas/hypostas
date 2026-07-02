@@ -136,6 +136,45 @@ reference-fidelity (the shipped simplified SEP is already sound, β❶<q) behind
 (HYP-330-gated regardless), so sequencing costs nothing on the critical path. The map above makes the build
 turn-key.
 
+## 5c. The blind-issuance (OblSign) v3 path — design (2026-07-02, the previously-undesigned piece)
+
+§2 designed the DIRECT `sign` leg. The credential is ALSO minted via blind issuance (`oblivious_sign` /
+`oblivious_sign_checked`), and blind creds must carry a proper `v3` — else blind-vs-direct creds are
+distinguishable (a `v3=0` blind cred is not reference-faithful and leaks the issuance path). Reading the
+blind flow (`sep_sig.rs:332` `oblivious_sign`, `:369` `oblivious_sign_checked`, and the user's
+`prove_request`/`verify_request` in `proof_show`) settles who samples `v3` and where it folds.
+
+**DECISION — the USER samples `v3` and folds `−A3·v3` into the commitment `c_u`.** So the credential
+relation `A_t·[v1;v2] + A3·v3 = u + D_s·s + D·m` holds after unblinding, with `v3` entirely user-side:
+
+```
+User:   v3 ← D_{R^K, s2};   c_u = A·ru + D_s·s + D·m − A3·v3   (was: A·ru + D_s·s + D·m)
+Issuer: syndrome = u + c_u;  v_blinded = SamplePre(t, u + c_u)          ← UNCHANGED (`oblivious_sign` code untouched)
+User:   v = v_blinded − [ru;0];  credential = (t, [v1;v2;v3])           ← append the user's own v3
+```
+
+Verify: `A_t·v = u + c_u − A·ru = u + D_s·s + D·m − A3·v3`, so `A_t·[v1;v2] + A3·v3 = u + D_s·s + D·m`. ✅
+
+**Why user-side (not issuer-sampled):** `v3` is the user's secret-adjacent randomness like `ru` — the
+issuer NEVER sees it, so it cannot become an issuance→show linkage. (Even issuer-sampled `v3` would be
+hidden by the ZK show, but user-side is strictly safer + symmetric with `ru`/`s`/`m`.) **Everlasting
+anonymity (BBS half) is untouched** — `v3` is entirely lattice-side and independent of `[s|m]`.
+
+**Coupling consequence (a SIMPLIFICATION):** the **issuer's `oblivious_sign` needs NO change** — it
+consumes `c_u` opaquely. The blind-path change is entirely USER-side:
+- `prove_request` (the user builds `c_u` incl. `−A3·v3`) + the well-formedness proof `π` must now ALSO
+  prove `‖v3‖²≤B3_SQ` AND that `−A3·v3` is the folded term (a linear relation on the committed `v3`).
+- `verify_request` (the issuer's Model-B check) must verify that extended `π`.
+- the user's unblind appends `v3` to `v`.
+
+So the atomic unit is: `sep_sig` (keygen A3 + direct sign/verify + the `‖v3‖≤B3` check) + `proof_show`
+(the show witness `v3` **and** the request-π `v3` leg + `verify_request`) + `codec` + `pq_vouch`/`scheme`
+key threading. `oblivious_sign` itself is untouched — smaller blast radius than §5b feared.
+
+**Open Q (resolve in impl):** does `prove_request`'s existing binariness/`upk`-binding π already carry a
+short-witness slot the `v3` norm proof can reuse, or does `v3` widen the request-π approx-range dim? Read
+`proof_show::prove_request`'s witness packing (same `s1`-layout question as the show, §5b Q2).
+
 ## 6. Risk
 
 Soundness-critical (the credential). Mitigations: design-first (this doc) → Codex DESIGN-review → chunked
