@@ -119,6 +119,22 @@ Blueprint: Libert–Ling–Nguyen–Wang, "Zero-Knowledge Arguments for Lattice-
 realized on our [LNP22] proof stack. The ring is public, so the verifier RECOMPUTES the accumulator; the prover
 proves a hidden path.
 
+### §3.0 Ring choice — PROOF-RING-NATIVE, no carry-lift (decided at C2)
+
+The accumulator lives **natively in the proof ring** `R_q̂ = Z_q̂[X]/(X^{n̂}+1)` (`proof_ring`, n̂ = 64, q̂ ≈
+2⁵⁷·⁷) — NOT in the SEP credential ring `R_p` (p = 425801). Rationale (found while grounding C2): SPRING keys
+are independent of the SEP credential, so there is no reason to pay the `R_p → proof-ring` **carry-lift + subring
+embedding** the SEP show needs — that bridge is the single most error-prone part of the [LNP22] stack (the class
+of the HYP-355 P1). Proving over q̂ directly, `proof_linrel` (`Σ C_k·s1[idx_k] = rhs`), `proof_relation_zk`, and
+`proof_agg_show` all compose with ZERO bridge and no carry witness.
+
+The one catch — a base-2 gadget over the 58-bit q̂ is ~58 digits/coeff (11× the R_p base-14's 5), which would
+blow the size budget — is resolved by a **large-base gadget** `b ≈ 2^ν` (ν≈12) so `⌈log_b q̂⌉ ≈ 5` digits/coeff,
+matching R_p's digit count. Digits then lie in `[0, b)` (a bounded-range family, `proof_range`) rather than
+`{0,1}`. Net: SAME witness size as the R_p accumulator, WITHOUT the carry-lift. `b` (and ℓ, the node dim) are
+calibrated for M-SIS collision-resistance in C5 — a larger `b` shrinks the witness but weakens CR; the feasible
+window is the C5 lever. C1's initial R_p draft is re-based to this at the C2 pivot.
+
 ### §3.1 The accumulator (public, both sides compute it after resolving the ring)
 
 **Resolve first (Codex P1).** Both `sign` and `verify` map the ring's `RingMemberId`s → SPRING pubkeys
@@ -132,8 +148,9 @@ An Ajtai/SIS hash `H: R_q^{2ℓ} → R_q^{ℓ}` compresses two nodes into one:
 H(a, b) = A_h · [ g⁻¹(a) ; g⁻¹(b) ]  mod q
 ```
 
-where `g⁻¹(·)` is the base-b gadget decomposition (`sep_gadget`, base-14, k = KG) mapping a full node in R_q^{ℓ}
-to a SHORT vector, and `A_h ∈ R_q^{ℓ × 2ℓk}` is a public CRS matrix. `H` is collision-resistant under M-SIS
+where `g⁻¹(·)` is the **large-base gadget decomposition over q̂** (§3.0, base `b ≈ 2^ν`, `k = ⌈log_b q̂⌉ ≈ 5`
+digits/coeff, digits in `[0, b)`) mapping a full node in R_q̂^{ℓ} to a SHORT vector, and `A_h ∈ R_q̂^{ℓ × 2ℓk}`
+is a public CRS matrix. `H` is collision-resistant under M-SIS over q̂
 (a collision yields a short nonzero kernel element of `A_h`). The leaves are `leaf_i = H_leaf(t_i)` — an Ajtai
 hash of the RESOLVED pubkey `t_i` (lattice-friendly, verifier-computable), NOT of the routing-id hash. To fix a
 canonical tree shape both sides agree on, leaves are ordered by the ring's canonical `RingMemberId` order (the
