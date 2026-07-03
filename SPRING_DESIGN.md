@@ -269,10 +269,10 @@ it is NOT a SPRING-specific gap.)
    `aggregate_rows(bit×(sib−node) bilinears, μ)`, `cross` = its `c¹` term, `lin_part` =
    `aggregate_rows(key/leaf/node/root linear rows, μ)`, `cst` = `aggregate_rows(−R rows, μ)`, μ from
    `mu_vector(t_a, …)`. (This REPLACES C2b-iii-b's pre-aggregated `FQuadForm` + `path_mu`.)
-2. **Scalar families as `extra` `AffineConstraint`s:** `s ∈ {0,1}` and each `b_j ∈ {0,1}` (binariness);
-   each committed digit `∈ [0,b)` (range); each digit-vector `recompose < q̂` (canonicality, §3.2b —
-   the `proof_ltconst` borrow-gadget over base-`b` digits). Aggregated by `mu_vector` + `aggregate`, exactly
-   like `issuance_binariness`.
+2. **Scalar families as `extra` `AffineConstraint`s:** `s ∈ {0,1}`, each `b_j` BINARY, and each `b_j` a
+   SCALAR bit (`Σ_{k≥1} coeff_k = 0`). Aggregated by `mu_vector` + `aggregate`, like `issuance_binariness`.
+   (Digit `[0,b)` range + canonicality `< q̂` are NOT included — §4/§3.2d show shortness + M-SIS CR suffice;
+   the show's approx-range leg supplies the shortness. This is the whole of C2b-iv, already built.)
 3. **`prove_spring_show` / `verify_spring_show`** mirror `prove_issuance_wf` / `verify_issuance_wf`: sample
    `y3/z3` (approx-range), `ℓ` garbage, commit `t_B`, FS-derive `γ/μ`, compute `h_i`, build
    `SumRelation{SpringMembershipRelation, scalar}`, `prove_agg`. **FS seed = `H(domain ‖ message ‖ root ‖
@@ -281,7 +281,13 @@ it is NOT a SPRING-specific gap.)
 This is the single largest, highest-risk chunk; it lands design-first → Codex DESIGN-review → chunked build
 (relation, then scalar families, then the show wrapper), each `codex exec review`-gated.
 
-### §3.2d Is per-digit canonicality/range actually needed? (soundness-vs-size, adjudicate before building)
+### §3.2d Is per-digit canonicality/range actually needed? (soundness-vs-size) — **RESOLVED: NO (see §4)**
+
+**Resolution:** the §4 reduction proves unforgeability from digit SHORTNESS + M-SIS collision-resistance
+ALONE (walk the extracted chain and the verifier's canonical tree to the first divergence → a short nonzero
+`A_node`/`A_leaf` kernel element). Canonical digits are never invoked, so the per-digit `[0,b)` range and
+`recompose < q̂` canonicality families are **dropped**: `m1 ≈ 440`, size stays ~20–45 KB, and C2b-iv is just
+the binariness families (already built). The record of the question follows.
 
 Grounding the C2b-iv (2/2) build surfaced a pivotal question that determines both soundness AND whether
 SPRING fits the size budget. `proof_range` commits **2·⌈log₂ b⌉ ≈ 24 bit-blocks per ring element**;
@@ -325,16 +331,42 @@ be re-derived after it settles. **Do not build the per-digit range families unti
 
 ## §4 Soundness (unforgeability)
 
-An accepting proof, by [LNP22] knowledge-soundness (the extractor we already rely on for the SEP show), yields a
-witness satisfying families 1–4. Family 4 pins `node_δ = R`; families 2–3 are a hash-chain from `leaf` to
-`node_δ`; family 1 opens `leaf`'s pre-image `t = A_s·s` for a KNOWN binary `s`. Therefore either:
-(a) `leaf` is one of the ring's actual leaves and the forger holds that member's `s` (not a forgery — it's a
-real member signing), or
-(b) the extracted path is a **collision** in `H` (two different pre-images hashing into an on-path node) or a
-short kernel element of `A_h`/`A_s` — an M-SIS break.
-Unforgeability reduces to M-SIS (accumulator + key binding) ∧ the FS/[LNP22] soundness we already calibrated for
-the show (q̂ ≈ 2⁵⁷·⁷, ℓ garbage rows → ~q̂⁻ˡ soundness error). The message is in the FS seed, so a proof does not
-transfer across messages.
+An accepting proof, by [LNP22] knowledge-soundness (the extractor we rely on for the SEP show), yields a
+witness satisfying the full-ring families (key/leaf/path/root) with, from the show's approx-range leg,
+**every committed digit SHORT** (`‖·‖_∞ ≤ B_short`) and (binariness families) `s ∈ {0,1}`, each `b_j` a
+scalar bit. Write the extracted values: `t = A_s·s`, `leaf = A_leaf·d_t` where `recompose(d_t)=`… (each
+`node` a recomposition of its committed SHORT digits), the δ hash rounds `node_{j+1} = A_node·[d_{node_j};
+d_{sib_j}]` (bit-ordered), and `node_δ = R`.
+
+**Reduction (no canonicality needed — resolves §3.2d).** Let `T` be the verifier's public tree: the K real
+leaves `{H_leaf(t_i)}` hashed up (canonical digits) to the same root `R`. Compare the extracted chain to `T`
+top-down from the shared root `R`:
+- **Root:** both `A_node·[extracted top children digits]` and `A_node·[canonical top children digits]` equal
+  `R`. If the two SHORT digit-vectors DIFFER, that is two distinct short pre-images of `R` under `A_node` — an
+  **M-SIS collision** (their difference is a short nonzero kernel element of `A_node`). Done.
+- **Else** they are equal ⇒ the extracted node values on this path match `T`'s; recurse into the sub-tree
+  holding the extracted leaf.
+- **Leaf:** at the bottom, either the extracted `leaf` equals a real `H_leaf(t_i)` with matching short
+  pre-image ⇒ (by `leaf = A_leaf·d_t` and `t = A_s·s`, an `A_leaf`/`A_s`-collision unless `t = t_i`) the
+  forger holds member `i`'s binary key — a REAL member, not a forgery; or the leaf digits differ from the
+  canonical ⇒ an `A_leaf` collision.
+
+So a non-member accepting proof yields a short nonzero kernel element of `A_node` / `A_leaf` / `A_s` — an
+**M-SIS break**. The argument uses ONLY digit SHORTNESS (so the divergence is a valid M-SIS instance:
+`2·B_short` below the `A_node`/`A_leaf` M-SIS norm bound, §5) and the hash-chain structure — it NEVER invokes
+canonical decompositions. **Hence per-digit canonicality (`recompose < q̂`) and `[0,b)` range families are NOT
+required for unforgeability, and are DROPPED (§3.2d resolved).**
+
+*Reconciling Codex's §3.2b P1.* That P1 correctly observed `[0,b)` does not force a canonical decomposition
+mod q̂, and refuted the WEAKER claim "the prover's digits equal the verifier's canonical tree." This stronger
+reduction does not need that claim: it walks the two trees to the first divergence and extracts the collision
+from the SHORT (not canonical) child vectors. The large-base gadget's non-unique decomposition is thus
+harmless — the binary LLNW accumulator gets canonicality for free (bits are unique) and so its proofs omit it;
+the CR argument covers the large-base case identically. The only residual requirement is `B_short` shortness,
+which the show's approx-range leg already provides — no per-digit witness.
+
+Unforgeability reduces to M-SIS (`A_node`/`A_leaf`/`A_s`, at `B_short`) ∧ the FS/[LNP22] soundness of the show
+(q̂ ≈ 2⁵⁷·⁷, ℓ garbage rows). The message is in the FS seed, so a proof does not transfer across messages.
 
 **Trust-model dependency (from the P1 fix).** Soundness now also rests on the member directory being the
 *authenticated* attested set: the reduction's "leaf is a real member's key" step needs the attestation to bind
