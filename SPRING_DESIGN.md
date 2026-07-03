@@ -246,6 +246,41 @@ binary `s`), the §4 extractor argument goes through: real member or M-SIS colli
 the P1 gap: without it, a non-canonical chain could reach `R` via a hash divergence the range `[0,b)` did
 not forbid.)
 
+### §3.2c The production show — mirror the ℓ-amplified issuance-π (C2b-iv+v)
+
+The C2b-iii-b `prove_quad` was a construction-validation shortcut with two gaps (documented on
+`MembershipCoreProof`): (1) no scalar `{0,1}`/range/canonicality families, (2) my OWN μ-row-aggregation +
+single garbage gives only `~1/p` soundness over the composite `q̂ = p·q₁`. **Both are closed by building
+the production proof as a MIRROR of the blind-issuance well-formedness show `prove_issuance_wf` (§G′)** —
+NOT the SEP-specific `prove_show_agg_with_extra`. §G′ is already the generic pattern: a NON-SEP full-ring
+relation (`OpeningRelation`) as the `a:` summand, ALL scalar families supplied via `extra`, the
+approx-range witness-shortness leg + the `ℓ` garbage rows + the single `(t0,t1)` — identical to the show.
+
+**Why mirror, not reinvent.** `OpeningRelation : FullRingRelation` aggregates its rows with the SAME
+`mu_vector` + `aggregate_rows` the SEP relation uses, inside the SAME ℓ-amplified masked show. So a SPRING
+relation built the same way inherits the SEP credential's *exact* soundness properties — including how the
+[LNP22] machinery treats the composite modulus. The C2b-iii-b `~1/p` weakness was an artifact of my
+bespoke `prove_quad` path, not of the show; mirroring §G′ removes it by construction. (The residual
+composite-modulus μ question is then identical to the SEP show's and lives under the same HYP-330 audit —
+it is NOT a SPRING-specific gap.)
+
+**The build:**
+1. **`SpringMembershipRelation : FullRingRelation`** (mirrors `OpeningRelation`): `quad_part` =
+   `aggregate_rows(bit×(sib−node) bilinears, μ)`, `cross` = its `c¹` term, `lin_part` =
+   `aggregate_rows(key/leaf/node/root linear rows, μ)`, `cst` = `aggregate_rows(−R rows, μ)`, μ from
+   `mu_vector(t_a, …)`. (This REPLACES C2b-iii-b's pre-aggregated `FQuadForm` + `path_mu`.)
+2. **Scalar families as `extra` `AffineConstraint`s:** `s ∈ {0,1}` and each `b_j ∈ {0,1}` (binariness);
+   each committed digit `∈ [0,b)` (range); each digit-vector `recompose < q̂` (canonicality, §3.2b —
+   the `proof_ltconst` borrow-gadget over base-`b` digits). Aggregated by `mu_vector` + `aggregate`, exactly
+   like `issuance_binariness`.
+3. **`prove_spring_show` / `verify_spring_show`** mirror `prove_issuance_wf` / `verify_issuance_wf`: sample
+   `y3/z3` (approx-range), `ℓ` garbage, commit `t_B`, FS-derive `γ/μ`, compute `h_i`, build
+   `SumRelation{SpringMembershipRelation, scalar}`, `prove_agg`. **FS seed = `H(domain ‖ message ‖ root ‖
+   ring.canonical_bytes())`** (§3.3 binding — distinct FS domain `spring-show/*`).
+
+This is the single largest, highest-risk chunk; it lands design-first → Codex DESIGN-review → chunked build
+(relation, then scalar families, then the show wrapper), each `codex exec review`-gated.
+
 ### §3.3 Sign / verify
 
 - **sign(message, ring, signer):** reject `SignerNotInRing` if `signer ∉ ring` (O(log K) `contains`). Resolve
