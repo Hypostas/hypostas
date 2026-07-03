@@ -233,8 +233,10 @@ short digit-vectors that recompose to the same value mod q̂ but hash DIFFERENTL
 pinning canonicality a prover could feed a non-canonical decomposition and diverge from the verifier's
 deterministic tree. The `< q̂` constraint (a `< CONSTANT` borrow-gadget over the base-`b` digits — the
 HYP-353 `bits(w) < Fr::MODULUS` technique, base-`b` instead of base-2, `proof_ltconst`) forces the UNIQUE
-canonical decomposition. Applied to every committed digit-vector (`t`, `leaf`, every `node_j`). Root
-equality `node_δ = R` is a linear family with the public `R` as `rhs`.
+canonical decomposition. Applied to **every committed digit-vector that feeds an `A_node`/`A_leaf` hash** —
+`t`, `leaf`, every `node_j`, AND every `sibling_j` (the auth-path siblings are committed hash inputs too;
+a non-canonical sibling decomposition would let the chain diverge just like a non-canonical node — Codex
+DESIGN-review P1). Root equality `node_δ = R` is a linear family with the public `R` as `rhs`.
 
 **Soundness.** `prove_agg`'s knowledge-soundness extracts a witness with `quad+lin+cst = 0` full-ring, so
 every level's `node_{j+1} = A_node·[bit-ordered children]` holds AND — via the canonicality (`< q̂`) family
