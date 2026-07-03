@@ -264,6 +264,15 @@ bespoke `prove_quad` path, not of the show; mirroring §G′ removes it by const
 composite-modulus μ question is then identical to the SEP show's and lives under the same HYP-330 audit —
 it is NOT a SPRING-specific gap.)
 
+> **⚠️ SUPERSEDED in part (2026-07-03, Codex gate on C2b-v).** The claim above that mirroring §G′ "removes
+> the `~1/p` by construction" is WRONG: the `a:` `mu_vector`+`aggregate_rows` aggregation is one-shot in the
+> masked quadratic and is NOT ℓ-amplified by the show's `h_i` rows (those amplify only the scalar `extra`
+> families). The `~1/p` is real for the `a:` relation — and, exactly as this section says, it is stack-wide
+> (identical in SEP's `OpeningRelation`/`SepRelation`), NOT SPRING-specific. It is a grindable soundness gap
+> (`~p_min` work), fixed by ℓ-folding the aggregation layer. See **`AGGREGATION_SOUNDNESS_COMPOSITE_MODULUS.md`**
+> for the analysis + the stack-wide fix. Until that lands, `prove_spring_show` (and the SEP show) carry the
+> one-shot aggregation posture under the `experimental-unaudited` / HYP-330 gate.
+
 **The build:**
 1. **`SpringMembershipRelation : FullRingRelation`** (mirrors `OpeningRelation`): `quad_part` =
    `aggregate_rows(bit×(sib−node) bilinears, μ)`, `cross` = its `c¹` term, `lin_part` =
