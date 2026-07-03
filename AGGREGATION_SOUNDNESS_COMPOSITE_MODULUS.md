@@ -35,8 +35,14 @@ Users of the aggregation layer (all identical in shape):
 - The scalar `extra` families are aggregated the same way (`aggregate`, `mu_vector`), but they are **already
   ℓ-repeated** via the `h_i` rows (independent `γ_{i,·}` per row); the `a:` relation is **not**.
 
-`q̂ = PHAT_P · PHAT_Q1 = 425801 · 549755813869 ≈ 2⁵⁷·⁷`, `p ≈ 2¹⁸·⁷`, `q₁ ≈ 2³⁹·⁰`. `q̂` is composite
-because the SEP credential ring is `R_p`; the show needs the larger `q̂`.
+`q̂ = PHAT_P · PHAT_Q1` is composite because the SEP credential ring is `R_p`; the show needs the larger
+`q̂`. Let **`p_min := min(PHAT_P, PHAT_Q1)`** — the smallest prime factor; it alone drives the aggregation
+weakness below (`~1/p_min`) and the fix constant (`ℓ_agg`). **The specific values are PROVISIONAL
+(HYP-330):** the illustrative `PHAT_P = 425801 (≈2¹⁸·⁷)`, `PHAT_Q1 = 549755813869 (≈2³⁹·⁰)` are marked in
+this repo's HYP-330 notes as ILLUSTRATIVE and **failing the Lemma 7.7 ZK bound** — the show modulus must be
+recalibrated regardless. So every numeric below is *conditional on the illustrative set* and recomputed once
+HYP-330 fixes `q̂`; the mechanism (weakness `~1/p_min`, fix `ℓ_agg = ⌈λ / log₂ p_min⌉`) is what is
+canonical, not the numbers. For the illustrative set `p_min ≈ 2¹⁸·⁷`.
 
 ---
 
@@ -52,10 +58,12 @@ SPRING key row `A_s·s − recompose(t_digits)`, set `t_digits` to recompose to 
 
 **Aggregate collapse.** `F(ŝ*) = Σ μ_{ik} row_{ik}`. Mod `q₁`: every deliberately-violated row is `≡ 0`, and
 the honest rows are `0`, so `F ≡ 0 (mod q₁)` automatically. Mod `p`: `F ≡ Σ μ · (row/… )` — one scalar
-equation in the FS scalars `μ`. Over the random `μ = mu_vector(t_A)`, `F ≡ 0 (mod p)` holds with probability
-**`~1/p ≈ 2⁻¹⁸·⁷`**. The prover **grinds `t_A`** (re-randomises the commitment) until the FS-derived `μ`
-zeroes the mod-`p` aggregate. Expected work: **`~2¹⁸·⁷` hashes.** Then `F(ŝ*) = 0` **honestly**, the masked
-quadratic (layer 1) proves it truthfully, and the verifier accepts a witness with `r(ŝ*) ≠ 0`.
+equation in the FS scalars `μ`. Over the random `μ = mu_vector(t_A)`, `F ≡ 0 (mod p_min)` holds with
+probability **`~1/p_min`** (`≈ 2⁻¹⁸·⁷` for the illustrative set). The prover **grinds `t_A`** (re-randomises
+the commitment) until the FS-derived `μ` zeroes the mod-`p_min` aggregate. Expected work: **`~p_min` hashes**
+(`≈ 2¹⁸·⁷` illustrative). Then `F(ŝ*) = 0` **honestly**, the masked quadratic (layer 1) proves it truthfully,
+and the verifier accepts a witness with `r(ŝ*) ≠ 0`. (If `p_min` is the *smaller* factor the grind targets
+the *other* factor's coset — symmetric; the cost is always `~p_min`.)
 
 **Shortness does not stop it.** A `q₁`-sized coefficient (`~2³⁹`) contributes `2⁷⁸` to `‖·‖²`, under the
 approx-range bound `B² ≈ 2⁸¹·⁸` (`B = c₂₅₆·σ₃·√256 ≈ 2⁴⁰·⁹`). Verified numerically. So the grinding witness
@@ -114,20 +122,29 @@ Replace the single FS-scalar aggregate with **`ℓ_agg` independent aggregates**
 ```
 F_j(ŝ) = Σ_{i,k} μ^{(j)}_{ik} · row_{ik}(ŝ) = 0    for j = 1..ℓ_agg ,   μ^{(j)} independent FS scalars
 ```
-A cheater's planted row survives all `ℓ_agg` collapses only with probability `(1/p)^{ℓ_agg}`. With
-`p ≈ 2¹⁸·⁷`, **`ℓ_agg = 7 ⇒ (1/p)⁷ ≈ 2⁻¹³¹ < 2⁻¹²⁸`**. Soundness becomes clean and unconditional — no
-reliance on the §3 M-SIS-mod-`q₁` interaction, no per-component calibration subtlety.
+A cheater's planted row survives all `ℓ_agg` collapses only with probability `(1/p_min)^{ℓ_agg}`. So the fix
+constant is a **formula keyed to the calibrated modulus**, not a hard number:
+```
+ℓ_agg = ⌈ λ / log₂ p_min ⌉ ,   λ = 128
+```
+For the illustrative `p_min ≈ 2¹⁸·⁷` this is `ℓ_agg = 7` (`(1/p_min)⁷ ≈ 2⁻¹³¹ < 2⁻¹²⁸`) — but **`ℓ_agg` is
+recomputed from whatever `p_min` HYP-330's modulus calibration selects** (a larger smallest factor ⇒ smaller
+`ℓ_agg`; e.g. a `p_min ≈ 2⁶⁴` factor ⇒ `ℓ_agg = 2`). Encode it as `⌈λ / log₂ p_min⌉` in code with a param-gate
+assertion `(1/p_min)^{ℓ_agg} < 2⁻λ`, so an uncalibrated or mis-set modulus is rejected, not silently shipped.
+Soundness then becomes clean and unconditional — no reliance on the §3 M-SIS-mod-`q₁` interaction, no
+per-component calibration subtlety.
 
 **Mechanism (implementation).** `prove_agg` proves one `F=0`; extend it to a **vector** of `ℓ_agg`
 relations sharing the *same* linear opening `(w, z1, z2)` and challenge `c`, with `ℓ_agg` garbage pairs
 `(t0_j, t1_j)`:
-- Prover: for each `j`, `e0_j = F_j.quad_part(y)`, `e1_j = F_j.cross(y,ŝ)+F_j.lin_part(y)`,
-  `t0_j = ⟨b,y2⟩+e0_j`, `t1_j = ⟨b,s2⟩... ` — wait: the `⟨b,s2⟩` term is shared; only the relation part
-  `e0_j/e1_j` differs. So `t0_j = ⟨b,y2⟩ + e0_j`, `t1_j = ⟨b,s2⟩ + e1_j`. Challenge `c` binds all `t0_j,t1_j`.
-- Verifier: the same reconstruction per `j`; accept iff all `ℓ_agg` check.
-- **Cost:** `+2(ℓ_agg−1)` ring elements over the current single garbage pair (`w, z1, z2` shared). For
-  `ℓ_agg=7`: `+12` `R_q̂` elements. `w/z1/z2` (the bulk) are unchanged — the proof stays log-size in the ring
-  depth `δ`.
+- Prover: for each `j`, `e0_j = F_j.quad_part(y)`, `e1_j = F_j.cross(y,ŝ) + F_j.lin_part(y)`, then
+  `t0_j = ⟨b,y2⟩ + e0_j` and `t1_j = ⟨b,s2⟩ + e1_j`. The `⟨b,·⟩` masking terms are shared across `j`; only
+  the relation parts `e0_j/e1_j` differ. The challenge `c = FS(t_A, t_B, w, {t0_j,t1_j}_j, context)` binds
+  ALL garbage pairs (so the prover cannot adaptively choose `μ^{(j)}` after seeing `c`).
+- Verifier: the same masked-garbage reconstruction per `j`; accept iff all `ℓ_agg` checks pass.
+- **Cost:** `+2(ℓ_agg−1)` ring elements over the current single garbage pair (`w, z1, z2` shared) — `+12`
+  `R_q̂` elements for the illustrative `ℓ_agg=7`. `w/z1/z2` (the bulk) are unchanged, so the proof stays
+  log-size in the ring depth `δ`.
 
 **A cheaper structural alternative (note, not chosen):** give SPRING its own **prime** proof ring
 (SPRING keys are independent of the SEP credential, §3.0). Then one-shot aggregation is `~1/q_prime`, and a
@@ -149,8 +166,11 @@ needs `ℓ_agg` repetition here. ℓ-folding is therefore the essential ingredie
 2. `SepRelation` / `OpeningRelation` / SPRING membership: derive `ℓ_agg` independent `μ^{(j)}` (domain-separated
    `mu_vector` seeds `…/agg/j`), expose the rows so the vector prover can re-aggregate per `j` (the relations
    already hold their `rows`; the `FullRingRelation` trait may need a `rows()`/`aggregate_with(μ)` hook).
-3. `ℓ_agg` is a **calibration constant** `⌈128 / log₂ p⌉ = 7` (Ref: this doc §5) — a real constant traced to
-   `p`, not a magic number. Add an estimator-style test asserting `(1/p)^{ℓ_agg} < 2⁻¹²⁸`.
+3. `ℓ_agg = ⌈λ / log₂ p_min⌉` is **computed from the calibrated modulus** (Ref: this doc §5), NOT a hard
+   constant — `= 7` only for the illustrative `p_min ≈ 2¹⁸·⁷`. Compute it in code from `p_min`; add a
+   param-gate test asserting `(1/p_min)^{ℓ_agg} < 2⁻λ`. This couples `ℓ_agg` to the SAME HYP-330 modulus
+   calibration that must already fix the Lemma 7.7 ZK bound (the illustrative `q̂` fails it) — one joint
+   solve, not two.
 
 **SEP note:** the SEP credential show is audited but behind `experimental-unaudited` and HYP-330-gated; this
 is a genuine soundness strengthening of it, filed as its own issue and reviewed against the SEP show the same
@@ -161,10 +181,11 @@ way. It is NOT a silent change to shipped-verified behavior — the gate is stil
 ## 7. Test plan (rule #27: integration + adversarial)
 
 - **Attack regression (the point of the whole doc):** a `#[test]` that mounts §2 — construct `ŝ` with a
-  `q₁`-multiple row, and assert that with `ℓ_agg=1` a single hand-chosen `μ` (μ ≡ 0 mod p) makes the aggregate
-  vanish (demonstrating the weakness concretely), while with `ℓ_agg=7` no single grind survives (the honest
-  path still verifies; the planted-violation path fails). This encodes the soundness *value*, not existence.
-- **Round-trip:** honest witness → `ℓ_agg=7` vector prove → verify, for SEP, issuance-π, and SPRING.
+  `p_min`-coset-multiple row, and assert that with `ℓ_agg=1` a single hand-chosen `μ` (`μ ≡ 0 mod p_min`)
+  makes the aggregate vanish (demonstrating the weakness concretely), while with the calibrated `ℓ_agg` no
+  single grind survives (the honest path still verifies; the planted-violation path fails). Encodes the
+  soundness *value*, not existence.
+- **Round-trip:** honest witness → `ℓ_agg`-vector prove → verify, for SEP, issuance-π, and SPRING.
 - **Size:** assert the measured `+2(ℓ_agg−1)` ring-element cost.
 
 ---
@@ -172,8 +193,12 @@ way. It is NOT a silent change to shipped-verified behavior — the gate is stil
 ## 8. Decision log
 
 - 2026-07-03: Josh chose **design-first, stack-wide** (over "accept as HYP-330" and "amplify SPRING only").
-- Recommendation: **ℓ_agg-fold the aggregation layer** (`ℓ_agg=7`), applied stack-wide, cost `+12` ring
-  elements. Clean unconditional `2⁻¹³¹` soundness; no reliance on the §3 M-SIS-mod-`q₁` interaction.
+- Recommendation: **ℓ_agg-fold the aggregation layer** (`ℓ_agg = ⌈λ/log₂ p_min⌉`; `= 7`, `+12` ring elements,
+  for the illustrative `p_min ≈ 2¹⁸·⁷`), applied stack-wide. Clean unconditional `<2⁻λ` soundness; no reliance
+  on the §3 M-SIS-mod-`q₁` interaction.
+- 2026-07-03 (Codex DESIGN-review, gpt-5.5/high): analysis ACCEPTED; one P1 — do not hard-code the
+  illustrative `q̂`/`ℓ_agg`. Folded in: modulus + `p_min` + `ℓ_agg` are now symbolic/formula-driven, coupled to
+  the HYP-330 modulus calibration (which must fix the Lemma 7.7 ZK bound anyway).
 - Open for Codex DESIGN-review: (a) is the §2 grinding attack correctly realizable (esp. the freedom to plant
   a `q₁`-multiple row under the shortness + binariness constraints)? (b) does §3(A) actually rescue the
   one-shot case, making this a hardening rather than a fix? (c) is `ℓ_agg=7` the right target, or should it key
