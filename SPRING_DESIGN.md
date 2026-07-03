@@ -100,9 +100,9 @@ system is a modulus-mismatch that would dwarf the rest of the design. So:
 - `RingMemberId` stays the shell's routing-identity hash (unchanged), and the Vita-Chain attestation binds the
   SPRING pubkey `t` to that same id, so the **member directory** `RingMemberId → t` is authenticated. Both ends
   build it from the attested active set the ring is drawn from (§18.3). **This is the one integration
-  requirement** and is recorded in `RUNTIME_REQUIREMENTS.md` (§7): the attested active-set entry must carry the
-  SPRING pubkey `t` alongside the routing id, so every `RingMemberId` in a ring resolves to a `t` at both signer
-  and verifier. A ring member that does NOT resolve (not in the attested set) makes `verify` reject — the
+  requirement**, to be recorded in the crate's `RUNTIME_REQUIREMENTS` contract file when the primitive is built
+  (§7 C4, per rule #4 — no such file exists yet): the attested active-set entry must carry the SPRING pubkey `t`
+  alongside the routing id, so every `RingMemberId` in a ring resolves to a `t` at both signer and verifier. A ring member that does NOT resolve (not in the attested set) makes `verify` reject — the
   signature is over an unauthenticated ring (§3.3). The `A_s` matrix and the leaf hash are CRS (§5), so `t = A_s·s`
   is verifier-checkable once `t` is resolved.
 
