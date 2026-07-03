@@ -80,8 +80,9 @@ Rejected alternative constructions (considered):
   lattice product-argument we do NOT have; building it is more novel infra than the accumulator path, and the
   naive O(K) one-hot witness is ~1000 committed ring elements (too large). Rejected: more new machinery, worse
   size.
-- **Port SPRING-2025 / a LaBRADOR-native ring sig wholesale.** Rejected for v1 (duplicate stack); LaBRADOR is
-  retained as the §6 size-optimization route, not the v1 construction.
+- **Port SPRING-2025 / a LaBRADOR-native ring sig wholesale.** Rejected (duplicate stack). Note LaBRADOR is
+  NOT even a size-optimization route here: HYP-358 built + proved the fold and found relations at this scale are
+  base cases (it compacts MB–GB proofs, not a 20–45 KB one) — see §6.
 
 ---
 
@@ -224,11 +225,22 @@ is always included; a degenerate `len()==1` ring gives no anonymity — the call
 - **Size honesty (rule: no silent caps).** The aggregated show is ONE masked quadratic regardless of family
   count, but its `z1` opening scales with the committed witness dimension m₁, which grows ~linearly in δ and the
   per-round gadget width. v1 is expected to land in the **~20–45 KB** range — LARGER than the §18.1 ~8–10 KB
-  target, WITHIN the 64 KiB `SPRING_MAX_SIG_LEN`. The doc does not pretend otherwise. Routes to the target
-  (deferred, tracked): (i) LaBRADOR (BS23, on disk) recursive folding of the final relation → few-KB proofs;
-  (ii) a smaller per-round hash arity; (iii) SIMD/ANE only affects time, not size. The v1 acceptance bar is
-  **sound + anonymous + log-size scaling**, with the concrete byte count measured and reported, not the 8–10 KB
-  number.
+  target, WITHIN the 64 KiB `SPRING_MAX_SIG_LEN`. The doc does not pretend otherwise.
+- **LaBRADOR folding is NOT the route (learned the hard way, HYP-358).** The sovereign LaBRADOR fold was built,
+  completeness-proven end-to-end (71/71 tests), and its two soundness-critical formulas BS23-paper-confirmed
+  (`[[project_labrador_fold]]`). When it was measured against the real C3 anchor relation (~114k elements, β²≈
+  8.4e14, ~58-bit modulus) the result was a **base case — ratio ~1.0×**, sometimes an EXPANSION. LaBRADOR only
+  compacts *large* relations (~2²⁸–2⁵² elements at q ≳ 2¹²⁸ → 38–65×). A SPRING proof is a SINGLE ~20–45 KB show
+  — ~1000× smaller than the anchor's κ=128-replicated ~57 MB, i.e. far below a single fold round's own overhead —
+  so folding it would EXPAND, not compact. Josh already pivoted C3 away from folding to source-shrinking for
+  exactly this reason. Do not repeat it here.
+- **Real routes to the target (deferred, tracked):** (i) **natural-bit-width serialization** — the openings are
+  sent at the full q̂ ~58-bit width but `max|coeff|` needs only ~18 bits; packing at true width is a **~3.7×**
+  proven win (HYP-358 `measure_real_anchor_opening_size`), which alone brings ~20–45 KB → **~6–12 KB**, at/near
+  the §18.1 target with NO new machinery; (ii) **source-shrink** (the anchor bind-shrink philosophy applied to
+  the tree): a higher-arity Merkle node to cut δ, or a more compact membership argument, reducing what the proof
+  opens. The v1 acceptance bar is **sound + anonymous + log-size scaling**, with the concrete byte count measured
+  and reported (then route (i) applied) — not the 8–10 KB number asserted up front.
 
 ## §7 Implementation plan (behind the traits, in `vouch-crypto`)
 
@@ -262,8 +274,9 @@ Design-first, then build in gate-clean chunks (each: integration + smoke test pe
    now only the attestation *placement* + rotation cadence, the RUNTIME_REQUIREMENTS integration point.)
 4. **FS binding completeness.** Is `H(domain ‖ message ‖ R ‖ ring.canonical_bytes())` sufficient, or must
    individual leaves / the CRS digest also enter the seed to prevent cross-ring/weak-FS attacks?
-5. **Size gap.** Is a v1 at ~20–45 KB acceptable behind the 64 KiB cap with LaBRADOR compression tracked, or is
-   the 8–10 KB target a hard v1 requirement (→ start from LaBRADOR)?
+5. **Size gap.** Is a v1 at ~20–45 KB acceptable behind the 64 KiB cap (then natural-bit-width serialization →
+   ~6–12 KB, §6 route (i)), or is the 8–10 KB target a hard v1 requirement? LaBRADOR folding is off the table
+   (§6, HYP-358 base-case wall); the levers are bit-width packing + source-shrink.
 
 ---
 
