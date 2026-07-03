@@ -186,6 +186,52 @@ The NIZK is Fiat–Shamir: the challenge (all of `proof_agg_show`'s `t_A`/`t_B`/
 `H(domain ‖ message ‖ R ‖ ring.canonical_bytes())`, so the proof is bound to `message` and the ring
 (non-malleable, replay-bound). `SpringSignature.0 = serialize(ShowAggProof + public inputs)`.
 
+### §3.2b The path-selection relation — the full-ring quadratic (C2b-iii design)
+
+The linear families (key opening, leaf, node hash, root) are proven full-ring by `proof_linrel`
+(`Σ C_k·s1[idx] = rhs`). The **path bit-selection is the one full-ring QUADRATIC** — a product of the
+witnessed direction bit with a witnessed node/sibling difference — which `proof_linrel` cannot express
+and `proof_constraint`/`AffineConstraint` prove only at the constant coefficient τ0. It is the SAME shape
+as the SEP relation's tag term `A_t = [A | tG−B]` (a witnessed tag × witnessed `v₂`), which is proven
+full-ring by `SepRelation : FullRingRelation` inside `proof_agg_show::prove_agg`. So SPRING gets a
+`SpringPathRelation : FullRingRelation` mirroring `SepRelation`.
+
+**Key construction move — do NOT commit the ordered children.** Split `A_node = [A_L | A_R]` and define
+two LINEAR hashes of the committed (unordered) child digits:
+`H_lin := A_L·g⁻¹(node_j) + A_R·g⁻¹(sib_j)` (children in path-order) and its swap
+`H_swap := A_L·g⁻¹(sib_j) + A_R·g⁻¹(node_j)`. Then the bit-selected hash is the **linear interpolation**
+
+```text
+A_node·[ selected children ]  =  H_lin  +  b_j·(H_swap − H_lin)          (b_j ∈ {0,1})
+```
+
+(`b_j=0` ⇒ path-order ⇒ `H_lin`; `b_j=1` ⇒ swapped ⇒ `H_swap`). So the per-level relation is
+
+```text
+recompose(g⁻¹(node_{j+1}))  −  H_lin  −  b_j·(H_swap − H_lin)  =  0          (full ring)
+```
+
+whose LINEAR part is `Σ bᵢ·node_{j+1}_digits − A_L·node_j_digits − A_R·sib_j_digits` and whose QUADRATIC
+part is the single bilinear `−b_j·((A_L − A_R)·(g⁻¹(sib_j) − g⁻¹(node_j)))` — `bit × linear-combo-of-digits`,
+exactly `SepRelation`'s `bil(tag, v₂)` shape. This **eliminates the ordered-children witness** (and its
+extra selection constraints): only `node_j_digits`, `sib_j_digits`, `b_j`, `node_{j+1}_digits` are
+committed per level, and `node_0 = leaf` (from §3.2 family 2), `node_j` for `j>0` is the previous level's
+`node_{j+1}` (shared block). `SpringPathRelation` implements `quad_part` (Σμ over the δ levels of the
+bilinear), `cross` (its `c¹` masked-proof term), `lin_part`, `cst=0`, μ-aggregated from `t_A` like
+`SepRelation`.
+
+**Composition.** The full relation is `SumRelation<SpringLinearRelation, SpringPathRelation>` (the linear
+families as a `lin_part`-only `FullRingRelation` + the path quadratic), proven by ONE `prove_agg` — one
+masked show, no §C-iv leak. The SCALAR families — `s ∈ {0,1}` and each committed digit `∈ [0,b)` (the
+range that forces the CANONICAL decomposition, so the prover's tree matches the verifier's) and
+`b_j ∈ {0,1}` — fold in as the show's `extra` `AffineConstraint` families (the pq-vouch R1–R5 pattern).
+Root equality `node_δ = R` is a linear family with the public `R` as `rhs`.
+
+**Soundness.** `prove_agg`'s knowledge-soundness extracts a witness with `quad+lin+cst = 0` full-ring, so
+every level's `node_{j+1} = A_node·[bit-ordered children]` holds AND (via the range family) the digits are
+canonical — a genuine hash chain from `leaf` to `node_δ = R`. Combined with family 1 (`leaf` opens to a
+known binary `s`), the §4 extractor argument goes through: real member or M-SIS collision.
+
 ### §3.3 Sign / verify
 
 - **sign(message, ring, signer):** reject `SignerNotInRing` if `signer ∉ ring` (O(log K) `contains`). Resolve
