@@ -171,11 +171,15 @@ Witness (all committed in ONE ABDLOP `t_A`, hidden):
 Relation families (each folds into the §C-iv aggregated masked quadratic via a γ-weighted family, exactly like
 the SEP show's v1/v2/v3-norm + binariness families):
 
+(Digits are proven only SHORT — via the show's approx-range leg — NOT `[0,b)`/canonical: §4/§3.2d show
+shortness + M-SIS CR suffice, so the range/canonicality families listed below were DROPPED. The scalar
+families that remain are binariness only.)
+
 1. **Key opening** — `A_s · s = t` (linear over R_q̂) ∧ `s ∈ {0,1}` (binariness). [`proof_linrel` + `proof_constraint::binariness`]
-2. **Leaf** — `leaf = A_h · g⁻¹(t ‖ pad)` with `g·g⁻¹(t) = t` (gadget-recomposition exactness) ∧ the
-   decomposition digits are in `[0,b)`. [`proof_linear` + range/binariness on digits]
+2. **Leaf** — `leaf = A_h · g⁻¹(t ‖ pad)` with `g·g⁻¹(t) = t` (gadget-recomposition exactness). [`proof_linrel`;
+   digits proven short by the show's approx-range, not per-digit range — §4]
 3. **Path rounds** j = 0..δ: `node_{j+1} = A_h · [ sel(b_j; node_j, sibling_j) ; sel(¬b_j; node_j, sibling_j) ]`
-   with `g·g⁻¹ = id` exactness, digit-range, and `b_j ∈ {0,1}`. The child-order swap `sel` is a
+   with `g·g⁻¹ = id` exactness and `b_j` a SCALAR bit (§3.2b/§3.2c binariness). The child-order swap `sel` is a
    bit-conditioned selection `left = (1−b_j)·node_j + b_j·sibling_j`, `right = b_j·node_j + (1−b_j)·sibling_j`
    — one multiplication by the selector bit, expressible as a quadratic family (like the tag/message binariness
    cross-terms already handled).
@@ -221,30 +225,23 @@ bilinear), `cross` (its `c¹` masked-proof term), `lin_part`, `cst=0`, μ-aggreg
 `SepRelation`.
 
 **Composition.** The full relation is `SumRelation<SpringLinearRelation, SpringPathRelation>` (the linear
-families as a `lin_part`-only `FullRingRelation` + the path quadratic), proven by ONE `prove_agg` — one
-masked show, no §C-iv leak. The SCALAR families fold in as the show's `extra` `AffineConstraint` families
-(the pq-vouch R1–R5 pattern): `s ∈ {0,1}`, `b_j ∈ {0,1}`, each committed digit `∈ [0,b)`, AND — the
-soundness-critical one (Codex DESIGN-review P1) — **CANONICALITY: each committed digit-vector's
-recomposition `< q̂` per coefficient**.
+families as a `lin_part`-only `FullRingRelation` + the path quadratic), proven by ONE masked show, no §C-iv
+leak. The SCALAR families fold in as the show's `extra` `AffineConstraint` families (the pq-vouch R1–R5
+pattern): `s ∈ {0,1}`, each `b_j` BINARY, and each `b_j` a SCALAR bit. Root equality `node_δ = R` is a
+linear family with the public `R` as `rhs`.
 
-*Why range `[0,b)` alone is NOT enough (P1).* The large-base gadget has `b^k > q̂` (`b^{KG_FOLD}=2⁶⁰ > q̂
-≈2⁵⁷·⁷`), so digits in `[0,b)` can represent a coefficient `x` OR `x+q̂` (both `< b^k`) — two distinct
-short digit-vectors that recompose to the same value mod q̂ but hash DIFFERENTLY under `A_node`. Without
-pinning canonicality a prover could feed a non-canonical decomposition and diverge from the verifier's
-deterministic tree. The `< q̂` constraint (a `< CONSTANT` borrow-gadget over the base-`b` digits — the
-HYP-353 `bits(w) < Fr::MODULUS` technique, base-`b` instead of base-2, `proof_ltconst`) forces the UNIQUE
-canonical decomposition. Applied to **every committed digit-vector that feeds an `A_node`/`A_leaf` hash** —
-`t`, `leaf`, every `node_j`, AND every `sibling_j` (the auth-path siblings are committed hash inputs too;
-a non-canonical sibling decomposition would let the chain diverge just like a non-canonical node — Codex
-DESIGN-review P1). Root equality `node_δ = R` is a linear family with the public `R` as `rhs`.
+**No canonicality / `[0,b)` range families (§4/§3.2d).** An earlier draft (Codex §3.2b P1) added a
+`recompose < q̂` canonicality family on every committed digit-vector, reasoning that `[0,b)` alone does not
+force a unique decomposition (`b^k = 2⁶⁰ > q̂`, so `x` and `x+q̂` are both representable). The §4 reduction
+supersedes this: unforgeability needs only digit SHORTNESS (which the show's approx-range leg already
+proves) + M-SIS collision-resistance — a non-canonical chain reaching `R` yields a short `A_node`/`A_leaf`
+collision, an M-SIS break, without any canonicality constraint. So the canonicality + `[0,b)` families are
+**dropped** (they were also ~25× over the size budget). The digits are proven SHORT, not canonical.
 
-**Soundness.** `prove_agg`'s knowledge-soundness extracts a witness with `quad+lin+cst = 0` full-ring, so
-every level's `node_{j+1} = A_node·[bit-ordered children]` holds AND — via the canonicality (`< q̂`) family
-— the digits are the UNIQUE canonical decomposition, so the extracted chain is exactly the verifier's
-deterministic tree hash from `leaf` to `node_δ = R`. Combined with family 1 (`leaf` opens to a known
-binary `s`), the §4 extractor argument goes through: real member or M-SIS collision. (Canonicality closes
-the P1 gap: without it, a non-canonical chain could reach `R` via a hash divergence the range `[0,b)` did
-not forbid.)
+**Soundness.** See §4 for the full reduction: `prove_agg` extracts a SHORT witness satisfying the full-ring
+families with binary `s` / scalar bits; for a non-member, walking the extracted chain and the verifier's
+canonical tree to the first divergence yields a short `A_node`/`A_leaf`/`A_s` collision — an M-SIS break.
+No canonical-decomposition constraint is invoked.
 
 ### §3.2c The production show — mirror the ℓ-amplified issuance-π (C2b-iv+v)
 
