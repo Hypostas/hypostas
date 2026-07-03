@@ -90,8 +90,8 @@ Rejected alternative constructions (considered):
 
 `RoutingIdentity` (`protocol-core/src/routing_identity/`) keys are **X25519 + ML-KEM-768 + Ed25519 + ML-DSA-65**;
 `routing_id = SHA-256(x25519_pk ‖ ml_kem_ek)`. ML-DSA-65 lives in a DIFFERENT ring (q = 8380417, degree 256,
-NTT-friendly) than our proof ring (q = 425801). Proving an ML-DSA secret relation *inside* a q = 425801 proof
-system is a modulus-mismatch that would dwarf the rest of the design. So:
+NTT-friendly) than our proof ring `R_q̂` (n̂ = 64, q̂ ≈ 2⁵⁷·⁷, §3.0). Proving an ML-DSA secret relation *inside*
+our proof system is a modulus-mismatch that would dwarf the rest of the design. So:
 
 **Each dyad mints a SPRING key in OUR ring, attested alongside its identity.**
 
