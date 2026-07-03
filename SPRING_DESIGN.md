@@ -222,15 +222,27 @@ bilinear), `cross` (its `c¹` masked-proof term), `lin_part`, `cst=0`, μ-aggreg
 
 **Composition.** The full relation is `SumRelation<SpringLinearRelation, SpringPathRelation>` (the linear
 families as a `lin_part`-only `FullRingRelation` + the path quadratic), proven by ONE `prove_agg` — one
-masked show, no §C-iv leak. The SCALAR families — `s ∈ {0,1}` and each committed digit `∈ [0,b)` (the
-range that forces the CANONICAL decomposition, so the prover's tree matches the verifier's) and
-`b_j ∈ {0,1}` — fold in as the show's `extra` `AffineConstraint` families (the pq-vouch R1–R5 pattern).
-Root equality `node_δ = R` is a linear family with the public `R` as `rhs`.
+masked show, no §C-iv leak. The SCALAR families fold in as the show's `extra` `AffineConstraint` families
+(the pq-vouch R1–R5 pattern): `s ∈ {0,1}`, `b_j ∈ {0,1}`, each committed digit `∈ [0,b)`, AND — the
+soundness-critical one (Codex DESIGN-review P1) — **CANONICALITY: each committed digit-vector's
+recomposition `< q̂` per coefficient**.
+
+*Why range `[0,b)` alone is NOT enough (P1).* The large-base gadget has `b^k > q̂` (`b^{KG_FOLD}=2⁶⁰ > q̂
+≈2⁵⁷·⁷`), so digits in `[0,b)` can represent a coefficient `x` OR `x+q̂` (both `< b^k`) — two distinct
+short digit-vectors that recompose to the same value mod q̂ but hash DIFFERENTLY under `A_node`. Without
+pinning canonicality a prover could feed a non-canonical decomposition and diverge from the verifier's
+deterministic tree. The `< q̂` constraint (a `< CONSTANT` borrow-gadget over the base-`b` digits — the
+HYP-353 `bits(w) < Fr::MODULUS` technique, base-`b` instead of base-2, `proof_ltconst`) forces the UNIQUE
+canonical decomposition. Applied to every committed digit-vector (`t`, `leaf`, every `node_j`). Root
+equality `node_δ = R` is a linear family with the public `R` as `rhs`.
 
 **Soundness.** `prove_agg`'s knowledge-soundness extracts a witness with `quad+lin+cst = 0` full-ring, so
-every level's `node_{j+1} = A_node·[bit-ordered children]` holds AND (via the range family) the digits are
-canonical — a genuine hash chain from `leaf` to `node_δ = R`. Combined with family 1 (`leaf` opens to a
-known binary `s`), the §4 extractor argument goes through: real member or M-SIS collision.
+every level's `node_{j+1} = A_node·[bit-ordered children]` holds AND — via the canonicality (`< q̂`) family
+— the digits are the UNIQUE canonical decomposition, so the extracted chain is exactly the verifier's
+deterministic tree hash from `leaf` to `node_δ = R`. Combined with family 1 (`leaf` opens to a known
+binary `s`), the §4 extractor argument goes through: real member or M-SIS collision. (Canonicality closes
+the P1 gap: without it, a non-canonical chain could reach `R` via a hash divergence the range `[0,b)` did
+not forbid.)
 
 ### §3.3 Sign / verify
 
