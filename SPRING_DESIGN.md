@@ -17,8 +17,18 @@ From `protocol-core/src/spring.rs` (the Track-A shell, already merged):
   which member** (1-in-K).
 - `RingVerifier::verify(message, sig, ring) -> Ok(())` iff sound + 1-in-K anonymous.
 - `SpringRing` = a **public**, canonical (sorted + de-duplicated) `Vec<RingMemberId>`; `RingMemberId([u8;32])`
-  is (a hash of) a member's routing identity. `K_DEFAULT = 1000`.
+  is a member's routing identity hash. `K_DEFAULT = 1000`.
 - `SpringSignature(Vec<u8>)`, `SPRING_MAX_SIG_LEN = 64 KiB`. Spec §18.1 *target* ~8–10 KB.
+
+**`RingMemberId` is an INDEX into an authenticated directory, not the crypto input** (Codex DESIGN-review P1).
+The 32-byte id is a hash — the verifier cannot recover the member's lattice SPRING pubkey `t_i ∈ R_q^d` from it,
+and proving a SHA-256 pre-image in-ZK is lattice-hostile. Both the signer and the verifier already hold the
+attested active set that §18.3's `sample_ring` draws the ring from (the ring is "identical at sender + verifier
+given Vita-Chain state"), so the real scheme holds a **member directory** `RingMemberId → t_i` and *resolves*
+every ring member to its SPRING pubkey before touching the accumulator. This resolution is public + authenticated
+(the attestation binds `RingMemberId ↔ t_i`, §2), OUTSIDE the ZK. The `RingSigner`/`RingVerifier` trait
+signatures are unchanged — the directory is `&self` state on the concrete `LatticeRingScheme` (§7), exactly like
+a verifier holding its CRS.
 
 **Restated as a crypto statement.** The ring is PUBLIC and both parties hold the full member list. So SPRING is
 a **1-out-of-K proof over a public ring that hides the index i**, Fiat–Shamir-bound to `message`:
@@ -87,11 +97,14 @@ system is a modulus-mismatch that would dwarf the rest of the design. So:
 - `spring_sk = s ∈ T₁^{η}` — a short/binary secret (mirrors the SEP user key `s ∈ T₁^{2d}`, `sep_sig::ukeygen`).
 - `spring_pk = t = A_s · s ∈ R_q^{d}` — an M-SIS commitment under a public matrix `A_s` (CRS, §5). Binding to a
   binary `s` is exactly the `upk = D_s·s` relation we already prove (`proof_show` binariness + linear).
-- `RingMemberId = SHA-256(domain ‖ encode(t))` — the shell's 32-byte id becomes the hash of the SPRING pubkey.
-  The Vita-Chain attestation (RelayAttestation / routing-identity publication) binds `t` to the dyad so the ring
-  sampler (`sample_ring`, already merged) draws honest `RingMemberId`s. **This is the one integration
+- `RingMemberId` stays the shell's routing-identity hash (unchanged), and the Vita-Chain attestation binds the
+  SPRING pubkey `t` to that same id, so the **member directory** `RingMemberId → t` is authenticated. Both ends
+  build it from the attested active set the ring is drawn from (§18.3). **This is the one integration
   requirement** and is recorded in `RUNTIME_REQUIREMENTS.md` (§7): the attested active-set entry must carry the
-  SPRING pubkey `t` (or a commitment the verifier can open to `t`), not merely the routing id.
+  SPRING pubkey `t` alongside the routing id, so every `RingMemberId` in a ring resolves to a `t` at both signer
+  and verifier. A ring member that does NOT resolve (not in the attested set) makes `verify` reject — the
+  signature is over an unauthenticated ring (§3.3). The `A_s` matrix and the leaf hash are CRS (§5), so `t = A_s·s`
+  is verifier-checkable once `t` is resolved.
 
 Rotation: the SPRING key MAY rotate on the routing-identity cadence (24 h) or be longer-lived; the ring is per
 circuit-build over the currently-attested set, so rotation is transparent to the construction. (Open question
@@ -105,7 +118,12 @@ Blueprint: Libert–Ling–Nguyen–Wang, "Zero-Knowledge Arguments for Lattice-
 realized on our [LNP22] proof stack. The ring is public, so the verifier RECOMPUTES the accumulator; the prover
 proves a hidden path.
 
-### §3.1 The accumulator (public, both sides compute it)
+### §3.1 The accumulator (public, both sides compute it after resolving the ring)
+
+**Resolve first (Codex P1).** Both `sign` and `verify` map the ring's `RingMemberId`s → SPRING pubkeys
+`{t_i ∈ R_q^d}` through the authenticated member directory (§2). If ANY member is unresolvable, the operation
+fails (`verify` → reject: the ring is not fully attested). The accumulator is built over the resolved `t_i`'s —
+NOT over the 32-byte ids — so no SHA-256 pre-image ever enters the ZK.
 
 An Ajtai/SIS hash `H: R_q^{2ℓ} → R_q^{ℓ}` compresses two nodes into one:
 
@@ -115,9 +133,12 @@ H(a, b) = A_h · [ g⁻¹(a) ; g⁻¹(b) ]  mod q
 
 where `g⁻¹(·)` is the base-b gadget decomposition (`sep_gadget`, base-14, k = KG) mapping a full node in R_q^{ℓ}
 to a SHORT vector, and `A_h ∈ R_q^{ℓ × 2ℓk}` is a public CRS matrix. `H` is collision-resistant under M-SIS
-(a collision yields a short nonzero kernel element of `A_h`). The Merkle tree over the K leaves
-`leaf_i = H_leaf(t_i)` (a domain-separated hash of member i's SPRING pubkey) has root `R = MerkleRoot(ring)`,
-depth `δ = ⌈log₂ K⌉ = 10` at K = 1000. The verifier computes `R` from the public ring in the clear (no ZK).
+(a collision yields a short nonzero kernel element of `A_h`). The leaves are `leaf_i = H_leaf(t_i)` — an Ajtai
+hash of the RESOLVED pubkey `t_i` (lattice-friendly, verifier-computable), NOT of the routing-id hash. To fix a
+canonical tree shape both sides agree on, leaves are ordered by the ring's canonical `RingMemberId` order (the
+`SpringRing` invariant), padded to a power of two with a fixed `⊥` leaf. The Merkle tree over the K leaves has
+root `R = MerkleRoot(resolved ring)`, depth `δ = ⌈log₂ K⌉ = 10` at K = 1000. The verifier computes `R` in the
+clear (no ZK) after resolution.
 
 ### §3.2 What the prover proves in ZK (the [LNP22] relation)
 
@@ -148,10 +169,12 @@ The NIZK is Fiat–Shamir: the challenge (all of `proof_agg_show`'s `t_A`/`t_B`/
 
 ### §3.3 Sign / verify
 
-- **sign(message, ring, signer):** reject `SignerNotInRing` if `signer ∉ ring` (O(log K) `contains`). Compute
+- **sign(message, ring, signer):** reject `SignerNotInRing` if `signer ∉ ring` (O(log K) `contains`). Resolve
+  every member → `t_i` (§3.1); the signer resolves its own `signer → t` and pairs it with the local `s`. Compute
   `R`, locate the leaf index, assemble the witness (path + key), run `prove` (FS-seed as above), serialize.
-- **verify(message, sig, ring):** enforce `SPRING_MAX_SIG_LEN`; recompute `R` from the public ring; re-derive
-  the FS seed from `(message, R, ring)`; run `verify_agg`; `Ok(())` iff it accepts. No secret, no index leaks.
+- **verify(message, sig, ring):** enforce `SPRING_MAX_SIG_LEN`; resolve every member → `t_i` (reject if any is
+  unresolvable); recompute `R` from the resolved ring; re-derive the FS seed from `(message, R, ring)`; run
+  `verify_agg`; `Ok(())` iff it accepts. No secret, no index leaks.
 
 ---
 
@@ -167,6 +190,13 @@ short kernel element of `A_h`/`A_s` — an M-SIS break.
 Unforgeability reduces to M-SIS (accumulator + key binding) ∧ the FS/[LNP22] soundness we already calibrated for
 the show (q̂ ≈ 2⁵⁷·⁷, ℓ garbage rows → ~q̂⁻ˡ soundness error). The message is in the FS seed, so a proof does not
 transfer across messages.
+
+**Trust-model dependency (from the P1 fix).** Soundness now also rests on the member directory being the
+*authenticated* attested set: the reduction's "leaf is a real member's key" step needs the attestation to bind
+`RingMemberId ↔ t_i` so a forger cannot inject a `t_i` it controls. This is the §2 integration requirement, not a
+new cryptographic assumption — it is the same Vita-Chain attestation the ring sampler already trusts. If the
+directory were unauthenticated, a forger could resolve a ring member to its OWN `t`, so `verify` MUST resolve
+through the attested set and reject unresolvable members (§3.1).
 
 **Reused invariant (carry into the build):** the norm/relation families must be *provable without wrap* at q̂ —
 the same `norm_bounds_provable`-style check that HYP-355 needed. Every SIS-hash round's max committable norm
@@ -211,8 +241,10 @@ Design-first, then build in gate-clean chunks (each: integration + smoke test pe
 - **C3 — `spring_prove.rs` / `spring_verify.rs`:** compose C2 into `prove_show_agg`-style prove/verify with the
   `(message, R, ring)` FS seed. Round-trip + adversarial (tampered path, wrong message, non-member) tests.
 - **C4 — the trait impl:** a real `RingSigner`/`RingVerifier` in `vouch-crypto` (e.g. `LatticeRingScheme`) that
-  `protocol-core` wires behind `spring::{RingSigner, RingVerifier}`, replacing `StubRingScheme`. Serialization
-  codec with the `SPRING_MAX_SIG_LEN` + frame cap (the §18.2 note). Smoke test through the trait.
+  `protocol-core` wires behind `spring::{RingSigner, RingVerifier}`, replacing `StubRingScheme`. The scheme holds
+  the CRS (`A_s`, `A_h`) and the **member directory** `RingMemberId → t_i` as `&self` state (the P1 resolution
+  seam); `verify` rejects any unresolvable member. Serialization codec with the `SPRING_MAX_SIG_LEN` + frame cap
+  (the §18.2 note). Smoke test through the trait, incl. an adversarial unresolvable-member reject.
 - **C5 — params calibration** (`proof_params.rs`): M-SIS core-SVP ≥ 128 estimator test; measure + record the
   real proof size.
 - Each chunk: `cargo test -p vouch-crypto --features experimental-unaudited --lib` + clippy + Codex gate.
@@ -225,8 +257,9 @@ Design-first, then build in gate-clean chunks (each: integration + smoke test pe
 2. **Hash arity / params.** Ajtai `H` arity (binary tree vs higher) and `A_h` dims to balance depth vs
    per-round width against q̂ wrap-safety and size.
 3. **SPRING key lifetime + attestation.** Does the SPRING pubkey `t` rotate with the routing identity (24 h) or
-   persist? Where exactly in the Vita-Chain attestation is `t` bound, and does the ring sampler need `t`
-   in-line or a commitment it opens? (RUNTIME_REQUIREMENTS integration point.)
+   persist? Where exactly in the Vita-Chain attestation is `t` bound? (The P1 fix settled *how* resolution works
+   — the scheme holds an authenticated `RingMemberId → t` directory and rejects unresolvable members; this Q is
+   now only the attestation *placement* + rotation cadence, the RUNTIME_REQUIREMENTS integration point.)
 4. **FS binding completeness.** Is `H(domain ‖ message ‖ R ‖ ring.canonical_bytes())` sufficient, or must
    individual leaves / the CRS digest also enter the seed to prevent cross-ring/weak-FS attacks?
 5. **Size gap.** Is a v1 at ~20–45 KB acceptable behind the 64 KiB cap with LaBRADOR compression tracked, or is
