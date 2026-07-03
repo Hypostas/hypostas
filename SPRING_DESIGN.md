@@ -130,8 +130,10 @@ of the HYP-355 P1). Proving over q̂ directly, `proof_linrel` (`Σ C_k·s1[idx_k
 
 The one catch — a base-2 gadget over the 58-bit q̂ is ~58 digits/coeff (11× the R_p base-14's 5), which would
 blow the size budget — is resolved by a **large-base gadget** `b ≈ 2^ν` (ν≈12) so `⌈log_b q̂⌉ ≈ 5` digits/coeff,
-matching R_p's digit count. Digits then lie in `[0, b)` (a bounded-range family, `proof_range`) rather than
-`{0,1}`. Net: SAME witness size as the R_p accumulator, WITHOUT the carry-lift. `b` (and ℓ, the node dim) are
+matching R_p's digit count. The honest/verifier decomposition is the canonical `[0, b)` one; the PROVER's
+committed digits are constrained only SHORT (the show's approx-range leg), NOT range-proved to `[0,b)` —
+per §4/§3.2d that suffices (a per-digit `proof_range` would be size-prohibitive; §4). Net: SAME witness size
+as the R_p accumulator, WITHOUT the carry-lift. `b` (and ℓ, the node dim) are
 calibrated for M-SIS collision-resistance in C5 — a larger `b` shrinks the witness but weakens CR; the feasible
 window is the C5 lever. C1's initial R_p draft is re-based to this at the C2 pivot.
 
@@ -150,7 +152,8 @@ H(a, b) = A_h · [ g⁻¹(a) ; g⁻¹(b) ]  mod q̂
 ```
 
 where `g⁻¹(·)` is the **large-base gadget decomposition over q̂** (§3.0, base `b ≈ 2^ν`, `k = ⌈log_b q̂⌉ ≈ 5`
-digits/coeff, digits in `[0, b)`) mapping a full node in R_q̂^{ℓ} to a SHORT vector, and `A_h ∈ R_q̂^{ℓ × 2ℓk}`
+digits/coeff, canonical digits in `[0, b)`; the PROVER's committed digits are only proven SHORT, not
+range-proved — §4) mapping a full node in R_q̂^{ℓ} to a SHORT vector, and `A_h ∈ R_q̂^{ℓ × 2ℓk}`
 is a public CRS matrix. `H` is collision-resistant under M-SIS over q̂
 (a collision yields a short nonzero kernel element of `A_h`). The leaves are `leaf_i = H_leaf(t_i)` — an Ajtai
 hash of the RESOLVED pubkey `t_i` (lattice-friendly, verifier-computable), NOT of the routing-id hash. To fix a
