@@ -21,7 +21,7 @@ From `protocol-core/src/spring.rs` (the Track-A shell, already merged):
 - `SpringSignature(Vec<u8>)`, `SPRING_MAX_SIG_LEN = 64 KiB`. Spec §18.1 *target* ~8–10 KB.
 
 **`RingMemberId` is an INDEX into an authenticated directory, not the crypto input** (Codex DESIGN-review P1).
-The 32-byte id is a hash — the verifier cannot recover the member's lattice SPRING pubkey `t_i ∈ R_q^d` from it,
+The 32-byte id is a hash — the verifier cannot recover the member's lattice SPRING pubkey `t_i ∈ R_q̂^d` from it,
 and proving a SHA-256 pre-image in-ZK is lattice-hostile. Both the signer and the verifier already hold the
 attested active set that §18.3's `sample_ring` draws the ring from (the ring is "identical at sender + verifier
 given Vita-Chain state"), so the real scheme holds a **member directory** `RingMemberId → t_i` and *resolves*
@@ -59,11 +59,11 @@ needs, for C3:
 
 | Primitive we already have | Module | Reused for SPRING as |
 |---|---|---|
-| R_q = Z_q[X]/(X²⁵⁶+1), q = 425801, sub-ring n̂ = 64, show modulus q̂ ≈ 2⁵⁷·⁷ | `proof_ring`, `sep_ring` | the proof ring |
+| proof ring R_q̂ = Z_q̂[X]/(X^{n̂}+1), n̂ = 64, q̂ ≈ 2⁵⁷·⁷ (credential ring R_q: X²⁵⁶+1, q = 425801) | `proof_ring`, `sep_ring` | the proof ring the accumulator + proof live in |
 | ABDLOP commitment + linear opening | `abdlop`, `proof_linear` | commit the witness |
 | Aggregated masked quadratic (one garbage commitment, §C-iv leak-free) | `proof_agg_show` | fold ALL constraints into one proof |
 | Exact-ℓ₂ norm families, binariness, `Σ = w` fixed-weight | `proof_constraint`, `proof_show` | short-preimage + selector-bit constraints |
-| Matrix–vector relation `M·x = y` over R_q | `proof_linear`, `proof_linrel` | the Ajtai/SIS hash rounds |
+| Matrix–vector relation `M·x = y` over R_q̂ | `proof_linear`, `proof_linrel` | the Ajtai/SIS hash rounds |
 | Approx-range witness-shortness, carry-lift exactness | `proof_approx_range` | keep the relation exact over q̂ |
 | SIS-commit-to-short-secret `t = D_s·s`, `s ∈ T₁` binary | `sep_sig` (`ukeygen`, `upk`) | the SPRING key relation |
 | Cross-domain / set-membership-flavoured ZK | `proof_anchor_bind` | pattern for the membership leg |
@@ -96,7 +96,7 @@ system is a modulus-mismatch that would dwarf the rest of the design. So:
 **Each dyad mints a SPRING key in OUR ring, attested alongside its identity.**
 
 - `spring_sk = s ∈ T₁^{η}` — a short/binary secret (mirrors the SEP user key `s ∈ T₁^{2d}`, `sep_sig::ukeygen`).
-- `spring_pk = t = A_s · s ∈ R_q^{d}` — an M-SIS commitment under a public matrix `A_s` (CRS, §5). Binding to a
+- `spring_pk = t = A_s · s ∈ R_q̂^{d}` — an M-SIS commitment under a public matrix `A_s` (CRS, §5). Binding to a
   binary `s` is exactly the `upk = D_s·s` relation we already prove (`proof_show` binariness + linear).
 - `RingMemberId` stays the shell's routing-identity hash (unchanged), and the Vita-Chain attestation binds the
   SPRING pubkey `t` to that same id, so the **member directory** `RingMemberId → t` is authenticated. Both ends
@@ -138,14 +138,15 @@ window is the C5 lever. C1's initial R_p draft is re-based to this at the C2 piv
 ### §3.1 The accumulator (public, both sides compute it after resolving the ring)
 
 **Resolve first (Codex P1).** Both `sign` and `verify` map the ring's `RingMemberId`s → SPRING pubkeys
-`{t_i ∈ R_q^d}` through the authenticated member directory (§2). If ANY member is unresolvable, the operation
+`{t_i ∈ R_q̂^d}` through the authenticated member directory (§2). If ANY member is unresolvable, the operation
 fails (`verify` → reject: the ring is not fully attested). The accumulator is built over the resolved `t_i`'s —
 NOT over the 32-byte ids — so no SHA-256 pre-image ever enters the ZK.
 
-An Ajtai/SIS hash `H: R_q^{2ℓ} → R_q^{ℓ}` compresses two nodes into one:
+An Ajtai/SIS hash `H: R_q̂^{2ℓ} → R_q̂^{ℓ}` over the PROOF ring (§3.0; q̂ ≈ 2⁵⁷·⁷, NOT the credential ring
+`R_q`, q = 425801) compresses two nodes into one:
 
 ```
-H(a, b) = A_h · [ g⁻¹(a) ; g⁻¹(b) ]  mod q
+H(a, b) = A_h · [ g⁻¹(a) ; g⁻¹(b) ]  mod q̂
 ```
 
 where `g⁻¹(·)` is the **large-base gadget decomposition over q̂** (§3.0, base `b ≈ 2^ν`, `k = ⌈log_b q̂⌉ ≈ 5`
@@ -170,7 +171,7 @@ Witness (all committed in ONE ABDLOP `t_A`, hidden):
 Relation families (each folds into the §C-iv aggregated masked quadratic via a γ-weighted family, exactly like
 the SEP show's v1/v2/v3-norm + binariness families):
 
-1. **Key opening** — `A_s · s = t` (linear over R_q) ∧ `s ∈ {0,1}` (binariness). [`proof_linear` + `proof_constraint::binariness`]
+1. **Key opening** — `A_s · s = t` (linear over R_q̂) ∧ `s ∈ {0,1}` (binariness). [`proof_linrel` + `proof_constraint::binariness`]
 2. **Leaf** — `leaf = A_h · g⁻¹(t ‖ pad)` with `g·g⁻¹(t) = t` (gadget-recomposition exactness) ∧ the
    decomposition digits are in `[0,b)`. [`proof_linear` + range/binariness on digits]
 3. **Path rounds** j = 0..δ: `node_{j+1} = A_h · [ sel(b_j; node_j, sibling_j) ; sel(¬b_j; node_j, sibling_j) ]`
@@ -235,7 +236,7 @@ is always included; a degenerate `len()==1` ring gives no anonymity — the call
 
 ## §6 Parameters + honest size estimate
 
-- CRS: `A_s ∈ R_q^{d×η}`, `A_h ∈ R_q^{ℓ×2ℓk}` — sampled from a public seed at install (§18.4 CRS
+- CRS: `A_s ∈ R_q̂^{d×η}`, `A_h ∈ R_q̂^{ℓ×2ℓk}` — sampled from a public seed at install (§18.4 CRS
   preprocessing), shared by all dyads. Concrete `d, η, ℓ, k` calibrated in `proof_params.rs`
   (`calibration-as-code`, the HYP-352 item-3a pattern) against M-SIS core-SVP ≥ 128.
 - Depth δ = 10 (K = 1000). Witness ≈ key-opening (η) + δ·(node + sibling + gadget digits) + selector bits.
