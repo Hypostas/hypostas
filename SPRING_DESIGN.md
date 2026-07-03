@@ -281,6 +281,37 @@ it is NOT a SPRING-specific gap.)
 This is the single largest, highest-risk chunk; it lands design-first → Codex DESIGN-review → chunked build
 (relation, then scalar families, then the show wrapper), each `codex exec review`-gated.
 
+### §3.2d Is per-digit canonicality/range actually needed? (soundness-vs-size, adjudicate before building)
+
+Grounding the C2b-iv (2/2) build surfaced a pivotal question that determines both soundness AND whether
+SPRING fits the size budget. `proof_range` commits **2·⌈log₂ b⌉ ≈ 24 bit-blocks per ring element**;
+range-proving every committed digit (~440 for δ=10) balloons `m1` from ~440 to **~11 000 blocks** → a
+multi-MB proof, ~25× over the 64 KiB cap. So the §3.2b canonicality (`recompose < q̂`) + `[0,b)` range
+families, as naively specced, are **size-prohibitive**. Before building them, resolve:
+
+**Claim (to be adjudicated): per-digit canonicality/range is NOT needed for unforgeability; the show's
+approx-range shortness + Ajtai-hash M-SIS collision-resistance suffice.**
+- The masked show ALREADY carries the `proof_approx_range` witness-shortness leg (`Y3_BLOCKS`/`z3`), which
+  proves `‖s1‖` (hence every committed digit) is SHORT — for FREE, no per-digit bit-decomposition.
+- Ajtai-hash CR holds for ANY short pre-image, canonical or not. So the extractor's short witness gives:
+  either `leaf` is a real ring leaf on a valid path (a real member), OR the extracted `leaf → node_δ = R`
+  chain merges with the real canonical tree at some node where two DISTINCT short child-sets share a
+  parent — an M-SIS collision. Either way unforgeability holds *without* pinning canonical digits.
+- This is a DIFFERENT argument from the one Codex's §3.2b P1 refuted ("digits match the verifier's tree"):
+  it does not require the prover's digits to equal the verifier's canonical ones — only that reaching the
+  public `R` with any short digits costs an M-SIS collision. Anonymity is unaffected (digits are ZK-masked
+  either way).
+
+**If the claim holds** (Codex DESIGN-review + the [LNP22] shortness-bound details confirm the approx-range
+`B` is tight enough for the accumulator's M-SIS): drop the canonicality + `[0,b)` families entirely, keep
+`m1 ≈ 440`, size stays ~20–45 KB, and C2b-iv reduces to just the binariness families (already built).
+**If it does NOT hold** (canonicality genuinely required): the naive per-digit range is infeasible and the
+construction needs a COMPACT range argument (one aggregated approx-range-style bound over all digits at
+once, or a higher-arity tree cutting the digit count) — a design change, not an implementation detail.
+
+This adjudication gates C2b-iv (2/2) and the final size claim. It is the reason the size §6 estimate must
+be re-derived after it settles. **Do not build the per-digit range families until this resolves.**
+
 ### §3.3 Sign / verify
 
 - **sign(message, ring, signer):** reject `SignerNotInRing` if `signer ∉ ring` (O(log K) `contains`). Resolve
