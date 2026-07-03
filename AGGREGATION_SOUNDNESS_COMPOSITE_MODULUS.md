@@ -135,16 +135,36 @@ Soundness then becomes clean and unconditional — no reliance on the §3 M-SIS-
 per-component calibration subtlety.
 
 **Mechanism (implementation).** `prove_agg` proves one `F=0`; extend it to a **vector** of `ℓ_agg`
-relations sharing the *same* linear opening `(w, z1, z2)` and challenge `c`, with `ℓ_agg` garbage pairs
-`(t0_j, t1_j)`:
-- Prover: for each `j`, `e0_j = F_j.quad_part(y)`, `e1_j = F_j.cross(y,ŝ) + F_j.lin_part(y)`, then
-  `t0_j = ⟨b,y2⟩ + e0_j` and `t1_j = ⟨b,s2⟩ + e1_j`. The `⟨b,·⟩` masking terms are shared across `j`; only
-  the relation parts `e0_j/e1_j` differ. The challenge `c = FS(t_A, t_B, w, {t0_j,t1_j}_j, context)` binds
-  ALL garbage pairs (so the prover cannot adaptively choose `μ^{(j)}` after seeing `c`).
-- Verifier: the same masked-garbage reconstruction per `j`; accept iff all `ℓ_agg` checks pass.
-- **Cost:** `+2(ℓ_agg−1)` ring elements over the current single garbage pair (`w, z1, z2` shared) — `+12`
-  `R_q̂` elements for the illustrative `ℓ_agg=7`. `w/z1/z2` (the bulk) are unchanged, so the proof stays
-  log-size in the ring depth `δ`.
+relations sharing the *same* linear opening `(w, z1, z2)` and challenge `c` — but with **independently-masked**
+garbage pairs `(t0_j, t1_j)`.
+
+> ⚠️ **The mask MUST be independent per `j`** (Codex DESIGN-review P1, 2026-07-03). Naïvely sharing the
+> single garbage mask — `t0_j = ⟨b,y2⟩ + e0_j`, `t1_j = ⟨b,s2⟩ + e1_j` — is a **ZK break**: the shared
+> `⟨b,·⟩` cancels in `t1_j − t1_k = e1_j − e1_k`, exposing a witness-linear relation difference (`e1` carries
+> `F.cross(y,ŝ)`), i.e. exactly the §C-iv multi-garbage leak the single-garbage design was built to avoid.
+> Do not implement the shared-mask form.
+
+- **Prover:** the CRS carries `ℓ_agg` INDEPENDENT BDLOP garbage generators `b^{(1)}..b^{(ℓ_agg)}` (CRS is not
+  proof size). For each `j`: `e0_j = F_j.quad_part(y)`, `e1_j = F_j.cross(y,ŝ) + F_j.lin_part(y)`, then
+  `t0_j = ⟨b^{(j)}, y2⟩ + e0_j`, `t1_j = ⟨b^{(j)}, s2⟩ + e1_j`. Now the mask is per-`j`:
+  `t1_j − t1_k = ⟨b^{(j)}−b^{(k)}, s2⟩ + (e1_j − e1_k)` — the leading term is a fresh independent commitment
+  to `0` under the SECRET `s2` with an independent generator, so the difference is uniform and reveals
+  nothing (each `(t0_j,t1_j)` is individually a BDLOP commitment of `e·_j`, simulatable without the witness).
+  The challenge `c = FS(t_A, t_B, w, {t0_j,t1_j}_j, context)` binds ALL garbage pairs (no adaptive `μ^{(j)}`).
+- **Verifier:** the masked-garbage reconstruction per `j` against `b^{(j)}`; accept iff all `ℓ_agg` checks pass.
+- **ZK obligation (build-time):** a simulator producing `{(t0_j,t1_j)}` from `(z1,z2,c)` + the public `F_j`
+  without the witness, and a test that pairwise differences do NOT cancel the mask. This is the acceptance
+  gate for the construction (rule #27 — the adversarial half).
+- **Cost:** `+2(ℓ_agg−1)` ring elements over the current single garbage pair (`w, z1, z2` shared, `b^{(j)}` are
+  CRS) — `+12` `R_q̂` elements for the illustrative `ℓ_agg=7`. The bulk `w/z1/z2` is unchanged, so the proof
+  stays log-size in the ring depth `δ`.
+
+**Simpler equivalent (preferred if it type-checks against `proof_garbage`):** the show ALREADY commits `ℓ`
+zero-const-coeff garbage polys `g_i` in `m̂` and reveals leak-free `h_i` — the *existing* leak-free boosting
+mechanism. If the `ℓ_agg` quadratic aggregates can be carried as additional garbage slots in `m̂` (each with
+its own `g`), the independent-mask property is inherited from the audited `h_i` construction rather than
+re-derived. Prefer this over new `b^{(j)}` generators if the quadratic `e0/e1` terms fit the `m̂`/`h_i`
+shape; fall back to independent `b^{(j)}` if they do not. The build's first step is to determine which.
 
 **A cheaper structural alternative (note, not chosen):** give SPRING its own **prime** proof ring
 (SPRING keys are independent of the SEP credential, §3.0). Then one-shot aggregation is `~1/q_prime`, and a
