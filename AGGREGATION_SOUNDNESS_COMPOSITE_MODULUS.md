@@ -263,3 +263,47 @@ it must appear in THREE places — (i) the `a:` quadratic relation → `prove_ag
 h_i rows. All three, in both SPRING and the audited SEP show. Chunks 2–4 must implement all three, not just (i).
 This is still within Josh's "fix the aggregation soundness stack-wide" decision — it is the same one-shot
 FS-scalar-over-composite-`q̂` weakness, found at a second level.
+
+---
+
+## 10. Correct implementation structure — ℓ_agg COPIES of the whole relation (supersedes §9(iii))
+
+Wiring chunk 2 exposed that §9 was still slightly off: **§9(iii) `ELL_AMP = ℓ_agg` conflates two different
+parameters.** The masked show has, in fact, THREE one-shot FS-scalar aggregations, and the `ELL_AMP` `h_i`
+rows fix only ONE of them:
+
+- `path_mu` — aggregates the membership rows (the `a:` quadratic). One-shot. (§1)
+- `scalar_mu`/`mu_vector` — aggregates each binariness family's sub-constraints (within-family). One-shot. (§9)
+- **`mus` (the show's own aggregator)** — the masked quad checks ONE `Σ_i mus_i·(h_i-definition_i) = 0`. So the
+  `ELL_AMP` `h_i` rows are folded by `mus` into a SINGLE aggregate before the masked quad — they amplify the
+  approx-range's JL `½`-per-rep soundness (their real purpose), NOT the exact-relation aggregation. A cheater
+  reveals `h_i` with `τ0=0` (passing `b4`) whose committed value is wrong, and grinds `t_A` so `mus` zeroes the
+  aggregate — `~1/p_min`, exactly as `path_mu`. `ELL_AMP` does not touch this.
+
+So the amplification is NOT "add more `h_i` rows" (§9(iii) is wrong). It is: **run the masked quad `ℓ_agg`
+times, each over an INDEPENDENT μ-draw of the SAME statement.** Concretely, `rels` handed to `prove_agg_vec` is
+```
+rels = [ combined(μ⁽⁰⁾), combined(μ⁽¹⁾), …, combined(μ⁽ℓ_agg−1⁾) ]
+combined(μ⁽ʲ⁾) = SumRelation{ membership_form_indexed(…, j),  scalar_form(mus⁽ʲ⁾, gammas, h, …) }
+```
+where copy `j` uses independent `path_mu⁽ʲ⁾` AND independent `mus⁽ʲ⁾` (both keyed by `j` via the FS domain). A
+planted violation of ANY exact relation — a membership row, a binariness sub-constraint carried in `h`, or a
+wrong `h_i` — must survive all `ℓ_agg` copies, i.e. must be zeroed by ALL of `μ⁽⁰⁾…μ⁽ℓ_agg−1⁾` at once:
+`(1/p_min)^{ℓ_agg}`. `prove_agg_vec`'s independent garbage generators `b⁽ʲ⁾` already give each copy its own
+leak-free mask. This is UNIFORM — one mechanism folds all three levels — and it is exactly the ℓ_agg-vector the
+chunk-1 primitive was built for.
+
+Consequences for the chunks:
+- **`ELL_AMP` stays a SEPARATE parameter** (the approx-range rep count, its own §7/HYP-330 calibration) — it is
+  NOT set to `ℓ_agg`. §9(iii) is retracted.
+- **`h`/`z3` are shared** across the `ℓ_agg` copies (revealed once); only the μ-aggregation differs per copy.
+  So `SpringShowProof = { t_A, agg: AggVecProof, h, z3 }`.
+- **De-aggregation (§9(i)/chunk 2 ii) is still used** — it puts the binariness subs directly into `h`, so the
+  per-copy `mus⁽ʲ⁾` folds them along with everything else (no separate per-copy `scalar_mu` needed).
+- **`membership_form_indexed` (chunk 2 i) is the per-copy membership**; the scalar form needs the same
+  `mus⁽ʲ⁾` indexing (a `scalar_form(…, j)` FS domain).
+- **SEP/issuance (chunk 3)** get the identical treatment: `ℓ_agg` copies of `SumRelation{SepRelation/OpeningRelation, scalar}`.
+
+**Codex DESIGN-review target for §10:** is "ℓ_agg copies of the whole `SumRelation`, independent μ per copy,
+shared `h`/`z3`, independent `b⁽ʲ⁾` masks" the right unification — and does it genuinely fold the `mus` level
+(the wrong-`h_i`-with-`τ0=0` grind), not just `path_mu`?
