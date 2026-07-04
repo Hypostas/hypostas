@@ -266,35 +266,14 @@ FS-scalar-over-composite-`q̂` weakness, found at a second level.
 
 ---
 
-## 10. Correct implementation structure — ℓ_agg COPIES of the whole relation (supersedes §9(iii))
+## 10. Correct implementation structure — TWO axes (`ELL_AMP=ℓ_agg` × `ℓ_agg` μ-copies)
 
-Wiring chunk 2 exposed that §9 was still slightly off: **§9(iii) `ELL_AMP = ℓ_agg` conflates two different
-parameters.** The masked show has, in fact, THREE one-shot FS-scalar aggregations, and the `ELL_AMP` `h_i`
-rows fix only ONE of them:
+Wiring chunk 2 forced a precise enumeration of the masked show's one-shot FS-scalar aggregations. There are
+THREE, they are DEFEATED BY DIFFERENT GRINDS, and **no single parameter blocks all three** — the show must be
+amplified on TWO independent axes. (This section went through two wrong drafts before this: "add h_i rows"
+alone and "ℓ_agg copies" alone each fix only part. The table below is the corrected, complete recipe.)
 
-- `path_mu` — aggregates the membership rows (the `a:` quadratic). One-shot. (§1)
-- `scalar_mu`/`mu_vector` — aggregates each binariness family's sub-constraints (within-family). One-shot. (§9)
-- **`mus` (the show's own aggregator)** — the masked quad checks ONE `Σ_i mus_i·(h_i-definition_i) = 0`. So the
-  `ELL_AMP` `h_i` rows are folded by `mus` into a SINGLE aggregate before the masked quad — they amplify the
-  approx-range's JL `½`-per-rep soundness (their real purpose), NOT the exact-relation aggregation. A cheater
-  reveals `h_i` with `τ0=0` (passing `b4`) whose committed value is wrong, and grinds `t_A` so `mus` zeroes the
-  aggregate — `~1/p_min`, exactly as `path_mu`. `ELL_AMP` does not touch this.
-
-So the amplification is NOT "add more `h_i` rows" (§9(iii) is wrong). It is: **run the masked quad `ℓ_agg`
-times, each over an INDEPENDENT μ-draw of the SAME statement.** Concretely, `rels` handed to `prove_agg_vec` is
-```
-rels = [ combined(μ⁽⁰⁾), combined(μ⁽¹⁾), …, combined(μ⁽ℓ_agg−1⁾) ]
-combined(μ⁽ʲ⁾) = SumRelation{ membership_form_indexed(…, j),  scalar_form(mus⁽ʲ⁾, gammas, h, …) }
-```
-where copy `j` uses independent `path_mu⁽ʲ⁾` AND independent `mus⁽ʲ⁾` (both keyed by `j` via the FS domain). A
-planted violation of ANY exact relation — a membership row, a binariness sub-constraint carried in `h`, or a
-wrong `h_i` — must survive all `ℓ_agg` copies, i.e. must be zeroed by ALL of `μ⁽⁰⁾…μ⁽ℓ_agg−1⁾` at once:
-`(1/p_min)^{ℓ_agg}`. `prove_agg_vec`'s independent garbage generators `b⁽ʲ⁾` already give each copy its own
-leak-free mask. This is UNIFORM — one mechanism folds all three levels — and it is exactly the ℓ_agg-vector the
-chunk-1 primitive was built for.
-
-**⚠️ CORRECTION (Codex DESIGN-review §10, round 1).** The ℓ_agg copies do NOT fold a binariness sub-constraint
-carried in `h`. The three composite-`q̂` grinds are DISTINCT, and no single parameter blocks all three:
+The three composite-`q̂` grinds:
 
 | # | Attack (violated exact relation) | Cheater's move | Blocked by |
 |---|---|---|---|
@@ -302,14 +281,14 @@ carried in `h`. The three composite-`q̂` grinds are DISTINCT, and no single par
 | B | binariness sub carried in `h` | reveal HONEST `h_i` (so every `mus⁽ʲ⁾` copy is 0) but grind `t_A` so the `γ`/`b4` constant term is 0 | **`ELL_AMP = ℓ_agg`** — `ell` independent-`γ` `h_i` rows, all `b4:τ0=0` |
 | C | wrong `h_i` (`τ0=0`, committed value wrong) | grind `t_A` so the `mus` aggregate of the `h`-definition vanishes | ℓ_agg copies, independent `mus⁽ʲ⁾` |
 
-The key error above: for **B**, the cheater keeps the `h`-definition SATISFIED (reveals the honest `h_i`), so
-`scalar_form(mus⁽ʲ⁾,…)` is `0` for EVERY `j` regardless of `μ` — the copies never engage. B is caught only at
-the `γ`/`b4` layer, which is amplified by the NUMBER OF `h_i` ROWS. So **§9(iii) is REINSTATED**: `ELL_AMP =
-ℓ_agg` is required (for B), AND the `ℓ_agg` copies are required (for A + C). Both, not either.
+The subtlety that makes B distinct: the cheater keeps the `h`-definition SATISFIED (reveals the honest `h_i`),
+so `scalar_form(mus⁽ʲ⁾,…)` is `0` for EVERY `j` regardless of `μ` — the μ-copies never engage. B is caught only
+at the `γ`/`b4` layer, which is amplified by the NUMBER OF `h_i` ROWS. So `ELL_AMP = ℓ_agg` is required (for B),
+AND the `ℓ_agg` μ-copies are required (for A + C). Both axes, not either.
 
 Corrected implementation structure:
 - **`ELL_AMP = ℓ_agg`** — `ell = ℓ_agg` independent-`γ` `h_i` rows (each `b4: τ0(h_i)=0`), folding the
-  `h`-carried binariness/approx exact constraints (attack B). This IS §9(iii); §10-round-0's retraction was wrong.
+  `h`-carried binariness/approx exact constraints (attack B). This is §9(iii).
 - **`ℓ_agg` copies** of `SumRelation{membership_form_indexed(…,j), scalar_form(mus⁽ʲ⁾,…)}` via `prove_agg_vec`,
   independent `path_mu⁽ʲ⁾` + `mus⁽ʲ⁾` per copy, folding membership (A) + wrong-`h_i` (C).
 - **`h`/`z3` shared** across copies (revealed once); `SpringShowProof = { t_A, agg: AggVecProof, h, z3 }`.
