@@ -442,8 +442,25 @@ Design-first, then build in gate-clean chunks (each: integration + smoke test pe
   the CRS (`A_s`, `A_h`) and the **member directory** `RingMemberId → t_i` as `&self` state (the P1 resolution
   seam); `verify` rejects any unresolvable member. Serialization codec with the `SPRING_MAX_SIG_LEN` + frame cap
   (the §18.2 note). Smoke test through the trait, incl. an adversarial unresolvable-member reject.
-- **C5 — params calibration** (`proof_params.rs`): M-SIS core-SVP ≥ 128 estimator test; measure + record the
+  > **BUILT 2026-07-03 (`spring_scheme.rs`, gate-clean).** `LatticeRingScheme { acc, directory, secrets }`;
+  > `RingMemberId` is an INDEX into the authenticated `directory` (both sign+verify resolve the whole ring →
+  > attested leaves; unresolvable ⇒ `UnknownMember`). Codec `SPRING_SIG_CODEC_VERSION` + `encode/decode_spring_
+  > show_proof`. Codex P2 fixes: malformed directory entry fails closed (no `hash_leaf` panic); `register_member`
+  > drops stale secrets + `sign` guards `pubkey(s)==directory[signer]` (no `Ok(sig)` that won't verify). 8 tests.
+  > **v1 SIZE is over cap** — see C5.
+- **C5 — params calibration** (`spring_params.rs`): M-SIS core-SVP ≥ 128 estimator test; measure + record the
   real proof size.
+  > **BUILT 2026-07-03 (`spring_params.rs`, gate-clean) — two findings.** (1) **M-SIS is SOUND at the provisional
+  > dims.** The BKZ core-SVP estimator (root-Hermite δ(b), optimal-sub-dim SIS-norm, classical 0.292·b / quantum
+  > 0.265·b) puts all three instances over the CLASSICAL 128 bar: `A_s`≈438 (binary β below the dimension-limited
+  > minimum), `A_leaf`≈170, `A_node`≈132. The large SHARED `q̂≈2⁵⁷·⁷` HARDENS the small node (bigger q → the q-ary
+  > lattice minimum grows past the fixed β). Quantum: node ≈119.5 — a slim, Dilithium-2-class margin; `min_ell_for_
+  > 128` says a strict quantum-128 node is a MODEST bump (ELL 4→5), not a blow-up. (2) **SIZE is the v1 blocker,
+  > not hardness.** Full-width v1 sig measured **110629 B at K=8/δ=3, over the 64 KiB cap.** Because the quantum-128
+  > node bump inflates the proof, the production calibration is a COUPLED dims+size optimization → §6 routes (i)
+  > natural-bit-width packing + (ii) source-shrink, design-first (rule #6). Committed bar = classical-128 (met);
+  > `accumulator_meets_128bit_classical_core_svp` passes at the provisional dims. **This is the remaining SPRING
+  > work: C5-full = fit `SPRING_MAX_SIG_LEN` (route i/ii) + optionally lift the node to quantum-128, solved jointly.**
 - Each chunk: `cargo test -p vouch-crypto --features experimental-unaudited --lib` + clippy + Codex gate.
 
 ## §8 Open questions for Codex DESIGN-review
