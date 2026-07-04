@@ -293,17 +293,34 @@ wrong `h_i` — must survive all `ℓ_agg` copies, i.e. must be zeroed by ALL of
 leak-free mask. This is UNIFORM — one mechanism folds all three levels — and it is exactly the ℓ_agg-vector the
 chunk-1 primitive was built for.
 
-Consequences for the chunks:
-- **`ELL_AMP` stays a SEPARATE parameter** (the approx-range rep count, its own §7/HYP-330 calibration) — it is
-  NOT set to `ℓ_agg`. §9(iii) is retracted.
-- **`h`/`z3` are shared** across the `ℓ_agg` copies (revealed once); only the μ-aggregation differs per copy.
-  So `SpringShowProof = { t_A, agg: AggVecProof, h, z3 }`.
-- **De-aggregation (§9(i)/chunk 2 ii) is still used** — it puts the binariness subs directly into `h`, so the
-  per-copy `mus⁽ʲ⁾` folds them along with everything else (no separate per-copy `scalar_mu` needed).
-- **`membership_form_indexed` (chunk 2 i) is the per-copy membership**; the scalar form needs the same
-  `mus⁽ʲ⁾` indexing (a `scalar_form(…, j)` FS domain).
-- **SEP/issuance (chunk 3)** get the identical treatment: `ℓ_agg` copies of `SumRelation{SepRelation/OpeningRelation, scalar}`.
+**⚠️ CORRECTION (Codex DESIGN-review §10, round 1).** The ℓ_agg copies do NOT fold a binariness sub-constraint
+carried in `h`. The three composite-`q̂` grinds are DISTINCT, and no single parameter blocks all three:
 
-**Codex DESIGN-review target for §10:** is "ℓ_agg copies of the whole `SumRelation`, independent μ per copy,
-shared `h`/`z3`, independent `b⁽ʲ⁾` masks" the right unification — and does it genuinely fold the `mus` level
-(the wrong-`h_i`-with-`τ0=0` grind), not just `path_mu`?
+| # | Attack (violated exact relation) | Cheater's move | Blocked by |
+|---|---|---|---|
+| A | membership row | grind `t_A` so the `path_mu` aggregate vanishes | ℓ_agg copies, independent `path_mu⁽ʲ⁾` |
+| B | binariness sub carried in `h` | reveal HONEST `h_i` (so every `mus⁽ʲ⁾` copy is 0) but grind `t_A` so the `γ`/`b4` constant term is 0 | **`ELL_AMP = ℓ_agg`** — `ell` independent-`γ` `h_i` rows, all `b4:τ0=0` |
+| C | wrong `h_i` (`τ0=0`, committed value wrong) | grind `t_A` so the `mus` aggregate of the `h`-definition vanishes | ℓ_agg copies, independent `mus⁽ʲ⁾` |
+
+The key error above: for **B**, the cheater keeps the `h`-definition SATISFIED (reveals the honest `h_i`), so
+`scalar_form(mus⁽ʲ⁾,…)` is `0` for EVERY `j` regardless of `μ` — the copies never engage. B is caught only at
+the `γ`/`b4` layer, which is amplified by the NUMBER OF `h_i` ROWS. So **§9(iii) is REINSTATED**: `ELL_AMP =
+ℓ_agg` is required (for B), AND the `ℓ_agg` copies are required (for A + C). Both, not either.
+
+Corrected implementation structure:
+- **`ELL_AMP = ℓ_agg`** — `ell = ℓ_agg` independent-`γ` `h_i` rows (each `b4: τ0(h_i)=0`), folding the
+  `h`-carried binariness/approx exact constraints (attack B). This IS §9(iii); §10-round-0's retraction was wrong.
+- **`ℓ_agg` copies** of `SumRelation{membership_form_indexed(…,j), scalar_form(mus⁽ʲ⁾,…)}` via `prove_agg_vec`,
+  independent `path_mu⁽ʲ⁾` + `mus⁽ʲ⁾` per copy, folding membership (A) + wrong-`h_i` (C).
+- **`h`/`z3` shared** across copies (revealed once); `SpringShowProof = { t_A, agg: AggVecProof, h, z3 }`.
+- **De-aggregation (chunk 2 ii)** puts the binariness subs into `h`, so `ELL_AMP=ℓ_agg` (not a per-copy
+  `scalar_mu`) folds them.
+- **SEP/issuance (chunk 3)**: identical — `ELL_AMP=ℓ_agg` rows + `ℓ_agg` copies.
+
+So the proof grows on BOTH axes: `ell = ℓ_agg` garbage rows + `h_i` (attack B), and `ℓ_agg` relation copies =
+`+2(ℓ_agg−1)` garbage pairs (attacks A + C). Net still log-size in the ring depth `δ`.
+
+**Codex DESIGN-review target for §10 (round 2):** are attacks A/B/C the COMPLETE set of one-shot composite-`q̂`
+grinds in the masked show, and does `{ELL_AMP=ℓ_agg rows} × {ℓ_agg μ-copies}` block all three at
+`(1/p_min)^{ℓ_agg}` — or is there a cross-term (e.g. a single grind that simultaneously defeats a `b4` row AND
+a `mus` copy, costing less than `(1/p_min)^{ℓ_agg}`) because all of `γ/mus/path_mu` derive from the same `t_A`?
