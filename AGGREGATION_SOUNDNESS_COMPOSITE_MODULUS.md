@@ -223,3 +223,43 @@ way. It is NOT a silent change to shipped-verified behavior — the gate is stil
   a `q₁`-multiple row under the shortness + binariness constraints)? (b) does §3(A) actually rescue the
   one-shot case, making this a hardening rather than a fix? (c) is `ℓ_agg=7` the right target, or should it key
   off `q₁` (if the reduction only needs the larger prime)? (d) the `rows()`/`aggregate_with` trait hook shape.
+- **2026-07-03 (chunk 1 done → scope broadened, §9 below).** Building the fix surfaced that §1 UNDERSTATED the
+  scope: the one-shot weakness is at TWO levels, and the scalar families are NOT "already ℓ-amplified" as §1
+  claimed. §9 corrects this; the recommendation now covers the scalar τ0 families and `ELL_AMP` too.
+
+---
+
+## 9. Scope correction — the weakness is at TWO aggregation levels (supersedes §1's scalar-family claim)
+
+§1 said the scalar `extra` families "are already ℓ-amplified via the `h_i` rows" and only the `a:` relation is
+one-shot. **That is wrong.** There are TWO aggregation levels, and only one of them is `h_i`-amplified:
+
+- **Across-family (γ):** each `h_i = g_i + Σ_f γ_{i,f}·τ0(fam_f) + approx`, checked `τ0(h_i)=0` for `ℓ`
+  independent `γ_i` rows. This IS amplified — a nonzero `τ0(fam_f)` is caught with `(1/p_min)^ℓ`. ✅
+- **Within-family (μ):** each family is itself a ONE-SHOT FS-scalar aggregate of its sub-constraints —
+  `s_binariness = aggregate(ETA binariness constraints, scalar_mu(t_A))` (`spring_scalar`), and identically
+  `issuance_binariness = aggregate(constraints, mu_vector(t_A))` in the AUDITED SEP show (`proof_show`). The
+  `h_i` only ever see `τ0(fam_f)` — the pre-aggregated value — so if a prover grinds `t_A` until a violated
+  sub-constraint's within-family aggregate `τ0(fam_f)=0` (`~1/p_min`, and a binariness defect `≈ q₁` is
+  reachable with a short `s` coeff `≈ 2^{19.5} < B`), ALL `ℓ` rows see `0`. **The within-family μ is NOT
+  amplified.** ❌ Same `~1/p_min` grinding as the `a:` relation.
+
+Two consequences the design must now carry:
+
+1. **Scalar-family fix (simpler than the quadratic one): DE-AGGREGATE.** Feed the RAW sub-constraints into the
+   `h_i` (no within-family `scalar_mu`/`mu_vector` pre-aggregation). Then the across-constraint `γ` sum — which
+   is already the `h_i` mechanism — carries every sub-constraint directly, so a violated sub-constraint is
+   caught with `(1/p_min)^ℓ`. Cost: the `h_i` sum widens from `n_families` to `n_sub_constraints` γ-terms (FS
+   scalars are free; `h_i` stay the same ring size). No new primitive — it is a change to how the families are
+   handed to the show. Applies to SPRING `binariness_families` AND SEP `issuance_binariness`.
+2. **`ELL_AMP` must be `ℓ_agg`, not 1.** The `h_i` row count `ELL_AMP` (currently `1` in both `spring_show` and
+   the SEP show) IS the across-family amplification exponent. `ELL_AMP=1` gives only `(1/p_min)¹` — the fix
+   needs `ELL_AMP = ℓ_agg = ⌈λ/log₂ p_min⌉`. This is a one-line param change but a real soundness constant
+   (traced to `p_min`), and it grows the proof by `ℓ_agg−1` extra garbage rows + `h_i`.
+
+**Unified statement of the fix (stack-wide):** `ℓ_agg = ⌈λ/log₂ p_min⌉` is the single soundness exponent, and
+it must appear in THREE places — (i) the `a:` quadratic relation → `prove_agg_vec` ℓ_agg independent aggregates
+(chunk 1 primitive done); (ii) the scalar families → de-aggregated raw sub-constraints; (iii) `ELL_AMP = ℓ_agg`
+h_i rows. All three, in both SPRING and the audited SEP show. Chunks 2–4 must implement all three, not just (i).
+This is still within Josh's "fix the aggregation soundness stack-wide" decision — it is the same one-shot
+FS-scalar-over-composite-`q̂` weakness, found at a second level.
