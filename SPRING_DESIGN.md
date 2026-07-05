@@ -482,6 +482,70 @@ Design-first, then build in gate-clean chunks (each: integration + smoke test pe
 
 ---
 
+## §9 PIVOT (2026-07-05, decided): accumulator → one-out-of-many. Resolves §8 Q1.
+
+**Why (MEASURED, not estimated — `spring_scheme::measure_packed_signature_size`).** The C1–C5 accumulator
+build shipped + is gate-clean, but the measurement kills it for `K=1000`: the natural-bit-width-packed sig at
+`K=8/δ=3` is **64.3 KB — already AT the 64 KiB cap**, and `lin.z1` (the [LNP22] opening, dimension
+`m1 ∝ δ ∝ log K`) is **70%** of it. The measured scaling `m1 ≈ 28 + 48·δ` puts `K=1000 (δ=10)` at **~150 KB
+packed, 2.4× over the cap.** Bit-width packing (route i) and a smaller mask are constant factors that help
+`K ≤ ~32` but NEVER fit `K=1000` — the opening scales with the ring through `δ`. Higher-arity Merkle is the
+WRONG lever (it GROWS the path witness: siblings `= (A−1)·log_A K`, minimized at binary — arity-32 is ~6×
+worse). The membership-witness DIMENSION is the driver, so the fix must shrink `m1` structurally. **One-out-of-
+many does exactly that: `m1 = O(log K)` with NO path nodes.** Josh chose it over "raise the §18.2 cap" and
+"smaller ring" (both preserve/relax at a cost); this is the "do it right" path — full `K=1000` anonymity, fits
+the cap. The accumulator (`spring_acc`/`spring_path`) is retired from the SPRING signature (kept in-tree,
+`experimental-unaudited`, in case a future accumulator use appears).
+
+**§9.1 Construction — Groth–Kohlweiss / Bootle-et-al one-out-of-many, adapted to [LNP22]/MatRiCT.** Public:
+the resolved member pubkeys `t_0,…,t_{N−1} ∈ R_q̂^{D_PK}` (`N=K`, from the directory), `n=⌈log₂N⌉`. Signer knows
+index `ℓ` and secret `s` (binary) with `A_s·s = t_ℓ`. Commit (ABDLOP): the index bits `b_0,…,b_{n−1}` of `ℓ`,
+the secret `s`, garbage vectors `T_0,…,T_{n−1} ∈ R_q̂^{D_PK}`, response masks `a_j`. FS challenge `x`. Per-bit
+linear forms `f_{j,1}(x)=b_j·x + a_j`, `f_{j,0}(x)=x − f_{j,1}(x)`. For index `i` with bits `i_j`:
+`P_i(x)=∏_j f_{j,i_j}(x) = δ_{i,ℓ}·x^n + Σ_{k<n} P_{i,k}·x^k` (top coeff `= ∏_j[i_j=b_j] = 1` iff `i=ℓ`). Then
+`Σ_i t_i·P_i(x) = t_ℓ·x^n + Σ_{k<n} T_k·x^k = (A_s·s)·x^n + Σ_{k<n} T_k·x^k` with `T_k = Σ_i t_i·P_{i,k}`.
+
+**§9.2 Why it is BUILDABLE on our stack (the key insight).** Reveal the masked bits `z_j = f_{j,1}(x)` in the
+response. The verifier then computes `V(x) = Σ_i t_i·∏_j f_{j,i_j}(x)` as a PUBLIC ring vector (`f_{j,1}=z_j`,
+`f_{j,0}=x−z_j`; `O(K·(n+D_PK))` ring mults ≈ ms at `K=1000`). The ZK obligations are ALL relations our stack
+already proves: (1) each `b_j` binary — `AffineConstraint::binariness`; (2) `z_j = b_j·x + a_j` opens the
+committed bit — [LNP22] linear opening; (3) the identity `V(x) = (A_s·s)·x^n + Σ_k T_k·x^k`, LINEAR in the
+committed `(s, T_k)` given the PUBLIC `V(x)` — `proof_linrel`; (4) `s` binary + `A_s·s` well-formed. No new
+proof primitive — the degree-`n` selector becomes a public evaluation (via the revealed masked bits) plus a
+linear garbage-coefficient identity. This is why the earlier "we lack the lattice product-arg" worry (memory
+`project_hyp317_spring_design`) does NOT block us: the product is made public at `x`, not proven in-ZK.
+
+**§9.3 Size + verify.** `m1 ≈ n + ETA + n·D_PK ≈ 10 + 8 + 40 = 58` ring elements at `K=1000` vs the path's
+~500; the garbage `T_k` (`n·D_PK ≈ 40`) dominate. Packed est. **~30 KB at `K=1000`, under the 64 KiB cap**
+(vs 150 KB). Verifier does `O(K)` PUBLIC work (the `V(x)` sum) + `O(log K)` proof checks — the standard
+one-out-of-many tradeoff (small proof, linear verify), fine at `K=1000`.
+
+**§9.4 Soundness — sketch + the OPEN item (needs the full pass, NOT self-certified).** Special-soundness: from
+`n+1` accepting transcripts at distinct challenges the Vandermonde in `x` is invertible ⇒ extract `b_j → ℓ` and
+`A_s·s = t_ℓ` with `s` binary; [LNP22] knowledge-soundness for `s, T_k`. **THE open crux:** the Vandermonde
+invertibility + the GK soundness error (`~n/|C|`) over the COMPOSITE modulus `q̂ = p·q₁` — challenge differences
+must be invertible mod BOTH primes (the `proof_ring` CRT invertible-difference set), and the composite modulus
+may reintroduce a `1/p_min`-style gap exactly like the aggregation issue ([[project_aggregation_soundness_gap]]).
+Whether the `n+1`-transcript extraction needs an `ℓ_agg`-style amplification here is THE question for the full
+soundness pass + Codex DESIGN-review. Anonymity: masks `a_j` hide `b_j` (`z_j` uniform), [LNP22] ZK hides
+`s, T_k` — standard GK zero-knowledge.
+
+**§9.5 Open questions for Codex DESIGN-review.** (a) Composite-`q̂` soundness of the `n+1`-transcript
+extraction (the §9.4 crux) — does it need `ℓ_agg`-folding? (b) The garbage-`T_k` masking + reject-sampling
+bounds (ZK + shortness). (c) Params: `m1`, the mask widths, the challenge set `|C|` for a `2⁻¹²⁸` soundness
+error. (d) Non-power-of-2 `K` handling (pad the member set to `2^n` with dummy `t_i`? or partial-tree). (e) The
+member-directory resolution seam is UNCHANGED (still `RingMemberId → t_i`, §7 C4).
+
+**§9.6 Build chunks (design-first FIRST — this §9 is the skeleton, the full soundness/params pass + Codex
+DESIGN-review gate BEFORE code, per rule #6).** D1 `oneofmany_relation.rs`: the clear-text selector +
+garbage-coefficient identity, pinned. D2: bit-commitment + binariness + response opening. D3: the `V(x)`
+public evaluation + the linear garbage identity. D4: compose into the [LNP22] masked show (s-opening +
+`ℓ_agg` if §9.4 demands it), FS-seed `H(domain‖message‖{t_i}‖x-transcript)`. D5: `LatticeRingScheme` swaps its
+prove/verify from `spring_show` → `oneofmany_show` (the trait + directory + codec are UNCHANGED — only the
+membership engine). Params calibration + measured size. Each chunk: test + clippy + Codex gate.
+
+---
+
 *Author: Iris. Pattern mirrors SEP_V3A3_DESIGN.md / ANCHOR_BIND_DESIGN.md (design-first → Codex DESIGN-review →
 chunked build → gate). Highest-risk crypto: a subtle bug is a silent anonymity/soundness failure; HYP-330 is the
 pre-mainnet backstop.*
