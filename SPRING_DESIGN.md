@@ -545,17 +545,19 @@ recover the coefficients ⇒ the bits `b_j` (scalar-pinned per §9.2 (1)) ⇒ `�
 `ρ`/`κ` (the `proof_challenge` doc asserts it, calibrate concretely), and that the degree-`n` bound uses the
 FULL selector degree (`n`, not per-bit) — both are calibration items, NOT soundness-structure gaps.
 
-**§9.5 Open questions for Codex DESIGN-review.** (a) Composite-`q̂` soundness of the `n+1`-transcript
-extraction (the §9.4 crux) — does it need `ℓ_agg`-folding? (b) The garbage-`T_k` masking + reject-sampling
-bounds (ZK + shortness). (c) Params: `m1`, the mask widths, the challenge set `|C|` for a `2⁻¹²⁸` soundness
-error. (d) Non-power-of-2 `K` handling (pad the member set to `2^n` with dummy `t_i`? or partial-tree). (e) The
-member-directory resolution seam is UNCHANGED (still `RingMemberId → t_i`, §7 C4).
+**§9.5 Open questions for Codex DESIGN-review.** (a) ~~Composite-`q̂` soundness of the `n+1`-transcript
+extraction~~ **RESOLVED in §9.4 — single-shot via the invertible-difference challenge set, NO `ℓ_agg`**
+(Codex DESIGN-review of the argument returned no refutation, only doc-consistency fixes). (b) The garbage-`T_k`
+masking + reject-sampling bounds (ZK + shortness). (c) Params: `m1`, the mask widths, and the concrete
+`|C| ≥ 2^128` check at the SPRING `ρ`/`κ` (the §9.4 soundness `≤ n/|C|` depends on it). (d) Non-power-of-2 `K`
+handling (pad the member set to `2^n` with dummy `t_i`? or partial-tree). (e) The member-directory resolution
+seam is UNCHANGED (still `RingMemberId → t_i`, §7 C4).
 
 **§9.6 Build chunks (design-first FIRST — this §9 is the skeleton, the full soundness/params pass + Codex
 DESIGN-review gate BEFORE code, per rule #6).** D1 `oneofmany_relation.rs`: the clear-text selector +
 garbage-coefficient identity, pinned. D2: bit-commitment + binariness + response opening. D3: the `V(x)`
-public evaluation + the linear garbage identity. D4: compose into the [LNP22] masked show (s-opening +
-`ℓ_agg` if §9.4 demands it), FS-seed `H(domain‖message‖ring.canonical_bytes()‖{t_i}‖x-transcript)` — MUST bind
+public evaluation + the linear garbage identity. D4: compose into the [LNP22] masked show (s-opening, NO
+`ℓ_agg` — §9.4 resolved single-shot), FS-seed `H(domain‖message‖ring.canonical_bytes()‖{t_i}‖x-transcript)` — MUST bind
 the ring's canonical member-ID bytes, NOT only the resolved `{t_i}` (Codex DESIGN-review P2): else a proof
 replays for a DIFFERENT `SpringRing` whose IDs resolve to the same `{t_i}` (key reused across routing-id
 rotation, or two `RingMemberId`s → the same `t_i`), violating the trait contract that binds the sig to the ring
@@ -571,7 +573,8 @@ scalar-bit/zero-pin families, not plain binariness (§9.2 (1)); **P2** — the F
 `ring.canonical_bytes()`, not only `{t_i}` (§9.6 D4). The composite-`q̂` crux (§9.4) is now **RESOLVED
 single-shot** — the [LNP22] challenge's pairwise-invertible differences give the `≤ n` roots-in-`C` bound, so
 soundness is `≤ n/|C| ≤ 2^{−124}` with NO `ℓ_agg`-folding (pending Codex DESIGN-review of this argument + the
-`|C| ≥ 2^128` params check). **D1 is BUILT** (`oneofmany_relation.rs`, 5 tests): the clear-text statement +
+`|C| ≥ 2^128` params check). **D1 is BUILT** (in the `dyados` repo, `vouch-crypto/src/oneofmany_relation.rs`,
+5 tests — the code lives in dyados, this design in hypostas): the clear-text statement +
 the selector identity (`top coeff P_i = δ_{i,ℓ}`; `x^n` coeff of `Σ t_i P_i = t_ℓ`, mask-independent) pinned
 over the real proof ring. D2 (scalar-pinned bit commitments + response opening) is next.
 
