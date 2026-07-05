@@ -556,8 +556,14 @@ seam is UNCHANGED (still `RingMemberId → t_i`, §7 C4).
 **§9.6 Build chunks (design-first FIRST — this §9 is the skeleton, the full soundness/params pass + Codex
 DESIGN-review gate BEFORE code, per rule #6).** D1 `oneofmany_relation.rs`: the clear-text selector +
 garbage-coefficient identity, pinned. D2: bit-commitment + binariness + response opening. D3: the `V(x)`
-public evaluation + the linear garbage identity. D4: compose into the [LNP22] masked show (s-opening, NO
-`ℓ_agg` — §9.4 resolved single-shot), FS-seed `H(domain‖message‖ring.canonical_bytes()‖{t_i}‖x-transcript)` — MUST bind
+public evaluation + the linear garbage identity. D4: compose into the [LNP22] masked show. **Two soundness
+mechanisms, do NOT conflate:** the SELECTOR/garbage identity `V(x)=(A_s·s)x^n+Σ T_k x^k` is LINEAR in the
+committed `(s,T_k)` given the PUBLIC `V(x)` → it goes through the `proof_linrel` linear opening, **single-shot,
+no `ℓ_agg`** (§9.4, the invertible-difference challenge). BUT the τ0 SCALAR EXTRAS (bit binariness + scalar-pin,
+`s` binariness) are coefficient constraints checked via the show's `h_i` → they use the **EXISTING `ℓ_agg`-fold
+(chunks 1–4)**, since those τ0 families ARE composite-`q̂`-grindable exactly like the SEP/accumulator ones. So
+the one-out-of-many needs no ADDITIONAL amplification beyond the show's standing `ℓ_agg` for its scalar extras.
+FS-seed `H(domain‖message‖ring.canonical_bytes()‖{t_i}‖x-transcript)` — MUST bind
 the ring's canonical member-ID bytes, NOT only the resolved `{t_i}` (Codex DESIGN-review P2): else a proof
 replays for a DIFFERENT `SpringRing` whose IDs resolve to the same `{t_i}` (key reused across routing-id
 rotation, or two `RingMemberId`s → the same `t_i`), violating the trait contract that binds the sig to the ring
