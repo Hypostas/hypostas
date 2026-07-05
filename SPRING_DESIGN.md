@@ -508,7 +508,12 @@ linear forms `f_{j,1}(x)=b_j·x + a_j`, `f_{j,0}(x)=x − f_{j,1}(x)`. For index
 **§9.2 Why it is BUILDABLE on our stack (the key insight).** Reveal the masked bits `z_j = f_{j,1}(x)` in the
 response. The verifier then computes `V(x) = Σ_i t_i·∏_j f_{j,i_j}(x)` as a PUBLIC ring vector (`f_{j,1}=z_j`,
 `f_{j,0}=x−z_j`; `O(K·(n+D_PK))` ring mults ≈ ms at `K=1000`). The ZK obligations are ALL relations our stack
-already proves: (1) each `b_j` binary — `AffineConstraint::binariness`; (2) `z_j = b_j·x + a_j` opens the
+already proves: (1) each `b_j` is a SCALAR bit — binariness `b_j²=b_j` on the constant coeff PLUS explicit
+zero-pins `coeff_k(b_j)=0 ∀k∈[1,NHAT)`. **Plain binariness is INSUFFICIENT** (Codex DESIGN-review P1): it
+constrains only `τ0(b_j)∈{0,1}`, so a prover could smuggle arbitrary data into coeffs `1..NHAT−1` while the
+constant stays binary — the top coeff of `P_i` would no longer be the Kronecker delta and the Vandermonde
+extraction would not yield a real index. This is the SAME scalar-bit lesson as the accumulator's direction
+bits (§3.2c C2b-iv): carry the binariness+zero-pin PAIR here. (2) `z_j = b_j·x + a_j` opens the
 committed bit — [LNP22] linear opening; (3) the identity `V(x) = (A_s·s)·x^n + Σ_k T_k·x^k`, LINEAR in the
 committed `(s, T_k)` given the PUBLIC `V(x)` — `proof_linrel`; (4) `s` binary + `A_s·s` well-formed. No new
 proof primitive — the degree-`n` selector becomes a public evaluation (via the revealed masked bits) plus a
@@ -540,9 +545,22 @@ member-directory resolution seam is UNCHANGED (still `RingMemberId → t_i`, §7
 DESIGN-review gate BEFORE code, per rule #6).** D1 `oneofmany_relation.rs`: the clear-text selector +
 garbage-coefficient identity, pinned. D2: bit-commitment + binariness + response opening. D3: the `V(x)`
 public evaluation + the linear garbage identity. D4: compose into the [LNP22] masked show (s-opening +
-`ℓ_agg` if §9.4 demands it), FS-seed `H(domain‖message‖{t_i}‖x-transcript)`. D5: `LatticeRingScheme` swaps its
+`ℓ_agg` if §9.4 demands it), FS-seed `H(domain‖message‖ring.canonical_bytes()‖{t_i}‖x-transcript)` — MUST bind
+the ring's canonical member-ID bytes, NOT only the resolved `{t_i}` (Codex DESIGN-review P2): else a proof
+replays for a DIFFERENT `SpringRing` whose IDs resolve to the same `{t_i}` (key reused across routing-id
+rotation, or two `RingMemberId`s → the same `t_i`), violating the trait contract that binds the sig to the ring
+of member IDs. Matches the C4 accumulator seed (which already included `ring.canonical_bytes()`). D5:
+`LatticeRingScheme` swaps its
 prove/verify from `spring_show` → `oneofmany_show` (the trait + directory + codec are UNCHANGED — only the
 membership engine). Params calibration + measured size. Each chunk: test + clippy + Codex gate.
+
+**§9.7 Review status (2026-07-05).** The selector identity (§9.1: `top coeff P_i(x) = δ_{i,ℓ}` and
+`Σ_i t_i·P_i(x)` has `x^n` coeff `= t_ℓ`) is NUMERICALLY VALIDATED (a field-arithmetic harness at `n=4`).
+Codex DESIGN-review of this §9 returned two P-findings, BOTH folded in above: **P1** — index bits need the
+scalar-bit/zero-pin families, not plain binariness (§9.2 (1)); **P2** — the FS seed must bind
+`ring.canonical_bytes()`, not only `{t_i}` (§9.6 D4). The **remaining open crux** (§9.4) — composite-`q̂`
+soundness of the `n+1`-transcript extraction (does it need `ℓ_agg`-folding?) — is NOT yet resolved and is the
+first item of the full soundness pass before the D1 build.
 
 ---
 
