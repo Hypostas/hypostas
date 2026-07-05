@@ -525,15 +525,25 @@ linear garbage-coefficient identity. This is why the earlier "we lack the lattic
 (vs 150 KB). Verifier does `O(K)` PUBLIC work (the `V(x)` sum) + `O(log K)` proof checks — the standard
 one-out-of-many tradeoff (small proof, linear verify), fine at `K=1000`.
 
-**§9.4 Soundness — sketch + the OPEN item (needs the full pass, NOT self-certified).** Special-soundness: from
-`n+1` accepting transcripts at distinct challenges the Vandermonde in `x` is invertible ⇒ extract `b_j → ℓ` and
-`A_s·s = t_ℓ` with `s` binary; [LNP22] knowledge-soundness for `s, T_k`. **THE open crux:** the Vandermonde
-invertibility + the GK soundness error (`~n/|C|`) over the COMPOSITE modulus `q̂ = p·q₁` — challenge differences
-must be invertible mod BOTH primes (the `proof_ring` CRT invertible-difference set), and the composite modulus
-may reintroduce a `1/p_min`-style gap exactly like the aggregation issue ([[project_aggregation_soundness_gap]]).
-Whether the `n+1`-transcript extraction needs an `ℓ_agg`-style amplification here is THE question for the full
-soundness pass + Codex DESIGN-review. Anonymity: masks `a_j` hide `b_j` (`z_j` uniform), [LNP22] ZK hides
-`s, T_k` — standard GK zero-knowledge.
+**§9.4 Soundness — RESOLVED single-shot (2026-07-05, grounded in `proof_challenge.rs`; still pending Codex
+DESIGN-review + the params pass).** The [LNP22] FS challenge is a RING element from the strong set `C`
+(`proof_challenge`: self-conjugate, `ρ`-bounded, **pairwise-invertible differences** via `qmin > (2ρ√κ)^κ`,
+sized `|C| ≥ 2^λ = 2^128`). That invertible-difference property is EXACTLY the tool that closes the
+composite-`q̂` gap I flagged: over `R_q̂` (a non-domain) a nonzero degree-`n` polynomial `f(X)` can have many
+roots, BUT if `c_i − c_j` is a unit for all distinct `c_i,c_j ∈ C`, the Vandermonde `V[i][k]=c_i^k` on any
+`n+1` challenges is invertible (`det = ∏_{i<j}(c_i−c_j)` = a product of units = a unit) ⇒ `f` cannot vanish on
+`n+1` points of `C` ⇒ `f` has **≤ `n` roots in `C`**. So a cheating prover (whose error polynomial
+`Σ_i t_i·P_i(X) − (committed)·X^n − Σ_k T_k·X^k` is nonzero) passes only if the FS challenge lands on one of
+those `≤ n` roots: probability `≤ n/|C| ≤ 10/2^128 ≈ 2^{−124}` — **SINGLE-SHOT ~128-bit, NO `ℓ_agg`-folding.**
+This is UNLIKE the aggregation gap ([[project_aggregation_soundness_gap]]), where the aggregator was a
+HASH-DERIVED SCALAR `μ` with no invertible-difference structure (grindable to `0 mod p`); the one-out-of-many
+rides the STRUCTURED [LNP22] challenge, whose invertible differences are precisely designed for this
+Schwartz–Zippel-over-a-non-domain argument. Special-soundness EXTRACTION uses the same invertible Vandermonde to
+recover the coefficients ⇒ the bits `b_j` (scalar-pinned per §9.2 (1)) ⇒ `ℓ`, and `A_s·s = t_ℓ` with `s` binary;
+[LNP22] knowledge-soundness for `s, T_k`. Anonymity: masks `a_j` hide `b_j` (`z_j` uniform), [LNP22] ZK hides
+`s, T_k` — standard GK zero-knowledge. **Caveats for the params pass:** confirm `|C| ≥ 2^128` at the SPRING
+`ρ`/`κ` (the `proof_challenge` doc asserts it, calibrate concretely), and that the degree-`n` bound uses the
+FULL selector degree (`n`, not per-bit) — both are calibration items, NOT soundness-structure gaps.
 
 **§9.5 Open questions for Codex DESIGN-review.** (a) Composite-`q̂` soundness of the `n+1`-transcript
 extraction (the §9.4 crux) — does it need `ℓ_agg`-folding? (b) The garbage-`T_k` masking + reject-sampling
@@ -558,9 +568,12 @@ membership engine). Params calibration + measured size. Each chunk: test + clipp
 `Σ_i t_i·P_i(x)` has `x^n` coeff `= t_ℓ`) is NUMERICALLY VALIDATED (a field-arithmetic harness at `n=4`).
 Codex DESIGN-review of this §9 returned two P-findings, BOTH folded in above: **P1** — index bits need the
 scalar-bit/zero-pin families, not plain binariness (§9.2 (1)); **P2** — the FS seed must bind
-`ring.canonical_bytes()`, not only `{t_i}` (§9.6 D4). The **remaining open crux** (§9.4) — composite-`q̂`
-soundness of the `n+1`-transcript extraction (does it need `ℓ_agg`-folding?) — is NOT yet resolved and is the
-first item of the full soundness pass before the D1 build.
+`ring.canonical_bytes()`, not only `{t_i}` (§9.6 D4). The composite-`q̂` crux (§9.4) is now **RESOLVED
+single-shot** — the [LNP22] challenge's pairwise-invertible differences give the `≤ n` roots-in-`C` bound, so
+soundness is `≤ n/|C| ≤ 2^{−124}` with NO `ℓ_agg`-folding (pending Codex DESIGN-review of this argument + the
+`|C| ≥ 2^128` params check). **D1 is BUILT** (`oneofmany_relation.rs`, 5 tests): the clear-text statement +
+the selector identity (`top coeff P_i = δ_{i,ℓ}`; `x^n` coeff of `Σ t_i P_i = t_ℓ`, mask-independent) pinned
+over the real proof ring. D2 (scalar-pinned bit commitments + response opening) is next.
 
 ---
 
