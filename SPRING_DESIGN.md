@@ -581,8 +581,9 @@ DESIGN-review gate BEFORE code, per rule #6).** D1 `oneofmany_relation.rs`: the 
 garbage-coefficient identity, pinned. D2: bit-commitment + binariness + response opening. D3: the `V(x)`
 public evaluation + the linear garbage identity. D4: compose into the [LNP22] masked show. **Two soundness
 mechanisms, do NOT conflate:** the SELECTOR/garbage identity `V(x)=(A_s·s)x^n+Σ T_k x^k` is LINEAR in the
-committed `(s,T_k)` given the PUBLIC `V(x)` → it goes through the `proof_linrel` linear opening, **single-shot,
-no `ℓ_agg`** (§9.4, the invertible-difference challenge). BUT the τ0 SCALAR EXTRAS (bit binariness + scalar-pin,
+committed `(s,T_k)` given the PUBLIC `V(x)` → a linear `FullRingRelation` proven by `prove_agg_vec` (which
+spans `s1`+the BDLOP message `m_hat` where the full-range `T_k` live — NOT `proof_linrel`, which is `s1`-only;
+see the §9.2 D4 BUILD CORRECTION), **single-shot, no `ℓ_agg`** (§9.4, the invertible-difference challenge). BUT the τ0 SCALAR EXTRAS (bit binariness + scalar-pin,
 `s` binariness) are coefficient constraints checked via the show's `h_i` → they use the **EXISTING `ℓ_agg`-fold
 (chunks 1–4)**, since those τ0 families ARE composite-`q̂`-grindable exactly like the SEP/accumulator ones. So
 the one-out-of-many needs no ADDITIONAL amplification beyond the show's standing `ℓ_agg` for its scalar extras.
@@ -614,6 +615,15 @@ release-enforced, re-gated clean). **D2-a done** (`oneofmany_bits.rs`: scalar-pi
 τ0 sub-constraints). The remaining **D2-b/D3/D4** compose the GK selector into the [LNP22] masked show; the
 pieces are all in-hand (`proof_linrel::prove` proves `Σ C_k·s1[idx_k] = rhs`; the masked-quad show +
 `h_i`/`ℓ_agg` handle the scalar extras; the show's own rejection sampling handles ZK). The construction:
+
+> **⚠️ SUPERSEDED IN PART by the §9.2 D4 BUILD CORRECTION (2026-07-06).** The bullets below were written
+> before the first build attempt found that the full-range `T_k` cannot live in the short `s1` and the
+> selector cannot be a `proof_linrel`. Read the §9.2 correction as authoritative on the commitment split and
+> the proof primitive: **`s1 = [bits ‖ s ‖ masks]` (short, `m1 = 2n + ETA`); `T_k` → BDLOP message `m_hat`
+> (`ell = n·D_PK`); the selector is a linear `FullRingRelation` over `s1`+`m_hat` proven by `prove_agg_vec`
+> (indexes the combined `shat`), NOT `proof_linrel`.** The z-binding stays `proof_linrel` (`s1`-only). The
+> witness-layout / commitment / "two proof_linrel identities" bullets below are stale on those two points
+> (the FS binding, rejection-sampling, and scalar-extras guidance remain correct).
 
 - **Witness layout `s1`:** index bits `b_j` (`n` SCALAR blocks), secret `s` (`ETA`), garbage `T_k` (`n·D_PK`),
   AND selector masks `a_j` (`n`). `m1 = n + ETA + n·D_PK + n` (≈ 58 at K=1000 — the §9.3 size).
