@@ -549,9 +549,12 @@ FULL selector degree (`n`, not per-bit) — both are calibration items, NOT soun
 extraction~~ **RESOLVED in §9.4 — single-shot via the invertible-difference challenge set, NO `ℓ_agg`**
 (Codex DESIGN-review of the argument returned no refutation, only doc-consistency fixes). (b) The garbage-`T_k`
 masking + reject-sampling bounds (ZK + shortness). (c) Params: `m1`, the mask widths, and the concrete
-`|C| ≥ 2^128` check at the SPRING `ρ`/`κ` (the §9.4 soundness `≤ n/|C|` depends on it). (d) Non-power-of-2 `K`
-handling (pad the member set to `2^n` with dummy `t_i`? or partial-tree). (e) The member-directory resolution
-seam is UNCHANGED (still `RingMemberId → t_i`, §7 C4).
+`|C| ≥ 2^128` check at the SPRING `ρ`/`κ` (the §9.4 soundness `≤ n/|C|` depends on it). (d) ~~Non-power-of-2
+`K`~~ **RESOLVED (Codex gate P1, `oneofmany_relation::pad_members_to_pow2`):** pad the member list to `2^n`
+with deterministic NONZERO NUMS dummy pubkeys (domain-separated XOF, no known binary preimage). Without it the
+unused indices `K..2^n` are implicit-ZERO pubkeys and a prover forges via an unused index + the all-zero secret
+(`A_s·0 = 0`); the nonzero dummies make those slots un-selectable. Both sides pad identically ⇒ part of the
+public statement. (e) The member-directory resolution seam is UNCHANGED (still `RingMemberId → t_i`, §7 C4).
 
 **§9.6 Build chunks (design-first FIRST — this §9 is the skeleton, the full soundness/params pass + Codex
 DESIGN-review gate BEFORE code, per rule #6).** D1 `oneofmany_relation.rs`: the clear-text selector +
