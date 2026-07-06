@@ -515,14 +515,34 @@ constant stays binary — the top coeff of `P_i` would no longer be the Kronecke
 extraction would not yield a real index. This is the SAME scalar-bit lesson as the accumulator's direction
 bits (§3.2c C2b-iv): carry the binariness+zero-pin PAIR here. (2) `z_j = b_j·x + a_j` opens the
 committed bit — [LNP22] linear opening; (3) the identity `V(x) = (A_s·s)·x^n + Σ_k T_k·x^k`, LINEAR in the
-committed `(s, T_k)` given the PUBLIC `V(x)` — `proof_linrel`; (4) `s` binary + `A_s·s` well-formed. No new
+committed `(s, T_k)` given the PUBLIC `V(x)`; (4) `s` binary + `A_s·s` well-formed. No new
 proof primitive — the degree-`n` selector becomes a public evaluation (via the revealed masked bits) plus a
 linear garbage-coefficient identity. This is why the earlier "we lack the lattice product-arg" worry (memory
 `project_hyp317_spring_design`) does NOT block us: the product is made public at `x`, not proven in-ZK.
 
-**§9.3 Size + verify.** `m1 ≈ n + ETA + n·D_PK ≈ 10 + 8 + 40 = 58` ring elements at `K=1000` vs the path's
-~500; the garbage `T_k` (`n·D_PK ≈ 40`) dominate. Packed est. **~30 KB at `K=1000`, under the 64 KiB cap**
-(vs 150 KB). Verifier does `O(K)` PUBLIC work (the `V(x)` sum) + `O(log K)` proof checks — the standard
+> **⚠️ D4 BUILD CORRECTION (2026-07-06, from the first build attempt — supersedes the "`proof_linrel`" /
+> "commit T_k in `s1`" phrasing above).** The garbage `T_k = Σ_i t_i·P_{i,k}(a)` are **full-range** ring
+> elements (the `t_i` are full-range pubkeys), NOT short. So they CANNOT go in the short Ajtai witness `s1`
+> — committing them there makes the [LNP22] rejection sampling always reject (`‖x·T_k‖ ≈ 2⁶⁰ ≫ the mask
+> bound `σ·τ ≈ 2³¹``; the prover returns `None`, which the first build hit immediately). **Corrected
+> commitment split:** `s1` (short Ajtai) `= [bits ‖ s ‖ masks a_j]` (`m1 = 2n + ETA`, all genuinely short);
+> the garbage `T_k` go in the **BDLOP message `m_hat`** (`ell = n·D_PK`, full-range is fine there). **The
+> selector identity (3) therefore spans `s1`(the `s` blocks) AND `m_hat`(the `T_k`), so it is proven by
+> `proof_agg_show::prove_agg_vec`** — whose relations index the COMBINED `shat = (s1, m_hat)`
+> (`shat_dim = 2·(m1 + m_hat.len())`) — **NOT `proof_linrel`, which only opens `s1`.** So the selector
+> becomes a linear `FullRingRelation` (quad=0; `lin` terms `A_s[d]·x^n` on the `s` blocks + `x^k` on the `T_k`
+> message blocks; `cst = −V(x)_d`) fed to `prove_agg_vec` — structurally MIRRORING how `spring_show` fed the
+> membership relation, with the linear selector replacing the quadratic membership. The z-binding (2) is
+> `s1`-only (bits+masks short) so it can stay a `proof_linrel` (or also ride `prove_agg_vec` as a linear rel).
+> A single un-aggregated linear selector relation is single-shot-sound (§9.4, `≤ n/|C|`) — the `ℓ_agg` fold is
+> only for the τ0 SCALAR extras (bit binariness/scalar-pin, `s` binariness), per §9.6 D4. **Net: D4 = adapt
+> `spring_show` (commit + approx-range `z3` + `h_i`/`ℓ_agg` extras from `oneofmany_bits` + FS), swapping the
+> quadratic `spring_copies` for the linear selector `FullRingRelation` over `s1`+`m_hat`.**
+
+**§9.3 Size + verify.** (Per the §9.2 D4 correction: short witness `m1 = 2n + ETA ≈ 28` [bits+masks+`s`]; the
+garbage `T_k`, `n·D_PK ≈ 40`, are the BDLOP MESSAGE `ell`, not `m1`.) Total committed `m1 + ell ≈ 68` ring
+elements at `K=1000` vs the path's ~500; the garbage `T_k` dominate. Packed est. **~30 KB at `K=1000`, under
+the 64 KiB cap** (vs 150 KB). Verifier does `O(K)` PUBLIC work (the `V(x)` sum) + `O(log K)` proof checks — the standard
 one-out-of-many tradeoff (small proof, linear verify), fine at `K=1000`.
 
 **§9.4 Soundness — RESOLVED single-shot (2026-07-05, grounded in `proof_challenge.rs`; still pending Codex
