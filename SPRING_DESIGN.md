@@ -587,32 +587,39 @@ soundness is `≤ n/|C| ≤ 2^{−124}` with NO `ℓ_agg`-folding (pending Codex
 the selector identity (`top coeff P_i = δ_{i,ℓ}`; `x^n` coeff of `Σ t_i P_i = t_ℓ`, mask-independent) pinned
 over the real proof ring. D2 (scalar-pinned bit commitments + response opening) is next.
 
-**§9.8 D4 show-composition — DESIGN MAP + the OPEN subtlety (needs a careful pass BEFORE the build, per rule
-#6).** Build status: **D1 done incl. the Codex-P1 non-power-of-2 fix** (`pad_members_to_pow2` /
-`aggregate_selector` fill unused slots `≥ K` with nonzero NUMS dummies — release-enforced, re-gated clean).
-**D2-a done** (`oneofmany_bits.rs`: scalar-pinned index-bit + `s`-binariness τ0 sub-constraints). The
-remaining **D2-b/D3/D4** compose the GK selector into the [LNP22] masked show; the pieces exist
-(`proof_linrel::prove` proves `Σ C_k·s1[idx_k] = rhs` on the committed witness — the shape of the selector
-identity; the masked-quad show + `h_i`/`ℓ_agg` handle the scalar extras) but the WIRING has a genuine open
-subtlety, mapped here honestly:
+**§9.8 D4 show-composition — RESOLVED design (Fiat-Shamir-with-aborts); pending Codex DESIGN-review + the
+params/rejection-bound calibration.** Build status: **D1 done incl. the Codex-P1 non-power-of-2 fix**
+(`pad_members_to_pow2` / `aggregate_selector` fill unused slots `≥ K` with nonzero NUMS dummies —
+release-enforced, re-gated clean). **D2-a done** (`oneofmany_bits.rs`: scalar-pinned index-bit + `s`-binariness
+τ0 sub-constraints). The remaining **D2-b/D3/D4** compose the GK selector into the [LNP22] masked show; the
+pieces are all in-hand (`proof_linrel::prove` proves `Σ C_k·s1[idx_k] = rhs`; the masked-quad show +
+`h_i`/`ℓ_agg` handle the scalar extras; the show's own rejection sampling handles ZK). The construction:
 
 - **Witness layout `s1`:** index bits `b_j` (`n` SCALAR blocks), secret `s` (`ETA`), garbage `T_k` (`n·D_PK`),
   AND selector masks `a_j` (`n`). `m1 = n + ETA + n·D_PK + n` (≈ 58 at K=1000 — the §9.3 size).
 - **One challenge `c ∈ C`** (the [LNP22] strong-set ring challenge, sampled after the commitment `t_a`) serves
   as the GK selector challenge `x` (§9.4 soundness needs exactly this invertible-difference set).
-- **THE open subtlety (why this is NOT a trivial spring_show copy):** the GK masks `a_j` and garbage
-  `T_k = Σ_i t_i·P_{i,k}(a)` are FUNCTIONS OF `a_j`, so BOTH must be committed in `s1` PRE-challenge — the
-  masks CANNOT be the show's own post-challenge Gaussian `y1` (a tempting shortcut that is WRONG: `y1` is
-  sampled after `c`, but `T_k` must exist at commit time). So the design commits `a_j` + `T_k` explicitly, the
-  response reveals the masked bits `z_j = c·b_j + a_j`, and the verifier (a) computes the PUBLIC
-  `V(c) = Σ_i t_i·∏_j f_{j,i_j}(c)` over the padded members from the revealed `z_j`, then (b) checks the
-  selector identity `V(c) = (A_s·s)·c^n + Σ_k T_k·c^k` as a LINEAR relation on the committed `(s, T_k)`. The
-  **precise mechanism to settle in the pass:** whether `z_j` is verified via the ABDLOP opening or a
-  dedicated `c·b_j + a_j = z_j` linrel (rhs is challenge-dependent, so NOT a fixed-rhs linrel — the GK
-  polynomial-identity structure); and whether the `V(c)`-identity check is a `proof_linrel` call or a direct
-  check on the opening `z1`. Both my first two quick framings were flawed (mask-timing; circular rhs), which
-  is the signal this wants a written sub-design + Codex DESIGN-review before code — mirroring how C2b-v was
-  designed before built.
+- **Masks + garbage are committed short, per-attempt (the resolved timing).** `a_j` and
+  `T_k = Σ_i t_i·P_{i,k}(a)` are BOTH committed in `s1` pre-challenge — `a_j` are SHORT Gaussian masks
+  (committable), `T_k` computable at commit time from the freshly-sampled `a_j`. They CANNOT be the show's own
+  post-challenge `y1` (that shortcut is wrong — `y1` is sampled after `c`, `T_k` must exist at commit time).
+- **The prove loop is Fiat-Shamir-with-aborts (the ZK resolution).** Sample `a_j` (+ the show mask `y1`),
+  compute `T_k`, commit `(b_j, s, a_j, T_k)` → `t_a`, `c = FS(t_a, message, ring, {t_i})`, then form the
+  response `z_j = c·b_j + a_j`. Do ONE JOINT rejection sampling on the whole `z = c·b + a` vector (NOT `n`
+  independent ones — joint acceptance ~1/M ≈ a few attempts, not `M^n`); on reject, restart with fresh
+  `a_j`/`T_k`/commitment. The accepted `z` is distribution-independent of `b` (standard Lyubashevsky
+  rejection) ⇒ ZK — the SAME response mechanism our `proof_*` masked openings already use. `a_j` stays short
+  throughout (no uniform-mask blowup).
+- **Two `proof_linrel` identities (single-shot, `c` as a public coefficient — no circularity, its own internal
+  challenge):** (1) `c·b_j + a_j = z_j` per `j` (binds the revealed `z_j` to the committed `(b_j, a_j)`); (2)
+  `V(c) = (A_s·s)·c^n + Σ_k T_k·c^k` per `D_PK` component, where the verifier computes the PUBLIC
+  `V(c) = Σ_i t_i·∏_j f_{j,i_j}(c)` over the PADDED members from the revealed `z_j` (`f_{j,1}=z_j`,
+  `f_{j,0}=c−z_j`). rhs is a fixed public value AFTER `z` is sent, so it IS a fixed-rhs linrel (my earlier
+  "circular rhs" worry dissolves once `z` is a sent response, not a challenge output).
+- **Calibration items for the pass (NOT structure gaps):** the rejection-sampling `σ_a`/bound `B` for `z`
+  (Lyubashevsky `M`, so `‖c·b‖` is masked); whether the two linrel families batch into one; and whether
+  revealing `z_j` alongside the show's opening of `a_j` (`z1[a_j]`) is jointly ZK (the `y1`-masked `z1[a_j]`
+  should protect `b_j`, but VERIFY in the params pass, not self-certify).
 - **Scalar extras** (bit binariness + scalar-pin `oneofmany_bits`, `s` binariness) ride the show's `h_i`/
   `ℓ_agg` (§9.6 D4); the selector-linear is single-shot (§9.4). **FS-seed** binds
   `ring.canonical_bytes()` + the padded `{t_i}` (§9.6 P2). Then D5 swaps `LatticeRingScheme`'s engine.
