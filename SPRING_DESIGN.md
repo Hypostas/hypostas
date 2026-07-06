@@ -654,6 +654,51 @@ pieces are all in-hand (`proof_linrel::prove` proves `Σ C_k·s1[idx_k] = rhs`; 
   `ℓ_agg` (§9.6 D4); the selector-linear is single-shot (§9.4). **FS-seed** binds
   `ring.canonical_bytes()` + the padded `{t_i}` (§9.6 P2). Then D5 swaps `LatticeRingScheme`'s engine.
 
+## §9.9 D4-b full-show composition (design; the binariness + approx-range + ℓ_agg layer)
+
+**Status:** selector-core BUILT + gate-clean (P1 forgery caught + fixed), z-binding BUILT. This §9.9 designs
+the last soundness/anonymity layer: how the `D_PK` linear SELECTOR relations compose with the ℓ_agg-folded
+τ0 SCALAR extras (bit binariness + scalar-pin, `s` binariness) and the approx-range shortness leg in ONE
+`prove_agg_vec` show. It REUSES the proven `spring_show` machinery — `spring_scalar_form` is generic over the
+`extra: &[AffineConstraint]`, so we feed `oneofmany_bits::scalar_subconstraints` — so the only novel wiring is
+the three points below.
+
+**Binariness mechanism (grounded).** `AffineConstraint::binariness(i)` τ0 = `Σ_k b_{i,k}(b_{i,k}−1)`; each term
+≥0 over ℤ, so `≡ 0 mod q̂` forces every coeff ∈{0,1} **iff it does not wrap** ⇒ REQUIRES the approx-range
+shortness bound `B` with `NHAT·B² < q̂` (so `Σ b_k(b_k−1) < q̂`). Then scalar-pin `Σ_{k≥1} b_k = 0` +
+per-coeff-binary ⟹ `b_j` is a SCALAR 0/1. (NOT the full-ring `b*·b=b*` shortcut — UNSOUND, zero-divisor
+solutions in the composite ring.) So binariness + scalar-pin + approx-range are ONE coupled layer, exactly
+`spring_show`'s `h_i`/τ0 mechanism.
+
+**Composition — the three novel points:**
+1. **`m_hat = [y3(Y3_BLOCKS) ‖ g(ELL_AMP) ‖ T_k(n·D_PK)]`** (`ell = Y3_BLOCKS + ELL_AMP + n·D_PK`). The
+   selector garbage `T_k` are APPENDED after the show's approx-range `y3` + `h_i` garbage `g`. So the
+   selector's `T_k` shat-index SHIFTS to `2·m1 + Y3_BLOCKS + ELL_AMP + k·D_PK + d` (was `2·m1 + k·D_PK + d`
+   in the core). `m1 = 2n + ETA` unchanged.
+2. **`rels = [selector_0 … selector_{D_PK−1}]  ++  [scalar_form(mus⁽⁰⁾) … scalar_form(mus⁽ᴱᴸᴸ⁻¹⁾)]`.** The
+   `D_PK` selector rels are SINGLE (single-shot §9.4 — a linear relation given public `V(c)`, no `ℓ_agg`
+   needed). The `ELL_AMP` `scalar_form` copies (independent `mus⁽ʲ⁾`) carry the binariness τ0 extras through
+   the two-axis fold (`ELL_AMP` `h_i` rows × `ELL_AMP` μ-copies), REUSING `spring_scalar_form` verbatim with
+   `extra = oneofmany_bits::scalar_subconstraints`. **NO membership summand** (one-of-many has no path) — the
+   scalar copies stand alone (they prove the `h_i` are consistent; `τ0(h_i)=0` forces binariness). `prove_agg_
+   vec` proves all `D_PK + ELL_AMP` rels, each with its own garbage pair → each sound independently.
+3. **`h` + `z3` in the proof; verify adds `τ0(h_i)=0 ∀i` + `z3_in_bound`** (exactly `verify_spring_show`'s
+   tail). The FS `c` still binds `t_b` (P1); with the enlarged `m_hat`, `t_b` now commits `y3‖g‖T_k`.
+
+**Soundness argument.** (a) SELECTOR: single-shot `≤ n/|C|` (§9.4), `T_k` committed in `t_b` before `c`.
+(b) BINARINESS: `τ0(h_i)=0` across `ELL_AMP` independent-`γ` rows × `ELL_AMP` independent-`μ` copies gives
+`(1/p_min)^{ELL_AMP}` against the composite-`q̂` grind (the chunk-1–4 result), and the approx-range `B` bound
+(`NHAT·B²<q̂`) makes the extracted `b` short enough that `τ0=0 ⇒` per-coeff-binary (no wrap). (c) z-binding
+(built) forces the revealed `z` to open the committed `(b,a)`. Together: a valid proof ⟹ committed scalar
+`0/1` bits + a real `s` with `A_s·s = t_ℓ` for a member `ℓ` ⟹ unforgeable. **ANONYMITY (separate calib):** the
+reveal-ZK `σ_a` mask + rejection on `z = c·b + a` (§9.8) — the last item; the τ0/approx-range machinery's own
+`z3`/`h_i` masking is the proven `spring_show` ZK.
+
+**Open for Codex DESIGN-review:** (i) mixing `D_PK` single selector rels with `ELL_AMP` `ℓ_agg` scalar copies
+in ONE `prove_agg_vec` — sound (each rel independent garbage) but confirm no cross-rel interaction. (ii) the
+`B`/`σ_a` calibration (`NHAT·B²<q̂` for binariness no-wrap; `σ_a` hides `c·b_j`). (iii) whether the selector
+needs to also ride a `SumRelation` with a scalar copy (spring_show pattern) vs standing separate.
+
 ---
 
 *Author: Iris. Pattern mirrors SEP_V3A3_DESIGN.md / ANCHOR_BIND_DESIGN.md (design-first → Codex DESIGN-review →
