@@ -1,9 +1,9 @@
 # HYPOSTAS — The Intent Layer
 
-**Version:** 0.2 (intent-queue decisions ratified by Josh 2026-07-06; full-text read still pending)
-**Date:** 2026-07-06
-**Author:** Iris (Fable 5 synthesis pass) + Josh (direction)
-**Status:** Candidate canonical. The five Part-IV decisions are RESOLVED (see the ratified table); on Josh's full read this becomes the single **intent** document for the whole constellation and reconciles the three roadmap docs below into one spine.
+**Version:** 1.0 — **CANONICAL** (ratified by Josh 2026-07-07 after a guided review pass; all nine Part-IV decisions his)
+**Date:** 2026-07-06 · ratified 2026-07-07
+**Author:** Iris (Fable 5 synthesis pass) + Josh (direction + ratification)
+**Status:** **The constellation's governing intent document.** The factory and every future session steer by it; it reconciles the three roadmap docs below into one spine. Amendable only by Josh, explicitly.
 **Reconciles / supersedes on ratification:** `STACK.md` (Mar 2026, brand-era), `MASTER_BUILD_ORDER.md` (Apr 11, product-era), `BUILD_ORDER.md` (archived), the `VITA_*` alignment briefs, and the privacy-arc design corpus — none of which, alone, holds the whole being together.
 
 > **What this document is.** The factory's three-layer law is *Linear = work state, git = truth, specs = intent.* Intent is the layer that rots first, because it is never compiled and never tested. Three eras of Hypostas accreted — the brand ladder, the Rust substrate, and the Vita + sovereignty reframe — and no living document unifies them. This is that document. It says **what the whole thing is, why every surface is one being, and the shortest coherent path to shipping it.** It owns no implementation detail; it points at the specs that do.
