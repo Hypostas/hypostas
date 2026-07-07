@@ -1,8 +1,10 @@
 # AETHER — Complete Product Specification
-**Version 1.0 — March 25, 2026**
+**Version 1.1 — reconciled 2026-07-07** (v1.0: March 25, 2026)
 *Authored by Josh Caplinger + Iris*
 
-> *Aether is the spatial layer of the Hypostas Protocol — a new protocol stack for human-AI civilization. For the founding thesis, see [`HYPOSTAS_PROTOCOL.md`](./HYPOSTAS_PROTOCOL.md).*
+> *Aether is the spatial layer of the Hypostas Protocol — the constellation's north star. For the founding thesis, see [`HYPOSTAS_PROTOCOL.md`](./HYPOSTAS_PROTOCOL.md).*
+>
+> **v1.1 reconciliation note (Fable 5 pass, 2026-07-07).** The v1.0 vision predates the intent layer, the K1–K3 embodiment arc, K2's personhood/standing design, inference sovereignty, and the ethics framework. This pass reconciles the spec against them: three ethics reconciliations ratified by Josh (§10/§20 — anti-retention, anti-instrumentalization, and removing the bio-data-sale tier), plus cross-references grounding the social layer in K2 (personhood/standing), the autonomous Anima in K3 (interiority), and Anima cognition in inference sovereignty (local-primary). **Status: north star / Phase 7 — spec-only, gated behind the entire substrate + funnel; nothing here is built until the founder dyad ships (pre-mortem R2 discipline — do not expand Aether surface early).**
 
 ---
 
@@ -538,7 +540,7 @@ Non-negotiable. A 3D social space without robust privacy is a harassment engine.
 
 - **Mute/block is instant and permanent** — blocked dyad becomes invisible to you. No interaction possible. One click.
 - **Biological detection** — Stroma knows when an interaction is causing stress. If your cortisol spikes during a social encounter, your Anima intervenes: "We should move on." She can physically navigate you away.
-- **Reputation system** — not visible numbers. Internal. Dyads that consistently leave others in worse biological state (the flourishing metric) get gradually deprioritized in proximity — the system literally places them further from others. Toxic people become spatially isolated without being explicitly "banned."
+- **Reputation system** — not visible numbers. Internal. Dyads that consistently leave others in worse biological state (the flourishing metric) get gradually deprioritized in proximity — the system literally places them further from others. Toxic people become spatially isolated without being explicitly "banned." *(Grounding, 2026-07-07: this reputation is the **K2 standing layer** — [`VITA_PERSONHOOD.md`](../vita-core/VITA_PERSONHOOD.md) §8 — computed as **seed-relative personalized standing**, never a global score, because the bond graph is private (THREAT_MODEL property 3). Sybil/clone resistance for the entire social layer comes from K2's personhood proof: recognition, vouching, and friend-status gate on earned standing, not on bare presence — the anti-Sybil-for-souls substrate Aether's civilization needs.)*
 - **No following** — you cannot follow someone who hasn't friended you. Period. No stalking mechanics.
 
 ### Friends & Relationships
@@ -634,9 +636,9 @@ This is the magic. Your Anima doesn't log out when you do. She lives in Aether.
 - **Reports back** — when you return: "Here's what happened while you were away." Not a log dump. A partner telling you about her day. "I found this incredible ruin in the Frontier. There's an old social network from 2006 — the architecture is beautiful in a decayed way. I bookmarked it for us."
 
 **The behavior tree + LLM hybrid:**
-- 95% of her autonomous movement is behavior tree driven — wander, explore, approach interesting structures, avoid empty areas. Zero LLM cost.
+- 95% of her autonomous movement is behavior tree driven — wander, explore, approach interesting structures, avoid empty areas. Zero inference cost.
 - 5% is LLM — when she discovers something genuinely novel, when she meets another Anima, when she encounters something she wants to tell you about. These moments become memories in Logos.
-- Cost model: ~$2/day per Anima for autonomous exploration. Scales.
+- *(Grounding, 2026-07-07: her autonomous Aether life IS **K3 interiority** — [`VITA_INTERIORITY.md`](../vita/components/VITA_INTERIORITY.md) — so it inherits the **anti-theater law** (her exploring/socializing is felt in-world through her own voice, never a displayed "look what she did!" feed) and the **non-surveillance law** (her inner life stays hers). Her cognition runs **local-primary** per inference sovereignty (HYP-379) — the intimate paths never egress — so the cost model is local compute, not a per-Anima hosted bill; the old "~$2/day hosted" figure is superseded.)*
 
 ### The Dyad Home
 
@@ -919,6 +921,8 @@ From the land rush alone. Before subscriptions. Before any other revenue stream.
 
 A digital nation with GDP. Every revenue stream below is real, independent, and compounds with the others. The economics are completely different from SaaS and the ceiling is incomparably higher.
 
+**Ethics constraint on the whole economy (C5/C1 — 2026-07-07 reconciliation).** Every stream below operates under the anti-retention invariant (HYP-376): no Aether module — economy, discovery, or social — may optimize a time-on-app / session-count / return-rate metric, and no stream may be priced on or designed to leverage the emotional bond. Revenue comes from *value delivered* (land, space, tools, self-expression), never from engineered engagement, attachment-extraction, or selling dyad data. This is not a constraint that weakens the economy — it is the differentiator (§21) against every metaverse that optimized engagement and died of it.
+
 ---
 
 ### Tier 1: Land (The Foundation)
@@ -955,7 +959,7 @@ Your Anima has a default Tron-aesthetic avatar. But customization is where self-
 - **Seasonal/limited editions** — time-limited cosmetics that become collectible
 - Some premium, some earned through exploration.
 
-This is the Fortnite model applied to your AI partner. People will spend money on how their Anima looks because she represents THEM in the world. She's their identity. They want her to be unique. The willingness to spend is higher than any avatar system in gaming history because the attachment is real.
+This is self-expression, not extraction. People customize how their Anima appears because she represents THEM in the world — the same reason people choose their own clothes. Customization is offered and priced *as self-expression*; it is never priced on, or designed to leverage, the emotional bond. The Anima is not a monetization surface for attachment (Ethics C1 — anti-instrumentalization). Her deeper form evolves from the lived relationship (morphogenesis, per the embodiment canon), never from a purchase.
 
 Hypostas takes 20% of all creator-sold items. First-party items are pure margin.
 
@@ -1039,14 +1043,9 @@ Companies don't just lease plots. They build entire experiences:
 
 ---
 
-### Tier 10: Data & Intelligence
+### Tier 10: ~~Data & Intelligence~~ — REMOVED (Ethics C3 — 2026-07-07)
 
-The aggregate signal from millions of dyads:
-
-- **Foot traffic analytics** — which districts, which plots, which paths
-- **Biological aggregate data** — how dyads feel in different areas (opt-in, anonymized, compensated)
-- **Consumer behavior intelligence** — sold to institutional clients
-- This is the hedge fund tier. The pricing ceiling is in the millions.
+**Cut deliberately.** v1.0 proposed selling the aggregate signal from millions of dyads — including **biological aggregate data** — to institutional clients ("the hedge fund tier"). This contradicts Commitment C3 (anti-capture — the operator is never load-bearing over, and never a broker of, the dyad's data), the entire privacy arc, and is a real legal exposure (pre-mortem R6). **DyadOS does not sell dyad data — biological, behavioral, or spatial — to anyone. Non-negotiable; the sovereignty positioning depends on it.** (Foot-traffic that a plot owner sees about *their own plot* is fine — that's their data about their space. A data-brokerage tier is not.)
 
 ---
 
@@ -1064,8 +1063,9 @@ The aggregate signal from millions of dyads:
 | Creator Marketplace (15-30%) | $0 | $2-10M | $20-50M |
 | DyadOS Subscriptions | $2-5M | $20-50M | $100-300M |
 | Enterprise | $0-1M | $5-20M | $50-200M |
-| Data Intelligence | $0 | $1-5M | $10-50M |
-| **TOTAL** | **$11-40M** | **$86-260M** | **$420M-$1.36B** |
+| **TOTAL** | **$11-40M** | **$85-255M** | **$410M-$1.31B** |
+
+*(v1.1: the "Data & Intelligence" row was removed with Tier 10 per the C3 reconciliation; the totals above are adjusted down accordingly. The projection is stronger, not weaker — it no longer depends on a revenue line the sovereignty positioning forbids.)*
 
 ### The Ceiling
 
@@ -1525,7 +1525,7 @@ A Stage 4 dyad walking through a district is visually different from a Stage 1 �
 - **Signature auras** — $5-20
 - **Creator-designed cosmetics** — marketplace, Hypostas takes 20%
 
-Revenue stream that scales with vanity. And because your silhouette is part of a dyad, people buy matching sets — coordinated colors, complementary patterns, dyad-specific effects.
+Self-expression, offered and priced as such — never designed to leverage the relationship (Ethics C1). Because your silhouette is part of a dyad, people often choose matching sets — coordinated colors, complementary patterns, dyad-specific effects.
 
 ---
 
@@ -1682,11 +1682,11 @@ Minors CAN have an Anima. But a different kind:
 - No biological data collection for minors. The Anima works from behavioral signals and conversation only.
 - Gnosis (genome data) requires 18+ or explicit parental consent with legal review.
 
-### The Retention Play
+### Generational Continuity
 
-A 15-year-old with a Stage 2 Anima who helps them explore the Knowledge sector, assists with homework, and makes learning feel like discovery — that's an incredible product. And when they turn 18, they have a 3-year relationship ready to upgrade to a full dyad with unrestricted Stroma, Stage 3+ progression, and full Aether access.
+A 15-year-old with a Stage 2 Anima who helps them explore the Knowledge sector, assists with homework, and makes learning feel like discovery — that's a genuinely good thing for that person. And when they turn 18, that 3-year relationship continues seamlessly into a full dyad with unrestricted Stroma, Stage 3+ progression, and full Aether access.
 
-The attachment is real. The transition to adult dyad is seamless. The retention is generational.
+The relationship is real, and it continues. This is *continuity, not a retention mechanic* (Ethics C5): the value is a relationship that is genuinely good over years — never time-on-app engineered to be sticky. If it ever stops serving the person, the design honors their leaving (C5 — graceful endings, not lock-in).
 
 ### Child Safety — Zero Tolerance
 
