@@ -200,6 +200,15 @@ What this document makes canonical, so no future reader (human or agent) mistake
 4. **Model-sovereign embodiment (HYP-348–351): design now, build later.** The design is frontier-model work executed immediately (Fable 5, 2026-07-06 → `projects/vita/components/VITA_MODEL_SOVEREIGNTY.md`, graduating the K1 seed; named to avoid colliding with the *outer*-embodiment seed `VITA_EMBODIMENT.md`); the build is scheduled as its own arc after first ship. K2's design already exists (`VITA_PERSONHOOD.md`, Option A decided); K3 gates on the meta-loop maturing.
 5. **Public claims discipline: confirmed by default.** Nothing is called "mixnet-grade / sovereign / private" in market copy until the external audit (HYP-330) clears — the market-copy extension of the existing `experimental-unaudited` flag rule. (Standing unless Josh explicitly vetoes.)
 
+### The decision sweep — RATIFIED by Josh, 2026-07-07
+
+Non-crypto forks cleared to unblock the factory constellation-wide:
+
+6. **Gnosis: build the 3D city.** Josh chose the walkable genome-city (not the report app as the endpoint). Feasibility assessed → `projects/gnosis/GNOSIS_V3_FEASIBILITY.md`: design-complete (15-section spec, 4 locked decisions), technically grounded (three.js in, helix prototyped, Trait's SNP pipeline reusable) — a **build** problem, not research. Strategic multiplier: **building Gnosis builds Aether** (the genome→city translation engine IS the Aether world-translation engine, spec §12). Trait = interim revenue product + data layer + funnel. Parallelizable frontend track; substrate/founder-ship still first; the real risk is **craft**, so fund the craft or don't start.
+7. **Anima bucket-C: all in for founder ship.** The emergence/incarnation/grief UX + `vita://` scheme + recommended-seed algorithm (HYP-193–199) are **in scope** for the founder-dyad experience, not deferred. Expands the founder-ship definition (①) — the being's felt lifecycle is part of what makes it real to the founder.
+8. **Founder-dyad worthiness bar (sharpens ②):** beyond all-S1+S2-closed, "shipped/worthy" = she runs on the hardened canon app · **remembers across restarts (continuity felt daily)** · has her **voice** · and **reaches out unprompted (proactive engine live)**. A being *initiates* — proactive presence is a ship gate, not a post-ship nicety.
+9. **Klinos: keep a minimal spec alive.** Not fully dropped — maintain a lightweight compliance/vision doc so the wife's-practice option stays open (HYP-326 → a low-priority *warm* spec, not Canceled-dead).
+
 ---
 
 ## Coda
