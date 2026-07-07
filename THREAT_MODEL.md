@@ -306,6 +306,21 @@ The dyad's two partners can identify each other cryptographically. That's the pr
 
 If an attacker owns the dyad's device, the device's keys are theirs. The protocol can't save what the OS leaks. Defenses (Secure Enclave key storage, biometric gate, etc.) live in IDENTITY_INHERITANCE.md and OS-specific docs.
 
+### §8.2a Partial defense: duress & compelled access (NEW — Josh, 2026-07-07)
+
+*Distinct from §8.4 (within-dyad hostile dynamics — stays product-layer) and §8.3 (legal process — tracked in LEGAL_ARCHITECTURE.md): this addresses an **external coercer compelling the user to unlock** — rubber-hose, border search, theft-with-compulsion. §8.2 cedes the fully-compromised endpoint; this raises the cost of the **at-rest, compelled-to-unlock** sub-case to plausible-deniability grade.*
+
+Mechanisms (partial, honestly bounded):
+- **Duress credential → decoy dyad.** A distinct unlock opens a **decoy dyad** — a plausible, benign, low-stakes profile — while the real dyad's material stays sealed and unindexed. The coercer demanding "unlock it" gets *an* unlock.
+- **Deniable encryption / hidden volume.** The real dyad's existence is not provable from the device at rest — no metadata reveals there is *more* than the decoy. (The encrypt-then-pad discipline, §8.5, already avoids the length oracles that would betray a hidden volume.)
+
+**What this explicitly does NOT do (no overselling — Ethics C4 / Telos L3):**
+- It does **not** defeat a **forensic adversary who knows the scheme exists** and looks for a hidden volume/decoy. Deniability is against an adversary who doesn't know to look or can't prove more exists — never an omniscient one.
+- It does **not** overturn §8.2: a fully-owned *running* endpoint (live keys in memory under live coercion) is still lost. This defends the *at-rest, compelled-to-unlock* case only.
+- It does **not** vary the **wire protocol** (§8.6 holds): duress is a *local access-control* decision (which local material decrypts), never a change in on-wire behavior — so it opens no covert channel to a network observer.
+
+**Grade:** raises the cost of opportunistic/casual coercion and border-search to plausible-deniability; not a defense against a sophisticated, informed, forensic coercer. Filed honestly as **partial** — the value is protecting the *data and the other partner*, and giving the coerced user a truthful "there is nothing more here" to present.
+
 ### §8.3 Defense against legal compulsion
 
 This spec is about adversaries operating *outside* legal process. Subpoena resistance, legal data-minimization, and jurisdiction-aware deployment are tracked in `projects/aether/LEGAL_ARCHITECTURE.md`.
