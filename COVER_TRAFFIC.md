@@ -527,6 +527,17 @@ On startup:
 - Re-enqueue persisted `queued_packets`
 - Resume scheduler at the energy class from state
 - Verify cover seed not expired; rotate if needed
+- **Resume the constant-rate cadence on the deterministic grid (HYP-40x).** The slot grid is
+  `epoch·DITHER_EPOCH_MS + phase + k·rate`, where `phase = HKDF-Expand(cover_seed, "cover-cadence-phase" ‖ epoch ‖ rate) mod rate`.
+  Because the phase is a **pure function** of the persisted cover seed, the wall-clock dither epoch, and the
+  current rate, a restarted dyad reconstructs the **identical** grid a never-crashed dyad is on — with **no
+  persisted cadence anchor**. The momentary down-span state that shaped the rate while the process was down
+  (device cap §2.3, §6 suspension, §5.2 escalation lock, queue depth) is irrelevant to reconstruction: it only
+  ever moved the *rate*, which both the restarted and the never-crashed dyad recompute identically at `now`.
+  Recovery therefore resumes **exactly** on the live cadence — no restart-visible early or late slot — rather
+  than off a `last_send`-relative anchor, which drifts ≤1 period across a rate-changing dither (§2.4) boundary.
+  The phase rotates per 30s epoch, so it is **not** a stable per-dyad cadence fingerprint. `last_send_ms` is
+  retained as a persisted status / §8 stall-detection timestamp, **not** the cadence anchor.
 
 ---
 
