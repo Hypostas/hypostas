@@ -70,9 +70,11 @@ stride = 2*APPROX_DIM + n_f;                        // TWO ranges (main) + de-ag
 gammas = fs_scalars(dom_gamma, t_a, t_b, [], ell * stride);
 
 // h_i: main's 2-range weave (g_approx + g_slice + families), run over ell = ell_agg() rows.
-h = (0..ell).map(|i| { g_approx = gammas[i*stride .. +APPROX_DIM]; g_slice = gammas[.. +2*APPROX_DIM];
+h = (0..ell).map(|i| { let base = i*stride;                                  // disjoint per-row block
+       g_approx = gammas[base .. base + APPROX_DIM];                          // Y range coords
+       g_slice  = gammas[base + APPROX_DIM .. base + 2*APPROX_DIM];           // W range coords (offset!)
        hi = g[i] + <Y-range terms with g_approx,R,z3> + <W-range terms with g_slice,R_slice,z3_norm>
-                 + Σ_f family_f.eval_ring(s1) · gammas[i*stride + 2*APPROX_DIM + f]; hi }).collect();
+                 + Σ_f family_f.eval_ring(s1) · gammas[base + 2*APPROX_DIM + f]; hi }).collect();
 
 // FOLD (ℓ_agg): ell_agg() μ-copies of SumRelation{SepRelation::new_indexed(j), sep_scalar_form(mus⁽ʲ⁾)}
 //              proven SIMULTANEOUSLY by prove_agg_vec (ell_agg garbage pairs), NOT prove_agg.
