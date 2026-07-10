@@ -529,15 +529,30 @@ On startup:
 - Verify cover seed not expired; rotate if needed
 - **Resume the constant-rate cadence on the deterministic grid (HYP-40x).** The slot grid is
   `epoch·DITHER_EPOCH_MS + phase + k·rate`, where `phase = HKDF-Expand(cover_seed, "cover-cadence-phase" ‖ epoch ‖ rate) mod rate`.
-  Because the phase is a **pure function** of the persisted cover seed, the wall-clock dither epoch, and the
-  current rate, a restarted dyad reconstructs the **identical** grid a never-crashed dyad is on — with **no
-  persisted cadence anchor**. The momentary down-span state that shaped the rate while the process was down
-  (device cap §2.3, §6 suspension, §5.2 escalation lock, queue depth) is irrelevant to reconstruction: it only
-  ever moved the *rate*, which both the restarted and the never-crashed dyad recompute identically at `now`.
-  Recovery therefore resumes **exactly** on the live cadence — no restart-visible early or late slot — rather
-  than off a `last_send`-relative anchor, which drifts ≤1 period across a rate-changing dither (§2.4) boundary.
-  The phase rotates per 30s epoch, so it is **not** a stable per-dyad cadence fingerprint. `last_send_ms` is
-  retained as a persisted status / §8 stall-detection timestamp, **not** the cadence anchor.
+  The phase is a **pure function** of the persisted cover seed, the wall-clock dither epoch, and the current
+  rate, so a restarted dyad reconstructs the **identical** grid with **no persisted cadence anchor**. Because
+  the grid depends on `rate`, exact reconstruction also requires reconstructing the emitted rate — so every rate
+  input a restart cannot re-derive live is made reconstructable:
+  - **boundary-latched real-volume signal** (§2.4) — PERSISTED (`latched_epoch_has_volume` + `volume_latch_epoch`,
+    v0x02) and REUSED when recovery lands in the same epoch it was latched for. It is boundary-latched *history*,
+    not a function of the queue at recovery `now` (the queue may have drained/filled since the boundary); a live
+    re-sample would swing the emitted rate (Standard↔Ambient) and leak a queued real that drained since the boundary.
+  - **§8 oscillation lock** deadline — PERSISTED (v0x02); it suppresses a firing-epoch up-flip, so losing it
+    would change the rate. (The §8 counter stays transient; only the active lock deadline is persisted.)
+  - **§2.3 device cap + §6 suspension** — re-sampled and applied to the scheduler BEFORE the first anchor (they
+    equal the never-crashed dyad's *current* device state, so re-sampling is exact).
+  - **committed class + §5.2 budget lock** — persisted; **dither decision** — seed-deterministic.
+
+  With all rate inputs reconstructed, recovery resumes **exactly** on the live grid for a same-epoch restart — no
+  restart-visible early or late slot — superseding the old `last_send`-relative anchor (which drifted ≤1 period
+  across a rate-changing boundary). A restart that crossed a dither boundary while OFFLINE re-samples the volume
+  latch: there is no observable never-crashed counterfactual across the offline gap, so a fresh latch is correct.
+  The phase rotates per 30s epoch, so it is **not** a stable per-dyad cadence fingerprint (the per-epoch phase
+  *sequence* is seed-determined for the seed's 24h life). `last_send_ms` is retained as a §6.2 status / §8
+  stall-detection timestamp, **not** the cadence anchor. Two second-order effects are bounded and documented: an
+  NTP wall-clock step *within* the current epoch offsets the monotonic ticker until the next boundary re-anchor
+  (≤30s, self-correcting); and a crash in the sub-ms window between a §9.2 seed rotation and its immediate
+  snapshot loses the rotated seed (re-rolled on restart, then persisted).
 
 ---
 
