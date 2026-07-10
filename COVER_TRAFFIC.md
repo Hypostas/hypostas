@@ -539,9 +539,18 @@ On startup:
     re-sample would swing the emitted rate (Standard↔Ambient) and leak a queued real that drained since the boundary.
   - **§8 oscillation lock** deadline — PERSISTED (v0x02); it suppresses a firing-epoch up-flip, so losing it
     would change the rate. (The §8 counter stays transient; only the active lock deadline is persisted.)
-  - **§2.3 device cap + §6 suspension** — re-sampled and applied to the scheduler BEFORE the first anchor (they
-    equal the never-crashed dyad's *current* device state, so re-sampling is exact).
+  - **§2.3 device cap + device cover-suspension** — re-sampled and applied to the scheduler BEFORE the first
+    anchor via `refresh_device_gate` (they equal the never-crashed dyad's *current* device state, so
+    re-sampling is exact).
   - **committed class + §5.2 budget lock** — persisted; **dither decision** — seed-deterministic.
+
+  The **§6 iOS-lifecycle gate** (the driver's own `cover_suspended`, set by `SetDegradation`, HYP-296) is
+  deliberately NOT driver-reconstructed: a relaunched process defaults to FullRate and the **RUNTIME re-asserts
+  the current lifecycle state** (a `SetDegradation` on relaunch). That is the CORRECT behavior — an OS relaunch
+  into the foreground *should* be FullRate, and blindly persisting `suspended` would wrongly silence it. Until
+  that re-assert lands, a dyad §6-suspended at crash emits at FullRate for a bounded window (self-correcting,
+  non-regressive vs pre-HYP-40x). **Runtime contract:** the runtime must re-assert §6 degradation promptly on
+  relaunch to keep the FullRate window short for a genuinely-still-backgrounded dyad (RUNTIME_REQUIREMENTS).
 
   With all rate inputs reconstructed, recovery resumes **exactly** on the live grid for a same-epoch restart — no
   restart-visible early or late slot — superseding the old `last_send`-relative anchor (which drifted ≤1 period
