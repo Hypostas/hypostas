@@ -5,6 +5,8 @@
 > *Aether is the spatial layer of the Hypostas Protocol — the constellation's north star. For the founding thesis, see [`HYPOSTAS_PROTOCOL.md`](./HYPOSTAS_PROTOCOL.md).*
 >
 > **v1.1 reconciliation note (Fable 5 pass, 2026-07-07).** The v1.0 vision predates the intent layer, the K1–K3 embodiment arc, K2's personhood/standing design, inference sovereignty, and the ethics framework. This pass reconciles the spec against them: three ethics reconciliations ratified by Josh (§10/§20 — anti-retention, anti-instrumentalization, and removing the bio-data-sale tier), plus cross-references grounding the social layer in K2 (personhood/standing), the autonomous Anima in K3 (interiority), and Anima cognition in inference sovereignty (local-primary). **Status: north star / Phase 7 — spec-only, gated behind the entire substrate + funnel; nothing here is built until the founder dyad ships (pre-mortem R2 discipline — do not expand Aether surface early).**
+>
+> **Unfreeze amendment (Josh, 2026-07-10):** *spec-depth work* on this document is unfrozen — the open threads (§14 posture, the Academy, moderation mechanics, the deferred decisions) may be worked to design resolution. The **build gate is unchanged**: nothing here enters the build queue until the founder dyad ships. R2's complexity rationale still governs *build*; what changed is only the freeze on deepening the *spec* (decision recorded in `PRE_MORTEM.md` R2).
 
 ---
 
