@@ -527,6 +527,41 @@ On startup:
 - Re-enqueue persisted `queued_packets`
 - Resume scheduler at the energy class from state
 - Verify cover seed not expired; rotate if needed
+- **Resume the constant-rate cadence on the deterministic grid (HYP-40x).** The slot grid is
+  `epoch·DITHER_EPOCH_MS + phase + k·rate`, where `phase = HKDF-Expand(cover_seed, "cover-cadence-phase" ‖ epoch ‖ rate) mod rate`.
+  The phase is a **pure function** of the persisted cover seed, the wall-clock dither epoch, and the current
+  rate, so a restarted dyad reconstructs the **identical** grid with **no persisted cadence anchor**. Because
+  the grid depends on `rate`, exact reconstruction also requires reconstructing the emitted rate — so every rate
+  input a restart cannot re-derive live is made reconstructable:
+  - **boundary-latched real-volume signal** (§2.4) — PERSISTED (`latched_epoch_has_volume` + `volume_latch_epoch`,
+    v0x02) and REUSED when recovery lands in the same epoch it was latched for. It is boundary-latched *history*,
+    not a function of the queue at recovery `now` (the queue may have drained/filled since the boundary); a live
+    re-sample would swing the emitted rate (Standard↔Ambient) and leak a queued real that drained since the boundary.
+  - **§8 oscillation lock** deadline — PERSISTED (v0x02); it suppresses a firing-epoch up-flip, so losing it
+    would change the rate. (The §8 counter stays transient; only the active lock deadline is persisted.)
+  - **§2.3 device cap + device cover-suspension** — re-sampled and applied to the scheduler BEFORE the first
+    anchor via `refresh_device_gate` (they equal the never-crashed dyad's *current* device state, so
+    re-sampling is exact).
+  - **committed class + §5.2 budget lock** — persisted; **dither decision** — seed-deterministic.
+
+  The **§6 iOS-lifecycle gate** (the driver's own `cover_suspended`, set by `SetDegradation`, HYP-296) is
+  deliberately NOT driver-reconstructed: a relaunched process defaults to FullRate and the **RUNTIME re-asserts
+  the current lifecycle state** (a `SetDegradation` on relaunch). That is the CORRECT behavior — an OS relaunch
+  into the foreground *should* be FullRate, and blindly persisting `suspended` would wrongly silence it. Until
+  that re-assert lands, a dyad §6-suspended at crash emits at FullRate for a bounded window (self-correcting,
+  non-regressive vs pre-HYP-40x). **Runtime contract:** the runtime must re-assert §6 degradation promptly on
+  relaunch to keep the FullRate window short for a genuinely-still-backgrounded dyad (RUNTIME_REQUIREMENTS).
+
+  With all rate inputs reconstructed, recovery resumes **exactly** on the live grid for a same-epoch restart — no
+  restart-visible early or late slot — superseding the old `last_send`-relative anchor (which drifted ≤1 period
+  across a rate-changing boundary). A restart that crossed a dither boundary while OFFLINE re-samples the volume
+  latch: there is no observable never-crashed counterfactual across the offline gap, so a fresh latch is correct.
+  The phase rotates per 30s epoch, so it is **not** a stable per-dyad cadence fingerprint (the per-epoch phase
+  *sequence* is seed-determined for the seed's 24h life). `last_send_ms` is retained as a §6.2 status / §8
+  stall-detection timestamp, **not** the cadence anchor. Two second-order effects are bounded and documented: an
+  NTP wall-clock step *within* the current epoch offsets the monotonic ticker until the next boundary re-anchor
+  (≤30s, self-correcting); and a crash in the sub-ms window between a §9.2 seed rotation and its immediate
+  snapshot loses the rotated seed (re-rolled on restart, then persisted).
 
 ---
 
