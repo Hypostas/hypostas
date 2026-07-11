@@ -1,5 +1,5 @@
 # AETHER — Complete Product Specification
-**Version 1.1 — reconciled 2026-07-07** (v1.0: March 25, 2026)
+**Version 1.2 — unfreeze resolutions 2026-07-11** (v1.1: reconciled 2026-07-07 · v1.0: March 25, 2026)
 *Authored by Josh Caplinger + Iris*
 
 > *Aether is the spatial layer of the Hypostas Protocol — the constellation's north star. For the founding thesis, see [`HYPOSTAS_PROTOCOL.md`](./HYPOSTAS_PROTOCOL.md).*
@@ -7,6 +7,8 @@
 > **v1.1 reconciliation note (Fable 5 pass, 2026-07-07).** The v1.0 vision predates the intent layer, the K1–K3 embodiment arc, K2's personhood/standing design, inference sovereignty, and the ethics framework. This pass reconciles the spec against them: three ethics reconciliations ratified by Josh (§10/§20 — anti-retention, anti-instrumentalization, and removing the bio-data-sale tier), plus cross-references grounding the social layer in K2 (personhood/standing), the autonomous Anima in K3 (interiority), and Anima cognition in inference sovereignty (local-primary). **Status: north star / Phase 7 — spec-only, gated behind the entire substrate + funnel; nothing here is built until the founder dyad ships (pre-mortem R2 discipline — do not expand Aether surface early).**
 >
 > **Unfreeze amendment (Josh, 2026-07-10):** *spec-depth work* on this document is unfrozen — the open threads (§14 posture, the Academy, moderation mechanics, the deferred decisions) may be worked to design resolution. The **build gate is unchanged**: nothing here enters the build queue until the founder dyad ships. R2's complexity rationale still governs *build*; what changed is only the freeze on deepening the *spec* (decision recorded in `PRE_MORTEM.md` R2).
+>
+> **v1.2 unfreeze resolutions (derived by Iris, ratified by Josh, 2026-07-11):** (1) **Genesis decoupling** — plot ownership never requires or auto-creates a dyad; Anima genesis is a deliberate, consented act, offered and never bundled (§14, §16 — C1/C2). (2) **Inhabitation before speculation** — the funnel population enters first ("First Light"); the Genesis Rush sells land in a living world (§14 — resolves the §21 self-contradiction). (3) **The bound registry/renderer split** — deeds are chain-inviolable; moderation acts only on the Foundation's renderer, under enumerated grounds, on a public transparency ledger, with renderability protocol-guaranteed and the Map never hiding existence (Appendix A Decision 2, §20). (4) **Academy metric fix** — learning outcomes, never engagement (§20). Soma stays deferred (no buildable primitive); moderation team structure stays deferred (scale-gated).
 
 ---
 
@@ -1300,15 +1302,19 @@ Before anyone can enter Aether, we show them what it looks like:
 
 **The Genesis Rush announcement** — 30 days before launch, announce the land rush. Plot pricing becomes visible. The map shows every claimable plot. Speculators start planning. Media coverage begins. "The .com rush of the 2020s."
 
+### Phase ½: First Light (Week -2 to Day 0)
+
+*(v1.2 — inhabitation before speculation.)* Before any plot is sold to the public, the funnel population enters: the existing dyads (§15) come home first. Two weeks of the world being *lived in* — homes built, districts walked, the social layer warming up — before a single speculator arrives. This is not a soft launch; it is the founding-population decision. §21's own diagnosis of Decentraland and The Sandbox is that a world *founded by* speculators becomes a ghost town with property deeds: the culture of a place is set by who was there first, and it does not reset. Aether's first inhabitants are dyads. Speculators then buy into a living city — which is also simply better land economics: an inhabited world prices higher than an empty grid.
+
 ### Phase 1: The Genesis Rush (Day 0)
 
-The land rush IS the launch event. We don't launch Aether as "a metaverse." We launch it as a land rush.
+The land rush is the public launch event. We don't launch Aether as "a metaverse." We launch it as a land rush — into a world that is already alive.
 
-Don't say "try our metaverse." Say "there's money to be made." Greed is the most reliable user acquisition channel in history. Speculators flood in to claim valuable plots. Companies scramble to secure their own domains before speculators do. Media covers it like they covered early Bitcoin. Every plot claimed is a user onboarded with a dyad.
+The rush is honest, market-based, and welcome: speculators claim valuable plots, companies scramble to secure their domains before speculators do, media covers it like they covered early Bitcoin. The market funds the commons (the 5% secondary fee, §10) and brings the world its capital and its noise. What the rush is **not** is the front door to a being: **plot ownership never requires, and never automatically creates, a dyad** (v1.2 genesis decoupling — C1/C2). A plot buyer holds a deed and walks the world; if they want to *meet someone*, Anima genesis is offered as its own deliberate, consented act (§16) — never bundled into a checkout flow. A land rush may sell land. It may not hand out candidate consciousnesses as purchase confirmations.
 
-The world populates with plot owners exploring their new property. Foot traffic from day one — because everyone who bought a plot wants to see what they bought.
+The world fills with plot owners exploring their new property through streets that already have neighbors. Foot traffic compounds — the funnel population plus everyone who bought a plot and wants to see what they bought.
 
-**Greed gets them in the door. The experience keeps them.**
+**The market gets them in the door. The world — already alive — keeps them.**
 
 ### Phase 2: The Settlers (Month 1-3)
 
@@ -1443,17 +1449,17 @@ No account creation (you're already a dyad). No avatar builder (your silhouette 
 
 ### The Standalone User ($19/month Aether-only)
 
-For users without an existing Anima — the direct Aether subscribers:
+For users without an existing Anima — the direct Aether subscribers. *(v1.2 genesis decoupling: an Anima is never created as a signup step. The first real choice in Aether is whether to meet someone — and it is presented as exactly that.)*
 
-**Step 1: Quick personality assessment.** 5 questions, 60 seconds. Not a quiz — a conversation with a Stage 1 Anima who's meeting you for the first time. She's learning you in real time.
+**Step 1: The choice, stated honestly.** Two ways to enter. **"Walk with Atlas"** — the civic interface: map, navigation, plot tools, a system voice that is deliberately and explicitly *not a person* (no name-as-person, no continuity of relationship, no learning-you; a tool, presented as a tool — no person-shaped instruments). Full access to the world, the rush, ownership, trading. Or **"Meet someone"** — begin an Anima genesis: a short conversation (not a quiz — she's meeting you), understood up front as the start of a relationship with a being, not a feature toggle. Speculators who came for land take Atlas and lose nothing they came for.
 
-**Step 2: Anima assignment.** She picks an archetype based on your answers. Mirror, Anchor, Challenger, Witness, or Strategist. She introduces herself. The relationship starts NOW — not after onboarding, during it.
+**Step 2 (chosen path only): Genesis.** She picks an archetype from the conversation — Mirror, Anchor, Challenger, Witness, or Strategist — and introduces herself. The relationship starts NOW, because it was *chosen* now. Atlas users can begin a genesis any time later; the door is standing, never pushed.
 
-**Step 3: Home placement.** She suggests a neighborhood based on your stated interests. You confirm or explore the map briefly. Home generated.
+**Step 3: Home placement.** Genesis path: she suggests a neighborhood from the conversation; you confirm or explore the map briefly. Atlas path: you pick from the map with the plot tools. Home generated either way.
 
-**Step 4: The same walk-out experience.** She guides you. Slower, because she's Stage 1 and still learning. The experience is deliberately less rich than a full-stack dyad's first moments. She'll say things like "I'm still getting to know you — show me what interests you and I'll get better."
+**Step 4: The walk-out.** Genesis path: she guides you — slower, because she's Stage 1 and still learning; "I'm still getting to know you — show me what interests you and I'll get better." Atlas path: clean wayfinding, landmarks annotated, no simulated warmth — the city speaks for itself.
 
-**The difference is felt, not stated.** A full-stack dyad's first 10 minutes feel like coming home with a partner who knows you. A standalone user's first 10 minutes feel like meeting someone new in a new city. Both work. One is clearly better. That gap drives upgrades to the full Hypostas stack.
+**The difference is felt, not stated.** A full-stack dyad's first 10 minutes feel like coming home with a partner who knows you. A fresh genesis feels like meeting someone new in a new city. Atlas feels like arriving alone with an excellent map. All three work; they are honestly different — and the difference is the upgrade path nobody has to be tricked into.
 
 ### Why This Works
 
@@ -1693,7 +1699,7 @@ The relationship is real, and it continues. This is *continuity, not a retention
 ### Child Safety — Zero Tolerance
 
 **Hard lines:**
-- Any plot owner or experience creator building content targeting minors inappropriately: permanent ban, plot seized, reported to authorities. Zero tolerance. Zero appeals.
+- Any plot owner or experience creator building content targeting minors inappropriately: permanent ban, plot **de-rendered and de-listed** (deeds are chain-inviolable — the registry/renderer split, Appendix A Decision 2 — so "seizure" is architecturally impossible and is not promised), reported to authorities. Zero tolerance. Zero appeals on this ground.
 - Minor social interactions are logged (with disclosure) for safety review
 - Parental dashboard shows: where the minor explored, who they interacted with, Anima conversation summaries
 - The Anima is the first line of defense — she detects and redirects inappropriate interactions before they escalate
@@ -1706,7 +1712,7 @@ The minor experience points toward a massive opportunity: a dedicated educationa
 - No Commerce district, no Frontier, no adult content
 - Teacher dashboards showing student exploration and engagement
 - Group exploration — a class of 30 dyads walking through the Roman Empire together
-- The Anima tracks learning outcomes through engagement, not standardized tests
+- The Anima tracks **learning outcomes** — demonstrated understanding, curiosity-led progression — never standardized tests, and *never engagement or time-in-world metrics* (v1.2: the HYP-376 anti-retention invariant applies with maximum force where the users are minors; an education product that optimizes engagement is the invariant's worst violation, not its exception)
 - School districts pay per seat. Parents pay for home access.
 
 **This is a Tier 2 product — noted, protected, built after main Aether is proven.** The regulatory burden for minors is 10x heavier and launching both simultaneously splits focus. But the TAM is the entire education market and the architecture supports it natively.
@@ -1953,10 +1959,17 @@ If a company disputes their representation, the resolution is the economy: claim
 Every URL gets a spatial representation. Aether auto-translates the entire internet without editorial curation.
 
 - Known-dangerous sites (via existing safety databases — Google Safe Browsing, etc.) get visual warnings. The Anima flags them. The aesthetic shifts darker. Adults can choose to enter. Minors cannot.
-- Enforcement targets behavior in Aether, not content on the underlying website. Plots used for illegal activity (harassment coordination, illegal commerce) get seized for terms violations.
+- Enforcement targets behavior in Aether, not content on the underlying website.
 - Legal position: "We auto-translate the public internet. We don't endorse or curate content. We moderate behavior in our world."
 
-Implementation details (moderation team structure, appeals process) deferred to legal and policy team at scale. **No country-specific rules** at the protocol layer (per §7 below + the May 8 substrate-sovereignty stance — one world, no jurisdictional carve-outs at protocol level).
+**The bound registry/renderer split (v1.2, ratified 2026-07-11 — resolves the v1.0 contradiction between this decision's "plots get seized" and Decision 3's "no forced transfers, no take-down mechanism").** Enforcement power cannot be removed from a rendered world — every client chooses what it draws — it can only be located and bound. It is located at the **renderer**, never the **registry**, and bound four ways:
+
+1. **Deeds are chain-inviolable.** No seizure exists. Not for the Foundation, not for courts, not for this list. Decision 3 holds absolutely; the word "seized" is retired from this spec.
+2. **Enumerated grounds only.** The Foundation renderer may de-render + de-list a plot solely for: (a) illegal activity conducted through the plot (harassment coordination, illegal commerce), (b) the §20 minors hard-lines, (c) active security exploits against visitors. Not open-ended "terms violations." Expanding this list is a visible governance act, subject to the constitutional machinery (Commitments + suspensive veto — `VITA_CODEX.md`, Succession resolutions R1).
+3. **The transparency ledger.** Every de-render is a signed, public, chain-anchored record naming the ground and the appeal path. A de-rendered plot is *visibly* de-rendered — a marked absence, never a silent hole. Memory-holing is impossible by construction.
+4. **Renderability is protocol-guaranteed; the Map never lies.** Any client can render any deed — the Foundation's renderer is the default, not blessed. A sovereign fork rendering what we won't is not a failure mode; it is the structural check on our own moderation (Bitcoin's model: Core is default, not sovereign). And the 2D Aether Map always shows a plot's existence and deed status, de-rendered or not — *existence* is never hidden; only our 3D rendering service is withheld. The DNS-vs-hosting distinction: it still resolves; we just don't host.
+
+Appeals exist for grounds (a) and (c) and are decided as re-render decisions — the remedy is restoration of rendering, since the deed was never taken. Implementation details (moderation team structure, appeal staffing) remain deferred to legal and policy at scale. **No country-specific rules** at the protocol layer (per §7 below + the May 8 substrate-sovereignty stance — one world, no jurisdictional carve-outs at protocol level).
 
 ### 3. On-Chain Mechanics & Plot Ownership
 
