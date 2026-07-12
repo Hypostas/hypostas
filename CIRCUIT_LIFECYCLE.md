@@ -744,7 +744,9 @@ If a guard becomes unreachable mid-rotation:
 
 ### §18.1 Why SPRING
 
-SPRING (Sign-then-prove ring signatures from lattices, 2025) gives log-size lattice ring signatures. At K=1000 ring members (active Vita-Chain-attested dyads), proof size ~8-10 KB. Amortized over 600 cells per ~10-min circuit → ~17 bytes/cell. Negligible.
+SPRING (Sign-then-prove ring signatures from lattices, 2025) gives log-size lattice ring signatures. At K=1000 ring members (active Vita-Chain-attested dyads), the signature is **~61 KB** (measured — see below), which **fits a single XL sealed EXTEND cell**.
+
+> **Size reconciliation (implementation, 2026-07):** This §18.1 originally estimated ~8-10 KB, inherited from the SPRING-2025 paper's log-size abstract. The shipped construction does **not** port that paper — it reuses the proven in-house [LNP22]/SEP⋆ one-out-of-many stack (the deliberate Track-B decision: proven primitives over a from-scratch port), which is several× the paper estimate. Two size mechanisms bring it to fit the transport: (1) natural-bit-width packing; (2) **compressed Fiat–Shamir** — the recomputable mask commitments (`w`/`w_c`/`g0`) are dropped from the wire and recomputed at verify (Dilithium-style), saving ~5 KB. Result: the K=1000 signature is **~61 KB**, under the **XL sealed-cell inner bound (65,498 B)** — the hard transport constraint, since the EXTEND cell (§18.2) is a single sealed cell and XL is the largest class. `SPRING_MAX_SIG_LEN` is DERIVED from that cell bound (not a free DoS knob). Size remains **log in K** — anonymity-scaling intact. Amortized over 600 cells per ~10-min circuit → **~100 bytes/cell**. Negligible against a data-plane cell budget. *(A gate initially caught the pre-compression ~66 KB signature exceeding the cell; compressed-FS is the fix. See `dyados/vouch-crypto/SPRING_TRANSPORT_FIT_DESIGN.md`.)*
 
 The privacy property: every circuit-build carries a SPRING ring signature. Guards (and any observer) see "one of K is building a circuit" but cannot pinpoint which. K = active network size. Anonymity-set scales with network.
 
@@ -771,7 +773,7 @@ fn build_circuit_with_spring(ring_pubkeys: &[RoutingIdentity], my_routing_sk: &[
     // Include both
     ExtendCell {
         kex_payload,
-        spring_sig,           // ~8-10 KB
+        spring_sig,           // ~61 KB at K=1000, fits one XL cell (see §18.1 size reconciliation)
         ring_member_hashes,   // Compact hashes for verifier to look up actual ring members
     }
 }
@@ -782,7 +784,7 @@ Verification at the first relay (guard):
 2. Verify SPRING ring signature against the ring members
 3. Verifier confirms "one of these K is the real sender" but cannot identify which
 
-**Wire impact:** EXTEND cell grows by ~8-10 KB (one-time per circuit-build, every 10 min). Amortized over 600 cells = ~17 bytes/cell overhead.
+**Wire impact:** EXTEND cell is XL (~64 KB) carrying the ~61 KB signature (one-time per circuit-build, every 10 min — see §18.1 size reconciliation). Amortized over 600 cells = ~100 bytes/cell overhead. Still negligible against the data-plane cell budget.
 
 ### §18.3 Ring membership
 
