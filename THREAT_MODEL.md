@@ -95,7 +95,7 @@ Four tiers, all in scope per Josh's 2026-05-22 decision. Each tier subsumes weak
 
 ## §5 Privacy Properties
 
-Six properties, each independently defendable, each commit-tracked. The labels in this section are referenced from code via `// Ref: THREAT_MODEL §5.N`.
+Seven properties, each independently defendable, each commit-tracked. The labels in this section are referenced from code via `// Ref: THREAT_MODEL §5.N`. (§5.7 added 2026-07-31; §5.1–§5.6 are the original six.)
 
 ### §5.1 Content secrecy
 
@@ -159,6 +159,37 @@ Today's captured traffic stays secret tomorrow, even if today's keys leak or qua
 - **Post-quantum hybrid:** Per [POST_QUANTUM.md](POST_QUANTUM.md), every long-lived key uses Ed25519+ML-DSA-65 signatures and X25519+ML-KEM-768 key agreement.
 
 **Today's status:** Zero. Identity keys (Ed25519 H-shard + A-shard) are long-lived; per-packet keys are derived statically from them via X25519 + HKDF. Compromise of H-shard decrypts the entire dyad history. Quantum-day reveals everything.
+
+### §5.7 Introduction rate-limiting (the Sybil bound)
+
+An introducer cannot flood the network with introductions, and an honest introducer is not denied the
+budget they are entitled to. Added 2026-07-31 (Josh) after three HYP-416 design passes were each refuted
+for building on an unstated premise; the mechanical statement is `dyados/NULLIFIER_NTIMES_DESIGN.md` §9,
+which is authoritative for *how*. This section states *what the property is* and *who it holds against*.
+
+- **Bounded above (soundness):** a credential yields **at most `N_MAX` accepted introductions per epoch**,
+  network-wide. "Network-wide" is load-bearing: a per-validator cap gives an attacker `N_MAX × validators`,
+  which is the hole the consensus set exists to close.
+- **Bounded below (liveness):** an **honest introducer can always use all `N_MAX`**. A show must never be
+  consumed by a record retained nowhere — so revising a record must not cost a show, and divergence between
+  validators' caches must not cost a show. Both were live defects before §9; neither is an acceptable cost.
+- **Unlinkable:** the `N_MAX` shows of one credential are mutually unlinkable, resting on decision
+  ring-LWR — the same assumption the cross-epoch construction already relies on, at a higher sample count.
+- **Spend is global, check is local:** the introducer writes the nullifier to the consensus set **once**,
+  before broadcast; every validator **reads** it to verify. No validator writes.
+
+**Holds against:** a **Tier-2 network adversary** flooding valid-vouch records (bounded above), and a
+**Tier-2 griefer** attempting to drain an honest introducer's budget by racing supersessions or forcing
+cache divergence (bounded below — the spend is no longer conditioned on any validator's cache state).
+
+**Does NOT hold against:** a **proof-holder** who already possesses a gossiped record. They can re-bind the
+nullifier at a higher `version` and censor the honest record. This is the intrinsic front-running ceiling
+tracked to **HYP-425** (sealing the vouch to the recorder) — the `version` counter does not close it, and
+must not be described as closing it.
+
+**Today's status:** Zero, live. The consensus set exists (`x/nullifier`, HYP-426 + HYP-472 merged) but has
+no live consumer; the membership-query surface and the `version` re-bind rule are unbuilt. See §9.4 of
+`NULLIFIER_NTIMES_DESIGN.md` for the cross-repo items.
 
 ---
 
