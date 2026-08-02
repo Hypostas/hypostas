@@ -12,7 +12,9 @@ This spec is the **relay layer's** home: the view of the system from a node acti
 
 A 1-hop sealed circuit hides message content + the recipient from the network, but the *entry relay* still sees the sender. Multi-hop circuits (CIRCUIT_LIFECYCLE §15, deep-EXTEND) break that: no single relay sees both ends. That only works if there is a population of nodes willing to **forward** other dyads' traffic — relays — and a way to **choose** trustworthy ones without a central authority. The relay layer is that population + the selection/forwarding/cover machinery around it.
 
-The relay role is **opt-in and capability-gated**: a dyad advertises relay capacity (bandwidth, carriers) via a `RelayAttestation` (CIRCUIT_LIFECYCLE §20.2.5; `protocol_core::reputation::RelayAttestation`) and is then eligible to be selected as someone else's hop. A dyad that never opts in is never a relay.
+The relay role is **default-ON and capability-gated** (Josh, 2026-08-01; supersedes the v0.1 opt-in default — see §9.2 for the rationale and §13 Q3 for what the reversal costs). Every bonded dyad that *can* relay does, so the anonymity set tracks adoption rather than a separate volunteer or token-incentive program, and the "why would anyone run a relay" question does not arise. Capability is determined by the node, not chosen by the user: phone-hosted dyads never enter the pool. The single user-facing knob is an **opt-out**, and it is honored (the COVER_TRAFFIC sovereignty principle).
+
+A dyad advertises relay capacity (bandwidth, carriers) via a `RelayAttestation` (CIRCUIT_LIFECYCLE §20.2.5; `protocol_core::reputation::RelayAttestation`) and is then eligible to be selected as someone else's hop — but **under a relay identity, not its `DyadId`** (§10). Publishing the dyad identity of every relaying dyad would turn the directory into a public census of the network; that defect and its fix are §10.
 
 ## §2 Relay roles + position-obliviousness
 
@@ -44,7 +46,7 @@ A relay forwards **fixed-size cells** (SEALED_ENVELOPE / OUTFOX). On a forward D
 The relay layer selects hops from the **attested active set** and weights them by trust. This composes the pieces built in CIRCUIT_LIFECYCLE §17/§20:
 
 - **Source — `RelayAttestation` (§20.2.5).** Each candidate is a relay's self-signed record: circuit keys, advertised bandwidth, carriers, operator, /24, validity window. `verify()` checks the self-signature + freshness (proves key control, NOT trust). Published on the Vita Chain + gossiped (HYP-204 extended to relay records); the local node holds a verified set.
-- **Trust — web-of-trust reputation (§20.3; `WebOfTrust`).** Each candidate is scored locally by personalized PageRank over the dyad's pair-bond graph, blended with observed delivery + uptime + attestation freshness. A relay with **no rooted trust path scores 0**.
+- **Trust — web-of-trust reputation (§20.3; `WebOfTrust`).** Each candidate is scored locally by personalized PageRank over the dyad's pair-bond graph, blended with observed delivery + uptime + attestation freshness. ⚠️ **The v0.1 rule "a relay with no rooted trust path scores 0" is REPEALED by §11.** Under §10 a relay's identity is unlinkable to its `DyadId`, so it has no pair-bond edges by construction and would score 0 — meaning `GuardPool` would select *nothing* and no circuit would ever build (confirmed against `reputation/mod.rs:301` + `guards.rs:357`). §11 replaces the rule with a two-tier prior.
 - **Pinning — entry guards (§17; `GuardPool`).** The first hop is drawn from a small persistent guard set, weighted by `bandwidth × uptime × reputation` (`GuardCandidate::from_attestation` maps an attestation + the local reputation/uptime → a candidate). A zero-reputation relay has weight 0 and is **never pinned**.
 - **Diversity.** No two hops of one circuit share an operator or /24 (best-effort, §17.2); the terminal is never the local dyad.
 
@@ -158,7 +160,256 @@ Both sides now hold `S`. Neither side ever puts A's *stable* identity on `C_tunn
 
 ---
 
+## §9 The relay directory (v0.3 — HYP-168)
+
+§4 sources candidates from "the attested active set" and never says who publishes it.
+`vita-carriers/src/guards.rs:14` names the same hole from the other side: the pool
+"is the input seam — supplied by the caller (HYP-168); this module never sources or
+attests it." There is no `eligible_relay_pool()`, no hop-selection function, and no
+caller of `GuardPool` anywhere in the tree. §9–§12 close that seam.
+
+### §9.1 The role-separation law (normative)
+
+Three roles, **disjoint node sets**:
+
+| Role | Population | Sees | Holds |
+|---|---|---|---|
+| **Validator** | `M1_VALIDATOR_COUNT = 7` | public chain state | consensus, the registry |
+| **Relay** | all capability-eligible dyads | adjacent hops only | no chain state |
+| **Client** | every dyad | its own circuits | the consensus directory |
+
+> **The chain is the DIRECTORY. It is not the RELAY.**
+
+Precedent: [Nym](https://nym.com/docs/operators/tokenomics) registers Nyx validators
+(Cosmos PoS + reward contract) and mixnodes separately; validators never carry mixnet
+traffic. Counter-precedent rejected: Oxen/Lokinet service nodes are *both*.
+
+**Why validators must not relay.** A 3-hop circuit over the 7-node validator set, with
+an adversary holding `k`: `k=1 → 0.0%`, `k=2 → 4.8%`, `k=3 → 14.3%` chance of seeing
+both entry and exit — over a set that is *publicly enumerated on-chain*, and where a
+node observing chain traffic and relay traffic gets cross-domain correlation free.
+Tor operates ~6,000–8,000 relays for scale.
+
+**Enforcement is structural, not a check.** §10's relay identity hides the registrant's
+`DyadId`, so `x/relay` *cannot* look up "is this a validator." The exclusion is therefore
+built into the membership ring: the anonymity set is `attested_dyads \ active_validators`,
+so a validator cannot produce a valid membership proof at all. A registration-time check
+would be unimplementable — this is the same class of contradiction as §13 Q2.
+
+### §9.2 Eligibility
+
+Every bonded dyad is relay-*capable* (§1). Entry into the public pool additionally requires
+an always-on host, public reachability, uptime above a threshold, no opt-out, and
+non-membership in the validator set. **All of these are host properties the chain cannot
+verify about an anonymous registrant** — see §13 Q2, which is the largest open problem in
+this design and is not solved here.
+
+### §9.3 `x/relay` — the chain module
+
+A Vita-Chain module, sibling to `x/nullifier`.
+
+```
+relay/entry/{relay_id}         → RelayDirectoryEntry
+relay/active/{epoch}           → [relay_id]
+relay/registered_at/{relay_id} → height
+```
+
+- `RegisterRelay { entry, membership_proof, relay_nullifier }` — validators verify the
+  proof and the nullifier's unseen-ness (§10.2), then admit.
+- `RefreshRelay` / `RetireRelay` — re-attest before expiry; voluntary exit.
+
+Rotation rides the **existing `x/nullifier` epoch beacon** (HYP-426) — one chain clock,
+not a second. ⚠️ That beacon is advanced by a **single `epoch_authority` key**
+(`nullifier.rs:61,130,653`) with `MIN_EPOCH_SPACING_BLOCKS = 1000`. Inheriting it means
+one key gates when dead or revoked relays leave the active set. Tracked as §13 Q5;
+decoupling is the likely fix.
+
+Bounds: `MAX_RELAYS = 4096` (mirrors `reputation::MAX_RELAYS`); attestation validity
+≤ `OBSERVATION_WINDOW_MS` (30 d); `MAX_REGISTRATIONS_PER_BLOCK` is **undetermined** and is
+a validator-CPU DoS bound (§13 Q4).
+
+## §10 Relay identity — the census defect and its fix
+
+### §10.1 The defect
+
+`RelayAttestation` publishes `relay_dyad_id`, `subnet_24`, and
+`advertised_bandwidth_kbps` (`protocol-core/src/reputation/attestation.rs:57-78`). Under
+§1's default-ON rule that makes the directory a **complete public census**: who exists,
+roughly where, and how large their connection is.
+
+**Required spec amendment (not a citation).** THREAT_MODEL §5 enumerates seven properties
+— content, identity, relationship, timing, volume, future secrecy, and introduction
+rate-limiting. **None of them covers this**, and an earlier draft of this design cited a
+non-existent "participation-unobservability" property rather than noticing the gap.
+Closing it requires *adding* an eighth property to THREAT_MODEL — participation secrecy,
+scoped to Tier-1/Tier-2 adversaries — and that amendment is a work item of HYP-168, not a
+preamble to it.
+
+### §10.2 The fix — a nullifier-bound relay identity
+
+A relay registers under `relay_id`, an identity key generated independently of its
+`DyadId` and not derivable from it. Uniqueness is enforced by a **nullifier**, reusing the
+n-times machinery already shipped (HYP-415/426/472):
+
+```
+relay_nullifier = PRF_credential("relay", slot_index),  slot_index ∈ [0, N_RELAY_MAX)
+```
+
+The registrant proves in ZK that it holds a bonded-dyad credential and that
+`relay_nullifier` is correctly derived from it; `x/nullifier` rejects a repeat. One dyad
+therefore claims at most `N_RELAY_MAX` relay slots, network-globally.
+
+**Why not SPRING.** An earlier draft proposed proving membership with SPRING (HYP-317).
+That is unsound here: SPRING is a plain one-of-many ring signature with **no key image,
+tag, or nullifier** (verified — zero hits in `spring_scheme.rs` / `spring_acc.rs`), so two
+proofs from the same ring member are indistinguishable *by design*. One dyad could mint
+`MAX_RELAYS` identities at the cost of proof computation. SPRING's unlinkability is
+exactly the property that makes it wrong for this job; the nullifier's linkable-tag is
+exactly the property that makes it right.
+
+### §10.3 `relay_id` is a stable pseudonym, and that is deliberate
+
+`slot_index` carries **no epoch**, so `relay_id` is stable for the relay's lifetime. This
+is required — §11 accrues reputation to it, and an identity that rotated per epoch would
+reset its reputation to zero every epoch and never become selectable.
+
+The cost, stated plainly: a stable pseudonym is linkable **to itself** across time, so a
+relay's behavior can be profiled longitudinally. It never links to a `DyadId`. Tor has the
+same property (relay fingerprints are stable) and it is the accepted price of reputation.
+
+Consequence: registration is effectively permanent, so **revocation needs a mechanism of
+its own** — retiring a `relay_id` must not free the nullifier for reuse, or the Sybil
+bound leaks. `RetireRelay` marks the entry dead; the nullifier stays spent.
+
+## §11 Two-tier reputation (replaces the §4 "scores 0" rule)
+
+Josh's call, 2026-08-01. Two tiers exist, but **tier is not a selection input** — both land
+in one pool under one score. The tier affects only how the score is *seeded*:
+
+```
+score(R) = ( w_vouch·P_trust(R) + n_obs(R)·B(R) ) / ( w_vouch + n_obs(R) )
+```
+
+- **Anonymous tier** — `w_vouch = 0`. Scored purely on observed behavior `B(R)`
+  (delivery + uptime + attestation freshness). At `n_obs = 0` the score is a **non-zero
+  neutral prior**; it must be non-zero or §4's repealed rule reappears and the tier is
+  never selected.
+- **Vouched tier** — a dyad *opts in* to publishing its `relay_id ↔ DyadId` link, gaining
+  a pair-bond PageRank prior `P_trust(R)` with pseudo-count `w_vouch`.
+
+**The vouch is a cold-start prior, not a permanent multiplier.** As `n_obs → ∞` both tiers
+converge to `B(R)`: a vouched and an anonymous relay with identical observed behavior end
+at identical scores. This is what prevents the failure mode that kills naive two-tier
+designs — if vouched relays scored permanently higher, paths would skew vouched, the
+anonymous pool would starve, and choosing privacy would be self-defeating. Here the
+advantage decays to zero.
+
+**Honest limits.**
+1. While `n_obs < w_vouch` a vouched relay *is* preferred. That window is real; bounding it
+   is what makes `w_vouch` load-bearing (§13 Q1).
+2. Vouching publishes that dyad's link — a census of the opt-in subset. That is an informed
+   sovereign trade, and it is **not revocable in retrospect**: dropping to anonymous stops
+   new disclosure but cannot unpublish history.
+3. `w_vouch` and the neutral prior are **not yet derived**. They MUST come from the measured
+   circuit rate against `OBSERVATION_WINDOW_MS`, not be chosen because they look reasonable
+   (rule #2).
+
+## §12 Directory distribution and the epistemic constraint
+
+**Normative:** every client selects from the identical, full, consensus directory. No lazy
+fetch, no per-client subsets, no fetching only the relays a client intends to use.
+
+[Danezis & Syverson, PETS '08](https://link.springer.com/chapter/10.1007/978-3-540-70630-4_10)
+prove two attacks on clients holding partial network knowledge: **route bridging**
+(exploiting what a client does *not* know) and **route fingerprinting** (a client's
+idiosyncratic view of the relay set identifies it across circuits). This is the decisive
+argument for a chain-backed directory over gossip — consensus supplies view-consistency as
+a property rather than a hope.
+
+**⚠️ The size budget does not currently close.** Per-entry, with real constants:
+
+| Field | Bytes |
+|---|---|
+| `relay_id` · `x25519_pk` | 64 |
+| `ml_kem_pk` (ML-KEM-768) | 1,184 |
+| `signing_pubkey` (`HybridPubkey`: Ed25519 + ML-DSA-65 vk) | ~1,984 |
+| `signature` (`HybridSig`: Ed25519 + ML-DSA-65) | ~3,373 |
+| bandwidth · subnet · validity | 15 |
+| **per entry** | **≈ 6,620 B** |
+
+At `MAX_RELAYS = 4096` that is **≈ 27 MB** — 13.5× Tor's ~2 MB consensus, and 27% of a
+dyad's 100 MB/day cellular `CostClass::Bandwidth` cap. Per COVER_TRAFFIC §5.4, exhausting
+that budget **suspends cover traffic**, so a naive directory sync would buy down the very
+property the relay layer exists to serve.
+
+The PQ *signature+key* pair is 81% of the entry — ML-KEM is only 18%, so compression aimed
+at the KEM key is aimed at the wrong field. Selective fetch is **forbidden** by the
+epistemic constraint above, which leaves: diff/delta sync against a held baseline,
+aggregate signatures over the entry set rather than per-entry, or a smaller `MAX_RELAYS`.
+**Unresolved — §13 Q6, and it gates the whole design.**
+
+## §13 Open questions
+
+1. **Q1 — `w_vouch` and the neutral prior.** Must be derived from measured circuit rate vs.
+   `OBSERVATION_WINDOW_MS`. Sets how long the vouched tier keeps its edge.
+2. **Q2 — capability gates against an anonymous registrant.** Uptime, always-on, and
+   reachability are host properties the chain cannot verify about a `relay_id` it cannot
+   identify; a fresh `relay_id` has zero uptime by construction. **The largest open problem
+   here.** Candidate direction: prove capability to the *observing* clients over time
+   rather than to the chain at registration — i.e. move the gate from §9.2 into §11's `B(R)`.
+3. **Q3 — what default-ON costs.** §1's reversal from opt-in was not costed. Chiefly: relay
+   forwarding and cover traffic share one `BandwidthBudget`
+   (`vita-carriers/src/cover_traffic/relay_padding.rs:12`), so an unauthenticated remote
+   adversary can drain a relay's budget and **suspend that dyad's cover traffic**
+   (COVER_TRAFFIC §5.4). Default-ON converts a self-limited resource into an
+   adversary-controlled one for every capable dyad. §6.1 already flags the shared budget as
+   "the one genuine architecture question"; default-ON makes it a security question.
+4. **Q4 — `MAX_REGISTRATIONS_PER_BLOCK`.** Each registration carries a ZK verification;
+   unbounded registration is a validator-CPU DoS.
+5. **Q5 — decouple relay rotation from the single-key `epoch_authority`.**
+6. **Q6 — the 27 MB directory.** Gating. Diff sync vs. aggregate signatures vs. smaller
+   `MAX_RELAYS`.
+7. **Q7 — cross-spec conflict, unresolved.** §4's selection contract says a short pool
+   "builds shorter"; CIRCUIT_LIFECYCLE §21.1 mandates constant-length 5-hop routes with
+   decoy padding so hop count is invisible. These contradict. Not resolved here — flagged
+   rather than silently decided.
+8. **Q8 — bootstrap.** Below ~50 relays the anonymity set is weak regardless of design.
+   **Population is the unsolved problem**: Tor's 6–8k relays took ~20 years of volunteers;
+   Nym and Oxen buy theirs with tokens. §1's default-ON makes relay count track dyad count,
+   which is the right structural answer, but early anonymity is weak in proportion to early
+   adoption and no amount of correct code changes that. Product decision, Josh's call.
+
+## §14 Sybil resistance
+
+A relay slot requires a bonded-dyad credential (§10.2), and bonded dyads are bounded by the
+pair-bond ceremony plus the n-times introduction cap — `N_MAX = 8` per (introducer, epoch),
+enforced network-globally by `x/nullifier` since HYP-426/472. With §10.2's nullifier
+binding, relay-Sybil cost is genuinely dyad-Sybil cost. Structurally this is the
+social-graph + stake hybrid of [SybilQuorum](https://arxiv.org/pdf/1906.12237).
+
+**Limits, stated rather than glossed:**
+1. **The cap bounds rate, not total.** An adversary growing a large bonded subgraph over
+   many epochs — real humans, paid or coerced — gets proportional relay share.
+2. **The argument requires §10.2.** Without the nullifier binding it is false, not weak:
+   §10.2 explains why the SPRING variant permitted unbounded identities from one dyad.
+3. **Social-graph defenses need real operator trust.** SybilGuard/SybilLimit-class arguments
+   fail where operators have no prior trust relationship. This design is in the regime where
+   they work *only because* relays are drawn from bonded dyads. Relax §1 to open enrollment
+   and this section is void.
+4. **Self-attested diversity is not a defense.** `operator_id` and `subnet_24` are
+   self-asserted fields of a self-signed record (`attestation.rs:76-78`) and `is_diverse`
+   (`guards.rs:386-391`) compares them literally, so one host can fabricate three and own
+   all three of a victim's guards. §10.2 bounds *how many* identities, not what they claim.
+5. **Forensics beats prevention, empirically.**
+   [Winter et al.](https://arxiv.org/pdf/1602.07787) found real Sybil groups in Tor's HSDir
+   and exit positions; manual vetting and per-IP caps did not stop them. Detection worked on
+   uptime correlation, config fingerprinting, and IP clustering. `ObservationWindow` is the
+   right host for the same forensics. Not built — follow-up, not claimed as solved.
+
+---
+
 | Version | Author | Notes |
 |---|---|---|
+| 2026-08-01 v0.3 | Iris + Josh | **§9–§14 (HYP-168): the relay directory.** Fills the `eligible_relay_pool` seam §4 and `guards.rs:14` both name. §9.1 role-separation law (chain = directory, never relay; validators excluded structurally via the membership ring, since §10 makes a registration-time check unimplementable). §1 flipped opt-in → **default-ON capability-gated** (Josh) so anonymity tracks adoption; §13 Q3 costs the reversal. §10 fixes the census defect — `relay_id` bound by a **nullifier** reusing HYP-415/426/472, *not* SPRING (verified: no key image/tag, so one dyad could mint `MAX_RELAYS` identities). §11 **two-tier reputation** (Josh) repeals §4's "no trust path scores 0", which would have made every anonymous relay unselectable and no circuit buildable; the vouch is a decaying cold-start prior so the anonymous pool cannot starve. §12 Danezis–Syverson forces full-consensus fetch — and surfaces that the directory is **~27 MB, unresolved (Q6, gating)**. §14 states five real limits. Prior v0.3 draft (`RELAY_DIRECTORY.md`, cfdd951e) was cross-vendor refuted — 3 P1 confirmed — and is deleted; its surviving material is folded in here. |
 | 2026-06-12 v0.2 | Iris + Josh | Detailed §7 bridge tunnels into a concrete, implementable protocol over EXISTING primitives (§7.1 pre-introduction = circuit-kex-style X25519+ML-KEM agreement; §7.2 bridge table + `bridge_tunnel` rotating id, built; §7.3 enforced carrier diversity) — no new crypto; replaces the v0.1 "deferred to kickoff" stub. |
 | 2026-06-12 v0.1 | Iris + Josh | Phase 3 kickoff spec. Consolidates the relay layer (referencing CIRCUIT_LIFECYCLE/SEALED_ENVELOPE/OUTFOX/COVER_TRAFFIC) + specs the two new pieces it owns: relay-relayed cover (§6, HYP-321) + bridge tunnels (§7, HYP-323). Built on the just-completed §20 web-of-trust relay-reputation/attestation/selection layer. |
