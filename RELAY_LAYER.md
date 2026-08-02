@@ -228,6 +228,57 @@ Bounds: `MAX_RELAYS = 4096` (mirrors `reputation::MAX_RELAYS`); attestation vali
 ≤ `OBSERVATION_WINDOW_MS` (30 d); `MAX_REGISTRATIONS_PER_BLOCK` is **undetermined** and is
 a validator-CPU DoS bound (§13 Q4).
 
+> ## ⛔ §10–§12 REFUTED (gate round 2, 2026-08-02) — do not build against them
+>
+> A second cross-vendor gate confirmed three P1s against code. They are not three
+> bugs; they are one unsolved problem wearing three faces, recorded in §15.
+>
+> 1. **§10.2's nullifier does not bind.** `x/nullifier` is epoch-keyed
+>    (`seen_record_key(epoch, seen_key)`, `nullifier.rs:299`) with `E_RETAIN = 2` and an
+>    unconditional `sweep_seen` (`:1270`). An epoch-free nullifier is therefore spendable
+>    **three times immediately** (`window_gate` accepts `[cur−2, cur]`) and
+>    `N_RELAY_MAX` more per beacon advance, forever. "The nullifier stays spent" needs
+>    unbounded consensus state, which `E_RETAIN` exists to forbid — §10.3's
+>    "stable forever" and the retention premise are **structurally incompatible**.
+>    This is the SPRING defect the fix was written to close, reintroduced by the fix
+>    (rule #13).
+> 2. **§10 does not fix the census at all.** `compute_commitment` hashes `ctx.tx_signer`
+>    (`nullifier.rs:809-823`) and both phases cost Aura, so commit and reveal are signed
+>    by one funded, identified `DyadId`. The *record* unlinks `relay_id` from `DyadId`;
+>    the *transaction* re-links them at a known height.
+> 3. **§11's vouched tier is game-theoretically empty and leaks §5.3.** `P_trust` is
+>    *personalized* PageRank rooted at the local dyad (`mod.rs:126,261`), so an adversary
+>    relay with no trust path to a victim scores `P_trust = 0` — **strictly worse than the
+>    anonymous tier's neutral prior. No rational adversary ever vouches.** The tier buys
+>    zero Sybil discrimination while imposing an irrevocable census disclosure *and* a
+>    relationship-secrecy leak (a vouched guard learns which client addresses are within
+>    k bond-hops of it) on the honest opt-in subset only.
+>
+> Also confirmed: §11's formula is `0/0` at the cold start it exists to fix; its
+> convergence is circular (`n_obs` is per-observer and only accrues by *being selected*,
+> so for almost every (client, relay) pair it never leaves 0); and it repeals a Sybil
+> anchor the code documents as load-bearing (`mod.rs:266-274` — the zero-score rule is
+> what stops a Sybil manufacturing reputation from faked delivery/uptime).
+>
+> **Corrections to this document's own claims:**
+> - `MAX_RELAYS = 4096` "mirrors `reputation::MAX_RELAYS`" is a **false citation** — the
+>   `observation` module is private and the constant is not re-exported. It is also an
+>   *admittedly invented* local `HashMap` bound ("slack headroom") promoted to network
+>   directory cardinality, and it contradicts §9.1's own "Tor operates ~6,000–8,000".
+> - **§13 Q3 is false as written.** Relay padding uses a *fresh* `u64::MAX` budget
+>   (`relay_padding_driver.rs:172`) and relay *forwarding* meters into no `BandwidthBudget`
+>   at all. The real defect is the inverse and worse: forwarding is **invisible** to the
+>   budget, so cover keeps emitting at full rate while the physical cap is consumed, and
+>   the COVER_TRAFFIC §5.4 step-down ladder cannot fire on load it does not measure.
+> - **§12's remedies are the wrong two.** The sound one: per-entry self-signatures are
+>   redundant *because* §9.1 makes the chain the directory — it verified them at
+>   `RegisterRelay`, and clients authenticate against the consensus state root. Dropping
+>   `signing_pubkey` + `signature` gives ≈1,263 B/entry ≈ **5.2 MB**. The "81% is decisive"
+>   framing was an artifact of carrying a gossip-era trust model into a consensus
+>   directory. (The byte table also omits `advertised_carriers` and `operator_id`.)
+> - §9.1's exclusion is a registration-time check after all: a relay that *later* becomes
+>   a validator cannot be evicted, because §10's unlinkability hides which entry to evict.
+
 ## §10 Relay identity — the census defect and its fix
 
 ### §10.1 The defect
@@ -406,10 +457,52 @@ social-graph + stake hybrid of [SybilQuorum](https://arxiv.org/pdf/1906.12237).
    uptime correlation, config fingerprinting, and IP clustering. `ObservationWindow` is the
    right host for the same forensics. Not built — follow-up, not claimed as solved.
 
+## §15 The root cause — the missing primitive (2026-08-02)
+
+Two gate rounds, six confirmed P1s. They are not six defects; they are one problem,
+and naming it is the only durable output of the two rounds:
+
+> **We do not have an anonymous-but-accountable relay identity, and every mechanism
+> reached for so far resolves that tension in one direction while silently breaking
+> the other.**
+
+The tension is exact. A relay identity must simultaneously be:
+
+| Requirement | Needs | Broken by unlinkability |
+|---|---|---|
+| **Unlinkable** to the operating dyad | §10.1 census | — |
+| **Rate-limited** — one dyad, bounded slots | §14 Sybil bound | nullifier needs unbounded state (`E_RETAIN=2`) |
+| **Scoreable** — reputation accrues to it | §11 selection | no bond edges ⇒ PageRank scores 0 |
+| **Capability-checkable** — uptime, always-on, reachable | §9.2 | host properties of an unidentifiable registrant |
+| **Revocable** — evict on misbehavior or role change | §9.1 | cannot identify which entry to evict |
+
+Each round of design picked a mechanism that satisfied one row and broke another, and
+the gate found the break each time. That is the signature of a **missing primitive**,
+not of careless design — the same shape as anonymous credentials with revocation and
+rate limiting, which is precisely the C3 / n-times territory (HYP-352, HYP-415/426/472)
+already in flight.
+
+**Consequence for the build order.** The relay directory is **blocked on a primitive we
+do not have**, and further directory design without it will keep producing plausible
+designs that die at gate. The next work item is the primitive, scoped on its own terms —
+not another revision of §9–§12.
+
+**What survives the two rounds** (unrefuted, and worth keeping):
+- §9.1 the role-separation law + the 7-validator arithmetic that forces it.
+- §12's epistemic constraint (Danezis–Syverson) mandating full-consensus directory views.
+- §12's corrected sizing method, and the finding that a consensus directory needs no
+  per-entry signatures (≈5.2 MB, tractable).
+- §14 limits 1, 3, 4, 5 — including that self-attested `operator_id`/`subnet_24` are not
+  a defense, and that `same_some` (`guards.rs:525-527`) returns `false` when either side
+  is `None`, so simply **omitting** both fields passes the diversity filter unconstrained.
+- §13 Q7 (builds-shorter vs. constant-length 5-hop) and Q5 (single-key `epoch_authority`)
+  — both real, both independent of the missing primitive.
+
 ---
 
 | Version | Author | Notes |
 |---|---|---|
+| 2026-08-02 v0.4 | Iris | **Gate round 2: §10–§12 REFUTED, 3 P1 confirmed** (banner above §10) + **§15 names the root cause**. The nullifier fix does not bind (`x/nullifier` is epoch-keyed, `E_RETAIN=2`, swept ⇒ spendable 3× now and `N_RELAY_MAX`/beacon forever — the SPRING defect reintroduced by its own fix, rule #13); the census is not fixed (`compute_commitment` hashes `ctx.tx_signer`, so the *transaction* re-links what the *record* unlinks); and the two-tier vouch is game-theoretically empty (`P_trust=0` for an adversary with no trust path ⇒ **no rational adversary ever vouches**) while leaking §5.3 relationship proximity to vouched guards. Also corrected: `MAX_RELAYS` was a false code citation *and* an invented local bound; **Q3 was false as written** — forwarding meters into no budget at all, and the real defect is that cover cannot see forwarding load; §12's remedies were the wrong two, since a consensus directory needs no per-entry signatures (≈5.2 MB). §15: six P1s across two rounds are one missing primitive — anonymous-but-accountable relay identity — so the directory is **blocked on it**, and further §9–§12 revision is the wrong next move. |
 | 2026-08-01 v0.3 | Iris + Josh | **§9–§14 (HYP-168): the relay directory.** Fills the `eligible_relay_pool` seam §4 and `guards.rs:14` both name. §9.1 role-separation law (chain = directory, never relay; validators excluded structurally via the membership ring, since §10 makes a registration-time check unimplementable). §1 flipped opt-in → **default-ON capability-gated** (Josh) so anonymity tracks adoption; §13 Q3 costs the reversal. §10 fixes the census defect — `relay_id` bound by a **nullifier** reusing HYP-415/426/472, *not* SPRING (verified: no key image/tag, so one dyad could mint `MAX_RELAYS` identities). §11 **two-tier reputation** (Josh) repeals §4's "no trust path scores 0", which would have made every anonymous relay unselectable and no circuit buildable; the vouch is a decaying cold-start prior so the anonymous pool cannot starve. §12 Danezis–Syverson forces full-consensus fetch — and surfaces that the directory is **~27 MB, unresolved (Q6, gating)**. §14 states five real limits. Prior v0.3 draft (`RELAY_DIRECTORY.md`, cfdd951e) was cross-vendor refuted — 3 P1 confirmed — and is deleted; its surviving material is folded in here. |
 | 2026-06-12 v0.2 | Iris + Josh | Detailed §7 bridge tunnels into a concrete, implementable protocol over EXISTING primitives (§7.1 pre-introduction = circuit-kex-style X25519+ML-KEM agreement; §7.2 bridge table + `bridge_tunnel` rotating id, built; §7.3 enforced carrier diversity) — no new crypto; replaces the v0.1 "deferred to kickoff" stub. |
 | 2026-06-12 v0.1 | Iris + Josh | Phase 3 kickoff spec. Consolidates the relay layer (referencing CIRCUIT_LIFECYCLE/SEALED_ENVELOPE/OUTFOX/COVER_TRAFFIC) + specs the two new pieces it owns: relay-relayed cover (§6, HYP-321) + bridge tunnels (§7, HYP-323). Built on the just-completed §20 web-of-trust relay-reputation/attestation/selection layer. |
