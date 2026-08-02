@@ -1,7 +1,95 @@
 # RELAY_IDENTITY_PREMISE.md — the premise, under test
 
-**Status:** PREMISE UNDER GATE. **Not canon. Not a design.** Nothing may be built against this
-document until it survives a cross-vendor gate.
+## ⛔ VERDICT: PREMISE DEAD (cross-vendor gate, 2026-08-02)
+
+Three legs — Codex `reasoning/hygiene` + two Claude refute legs — converged. **PR-5, PR-9, and PR-3
+are BROKEN; PR-10 is uncalibrated.** Under §3, any one of those ends it. What follows is the record;
+the propositions are left unedited below so the failure is legible.
+
+**The real finding is deeper than any single proposition, and it is not a missing primitive:**
+
+> **A forward-secret credential cannot host a persistent identity.** These are opposing requirements,
+> and no amount of re-keying reconciles them.
+
+The C3 vouch credential **rotates every epoch by construction** — `anchor.epoch() != epoch ⇒ Invalid`
+(`scheme.rs:162,208`), and rotation *is* the forward-secrecy mechanism ("a leaked key ≠ retroactive
+graph"). A relay identity must be stable so reputation can accrue. The relay identity therefore
+cannot be built on the vouch credential at all; it needs its own credential with its own lifetime
+policy. That is the actual work item.
+
+### What broke
+
+- **PR-5 BROKEN (CONFIRMED).** Nothing bounds credentials per dyad, on four independent legs:
+  the only cap is per-`upk`, and `upk = D_s·s` is **self-chosen** (`sep_sig.rs:615`); the gate
+  `register_member` has **zero production callers** (both are `#[cfg(test)]`); `UpkLedger` is a
+  process-local in-memory `HashMap` with no `Serialize` (`blind_issuance.rs:118-122`) — precisely the
+  per-verifier-cap hole THREAT_MODEL §5.7 says the consensus set exists to close; and issuer-hiding
+  multiplies the ledgers by the introducer set, making over-issuance **unattributable by
+  construction**. `w` is requester-chosen and never seen by the issuer, so two credentials carry two
+  independently-chosen, mutually unlinkable `w` values.
+- **PR-9 BROKEN (CONFIRMED), and it takes PR-7 with it.** Re-issuance per epoch is the *normal flow*.
+  Whether to reuse `w` is the **holder's unverifiable choice** — so the honest relay reuses `w` and
+  accumulates LWR samples, while a Sybil rotates `w` and resets the slot bound every epoch. **The
+  mechanism punishes the honest party and rewards the attacker.** The burned-slot set then grows with
+  rotation *events* (`dyads × slots × epochs`), reintroducing exactly the unbounded state PR-6 claims
+  to avoid — §3 filed PR-7 as "repairable", which was wrong.
+- **PR-3 BROKEN (CONFIRMED).** The module's documented escape hatch — *"rotate epochs more often (the
+  security-CHEAP knob)"* — **does not exist**: a fresh epoch and a fresh index produce the identical
+  object (an independent uniform base with `round_Δ(a·w)` published under the same `w`). The
+  gate-validated reduction is **pairwise only**; there is no LWE/LWR estimator anywhere in the tree
+  (the only one is M-SIS). And because `w_ring` is a deterministic public function of `w`, a break
+  recovers the full identity — deanonymizing every past and future scope at once, not merely linking
+  two tags.
+- **PR-3(b) — the project already ruled on permanence.** *"k = 1 preserves everlasting unlinkability;
+  k > 1 downgrades it to computational."* `N_MAX = 8` already took that downgrade; a relay identity
+  makes it **permanent and unexpiring**, forfeiting the everlasting-anonymity leg the C3 dual-hybrid
+  exists to provide. A posted introduction nullifier's exposure is bounded by record validity
+  (≤ 90 d); a directory-published relay tag has **no expiry** — unbounded attacker time,
+  harvest-now-break-later, against a provisional `Δ`.
+- **PR-10 UNCALIBRATED.** `N_RELAY_MAX` exists nowhere. Each slot costs `NHAT = 64` samples, and the
+  entire documented budget — *"`N_MAX × NHAT = 512` RLWR samples under ONE secret `w`"* — is
+  **exactly** the 8 introduction shows. There is no budget left to spend, and no curve to shrink along.
+
+### What survived, and it matters
+
+- **PR-4 HOLDS (CONFIRMED).** `w` *is* prover-determined, via a verifier-enforced chain: R3 binds the
+  committed SEP message to `w_bits` exhaustively over all 512 slots; R1 pins each bit to a pure
+  constant in {0,1}; R2 makes `w_ring` a function of those bits with no free coordinates; R5 binds the
+  published `N` to that same `w_ring`, with the verifier rebuilding the layout **analytically** rather
+  than reading offsets from the proof. **This is explicitly not the SPRING shape** — SPRING proved
+  membership without binding which member; here the specific signed message is bound bit-for-bit.
+  *Conditional:* this verifies the binding chain, not the underlying SEP show's own soundness.
+- **PR-1 was over-claimed by me.** It is true of the *function* and false of every *live path*:
+  `verify_issuer_hidden` — documented as the entry the live path MUST use — sources the scope solely
+  from `anchor.epoch_bytes()`, which is **8 bytes of big-endian `u64`** (`issuer_hiding.rs:101-103`),
+  deliberately single-sourced so "the nullifier base and the anchor can never disagree." A relay scope
+  would therefore *necessarily alias an introduction epoch label*. Codex predicted this exact failure
+  **without being able to read the file** (it lives in another repo): *"a verifier actually requires
+  the argument to equal the current fixed-width epoch."* My "just re-key the primitive" framing was
+  wrong — a new opaque-scope verify entry with domain separation is required work.
+- **Sybil arithmetic was 8× off.** `show_index` is prover-chosen and only range-checked
+  (`pq_vouch.rs:907`); a test proves one credential at `i ∈ {0,1,2}` yields three distinct accepted
+  `N`. The bound is `credentials × N_RELAY_MAX × 8`.
+- **Codex P2, on my own method:** §3 filed "PR-3 broken ⇒ unaffordable." Wrong — breaking
+  cross-scope unlinkability means the construction **is not anonymous**, which is dead, not expensive.
+  A verdict table must not downgrade the failure of a defining property to a cost.
+
+### Carried out of this gate (independent of relays)
+
+1. **Sample-budget accounting gap.** The documented 512 counts the 8 shows per epoch and **not the
+   epoch axis**. It is correct only if `w` rotates with the credential — nothing enforces that, and
+   the module's own `unlinkable_across_epochs` test presumes the opposite (one `w`, two epoch labels).
+   Not a demonstrated break in merged code; a real inconsistency to resolve under HYP-330, which
+   already gates non-experimental use.
+2. **Two dangling design docs.** `INTRODUCTION_RECORD_CRYPTO_DESIGN.md` is cited by four live source
+   files but was **deleted** (recoverable at `hypostas@8409daa`); `ISSUER_HIDING_DESIGN.md` is cited
+   five times in `issuer_hiding.rs` and was **never committed**. Both define the epoch/rotation model
+   that decided this gate — specs-are-intent, currently unreadable.
+
+---
+
+**Status:** ⛔ REFUTED. Retained as the record of a premise gated *before* a design was built on it —
+which is the point: this cost one document instead of a design-plus-build cycle.
 **Context:** `RELAY_LAYER.md` §15 — six confirmed P1s over two gate rounds resolved to one claim:
 "there is no anonymous-but-accountable relay identity." This document asserts that claim is **false**
 and states exactly why, as falsifiable propositions, so the gate can attack the *premise* rather than
