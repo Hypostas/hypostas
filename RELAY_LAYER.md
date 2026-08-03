@@ -589,6 +589,14 @@ research wall. Rows 1, 4, and 5 remain as stated.
 
 ### §15.3 The local-only-scoring question, answered by counting (2026-08-03)
 
+> ⛔ **PREMISE REFUTED, same day — read §15.4 first.** Every figure below assumes cover packets
+> trigger circuit construction at `COVER_DEST_NEW_CIRCUIT_MAX_PER_MIN`. **They do not.** In shipped
+> code `spawn_establish` has exactly one production call site — the `NoReadyCircuit` branch of the
+> *real* packet path (`cover_traffic/driver.rs:510`) — and cover cells route directly over the
+> carrier with no circuit at all. The activity-independent observation stream this section rests on
+> is **zero** as implemented. The arithmetic is retained because it becomes correct *if* §4.5 is
+> built (§15.4), but it describes an intended system, not the current one.
+
 §15.2 proposed that mandatory cover traffic might supply enough per-client observations to score
 relays **locally** — no authorities, no aggregation, no new crypto. It is a counting question, and
 the count settles it. All inputs are shipped constants:
@@ -643,6 +651,48 @@ coincidence. Consequences:
 **Method note.** This is a counting argument over shipped constants, not a simulation. A gpa-sim run
 would refine the 30-obs floor and model non-uniform (score-weighted) selection, but cannot flip the
 result: the local-vs-aggregated gap is exactly `N`, which is arithmetic, not dynamics.
+
+### §15.4 §4.5 has no subject — and its absence is a live leak (2026-08-03)
+
+Attempting to *implement* the §4.5 cap surfaced that **there is nothing to cap.** Verified at the
+production call sites, not from the type or the doc comment:
+
+- `spawn_establish` has **exactly one** production call site — `cover_traffic/driver.rs:510`, inside
+  the `NoReadyCircuit` arm of `SlotOutcome::SendReal`. (`grep -rn spawn_establish … | grep -v tests`
+  ⇒ definition + that one site.)
+- `send_cover` routes an `OutboundPayload::CoverCell` via `route_pinned` to a candidate drawn from
+  the dyad-existence cache (`ledger_directory.rs:153` → `cover_candidates_for_carrier`). No circuit,
+  no establishment, no `seal_data_ready`.
+
+COVER_TRAFFIC.md §4.5 states *"Each cover packet uses an existing circuit (if one exists) or
+**triggers circuit construction**… rate-limited (max 1 new circuit per 60s; if budget exceeded, the
+cover packet picks a different destination from peers with existing circuits)."* The second and third
+clauses have no implementation. `COVER_DEST_NEW_CIRCUIT_MAX_PER_MIN` greps to zero because the
+**behavior it governs was never built**, not because a constant was left unwired. Capping a path that
+never executes would be a dead wire by construction — the HYP-463 / I7 class.
+
+**The absence is not neutral — it is a leak.** Because establishment fires *only* when a real packet
+finds no ready circuit, **every circuit-build event means "this dyad has real traffic for a new
+destination."** Build events are 1:1 correlated with real activity. That is precisely the correlation
+§19.1 was written to break, one layer down, and it is exactly what §4.5's stated rationale — *"to
+avoid making circuit-build events themselves a fingerprint"* — exists to prevent. The spec knows;
+the code does not implement it.
+
+**This is a design fork, not a bug to patch.** Two coherent positions, with real costs:
+
+- **(A) Build cover-driven construction + the cap.** Decorrelates build events from real traffic,
+  closes the leak, and incidentally creates the observation stream §15.3 assumed. Costs bandwidth and
+  battery on every dyad, and deliberately manufactures handshakes — which is why §4.5 caps them at 1
+  per 60 s and re-targets rather than dropping (a gap in the constant-rate grid is itself the
+  fingerprint).
+- **(B) Accept real-only construction and correct the spec.** Cheaper, but concedes that build-event
+  timing leaks real activity, and leaves §15.3's local-scoring path unavailable at any `N`.
+
+**Error class, recorded (rule #33 check 1, sixth instance).** §15.3 was written by reading a *spec*
+property as a *system* property and building a full quantitative argument on it. The check that would
+have caught it costs seconds — `grep <producer> | grep -v test` — and it is the same check that
+caught it here, before any code was written. The cost this time was a wrong spec section rather than
+wrong code, which is the checklist working, not the checklist unnecessary.
 
 ---
 
