@@ -498,6 +498,50 @@ not another revision of §9–§12.
 - §13 Q7 (builds-shorter vs. constant-length 5-hop) and Q5 (single-key `epoch_authority`)
   — both real, both independent of the missing primitive.
 
+### §15.1 Candidates evaluated against the table (2026-08-03)
+
+Verified so they are not re-proposed. **Neither closes §15.** Both are real, peer-reviewed, and
+useful — for other questions.
+
+**BCMIX** — Zou & Lv (Xidian Univ.), *A Blockchain-Based Dynamic Self-Reconfigurable Mixnet*,
+IEEE/ACM Trans. Networking 31(5):2222, 2023; arXiv:2009.11546 (v1 titled *DSMIX*). Suggested as
+"the closest academic analogue to *every minted dyad becomes an involuntary relay*." **It is not
+that, and it violates §9.1.** From the paper, verified:
+
+- Mix nodes **are the miners**: *"Mix nodes: These entities are selected from miners through the
+  PoW and VRF algorithm"* (§III.A). This is precisely the validator/relay collapse §9.1 forbids
+  as a normative law, and the Oxen-shaped architecture rejected during the 2026-08-01 research pass.
+- Users are **not** relays: *"There are three entities in our proposed BCMIX, that is, Miners, Mix
+  nodes and Senders"* (§III.A) — three separate roles. So it carries no evidence about
+  involuntary/universal relaying, which is the property it was cited for.
+- Relay identity is **public by construction**: *"Miners disclose their addresses in the form of
+  (address_M, pk_M)"* (§III.A), and Sybil resistance runs on public IP prefixes — *"IPSharding
+  … takes as input IP prefix of miners in set M, and outputs n node pools (Miners in each node
+  pool have the same IP prefix IP/z …)"* (§IV.B). That **is** §10.1's census defect, adopted
+  deliberately rather than solved.
+- Accountability is public attribution: mix nodes *"commit to their computations and send special
+  transactions to blockchain network for subsequent auditing"* (§III.A).
+
+BCMIX therefore resolves the §15 tension by **discarding row 1 entirely** (unlinkability to the
+operator). It is the same failure signature as our own six P1s, not an escape from it. Its real
+contributions — decentralized mixnode *selection* without a central authority, and a collision-
+tagging attack on cMix — are orthogonal to relay identity.
+
+**Multiparty Routing** — Shirazi, Andreeva et al., arXiv:1708.03387, 2017. Solves **route
+selection over an already-known mix set** — distributing the routing decision and verifying its
+correctness so an adversary cannot bias paths. It assumes the mix set is known/public and says
+nothing about mixnode identity, operator anonymity, reputation, revocation, or Sybil resistance.
+**Orthogonal to §15.**
+
+It *is* relevant to **§12**, which §15 lists as surviving and independent: §12's epistemic
+constraint (Danezis–Syverson) forces full-consensus directory views precisely because a
+source-routing initiator must hold an up-to-date system view, which is what drives the directory
+sizing problem. Multiparty routing is a structural alternative that removes the client's need for
+that view. **Open question before it can be used:** Sphinx fixes the path at packet construction
+(the sender layers the onion), so whether distributed/hop-by-hop routing composes with our packet
+format is unresolved — the abstract does not settle it, and the full paper has not been read.
+Do not treat this as an answer to §12 until that is checked.
+
 ---
 
 | Version | Author | Notes |
