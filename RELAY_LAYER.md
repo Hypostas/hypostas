@@ -587,6 +587,63 @@ one, and is the same problem Tor solves with a small set of semi-trusted bandwid
 That is a design fork (accept measurement authorities vs. build multi-observer aggregation), not a
 research wall. Rows 1, 4, and 5 remain as stated.
 
+### §15.3 The local-only-scoring question, answered by counting (2026-08-03)
+
+§15.2 proposed that mandatory cover traffic might supply enough per-client observations to score
+relays **locally** — no authorities, no aggregation, no new crypto. It is a counting question, and
+the count settles it. All inputs are shipped constants:
+
+| Constant | Value | Source |
+|---|---|---|
+| `COVER_DEST_NEW_CIRCUIT_MAX_PER_MIN` | 1 | COVER_TRAFFIC.md §4.5 — **spec'd, zero hits in code** |
+| `MAX_HOPS_PER_CIRCUIT` | 5 | `sealed_envelope/mod.rs:259` |
+| `OBSERVATION_WINDOW_MS` | 30 days | `reputation/observation.rs:26` |
+| `CIRCUIT_DEFAULT_LIFETIME_MS` | 600 000 | `circuit_manager/mod.rs:118` |
+
+Per client per window: `1/min × 43 200 min = 43 200` builds `× 5 hops` = **216 000 relay-slots**.
+Cover-driven builds dominate and are *activity-independent* — an idle dyad accrues them too, which
+was the point of the proposal.
+
+**But per relay that divides by N, and N is every dyad** (§1's default-ON rule):
+
+| N | obs/relay/window (local-only) |
+|---|---|
+| 1 000 | 216 |
+| 7 200 | 30 |
+| 100 000 | 2.2 |
+| 1 000 000 | 0.22 |
+
+**Aggregated, it does not divide.** `N` clients × 216 000 slots ÷ `N` relays = **216 000
+obs/relay/window, independent of N**. The aggregation factor *is* `N`. So multi-observer aggregation
+is not an incidental nicety — it is **forced by the decision that every dyad is a relay**, and the
+same adoption that grows the anonymity set shrinks each client's per-relay evidence at the same rate.
+
+**Verdict — a scale bound, not a refutation.** Taking ~30 obs/relay/window as the floor for
+separating a failing relay from baseline, local-only scoring holds to **N ≈ 7 200** and fails above
+it. That is within noise of Tor's live relay count (~7 000); it is the same physics, not a
+coincidence. Consequences:
+
+1. **Local-only scoring is a sound bootstrap mechanism** — correct at launch scale, needs no crypto
+   we do not have, and removes the cold-start dependency on the (refuted) vouched tier.
+2. **It must be designed to hand off**, with the crossover as an explicit, monitored parameter.
+   A design that silently degrades past `N ≈ 7 200` is the §19.1 failure again: a partial defense
+   whose partiality is invisible.
+3. **`B(R)`'s components do not split evenly.** Construction is telescoping (one EXTEND per hop), so
+   a build failure at hop *k* proves hops 1..*k*−1 answered and *k* did not — **uptime/reachability
+   is locally attributable** at the full 216 000/N budget. A post-construction data failure
+   implicates all five hops with no attribution, so **delivery quality is not** locally attributable;
+   disentangling blame across many different 5-sets is exactly what aggregation buys.
+   *(Attribution inferred from the telescoping construction design; the failure-reporting code has
+   not been read. Verify before building on it.)*
+4. **§4.5's cap is load-bearing and unimplemented.** Every figure above is proportional to
+   `COVER_DEST_NEW_CIRCUIT_MAX_PER_MIN`, which greps to **zero hits**. Until it exists the real
+   observation rate is whatever the driver happens to do — so this analysis constrains a system we
+   have not built yet. Filed under HYP-491.
+
+**Method note.** This is a counting argument over shipped constants, not a simulation. A gpa-sim run
+would refine the 30-obs floor and model non-uniform (score-weighted) selection, but cannot flip the
+result: the local-vs-aggregated gap is exactly `N`, which is arithmetic, not dynamics.
+
 ---
 
 | Version | Author | Notes |
