@@ -542,6 +542,51 @@ that view. **Open question before it can be used:** Sphinx fixes the path at pac
 format is unresolved — the abstract does not settle it, and the full paper has not been read.
 Do not treat this as an answer to §12 until that is checked.
 
+### §15.2 Row 3 is overstated — §11 already answers the version in the table
+
+Chasing **BLACR** (Au, Kapadia & Susilo, NDSS 2012) and **DBLACR** (ACISP 2018; extended in
+*Computers & Security*, 2019) against row 3 produced a correction to §15 itself, and it came
+from re-reading **our own spec**, not the papers.
+
+Row 3 states the break as *"no bond edges ⇒ PageRank scores 0."* **That is the pre-§11 framing.**
+§11 already assigns the anonymous tier `w_vouch = 0` and scores it purely on observed behavior
+`B(R)`, with an explicitly **non-zero neutral prior at `n_obs = 0`** — added precisely so §4's
+repealed "scores 0" rule could not reappear — and both tiers converge to `B(R)` as `n_obs → ∞`.
+An anonymous relay is therefore scoreable and selectable by construction.
+
+What gate round 2 actually refuted in §11 was the **vouched** tier: `P_trust = 0` for an
+adversary with no trust path ⇒ no rational adversary ever vouches, so the signal carries no
+information about the population it exists to screen, while leaking §5.3 relationship proximity
+to vouched guards. *(Read from the v0.4 version note's characterization of the verdict; a
+re-read of the verdict itself would confirm the scope.)* The anonymous behavioral score was
+not the thing refuted.
+
+**What remains genuinely open in `B(R)`,** and where the two papers land:
+
+- BLACR's model is the right shape and no TTP is required: the party that **interacted** scores
+  the interaction, and the holder later proves `score ≥ threshold` in ZK. That maps directly —
+  a circuit builder has first-hand evidence of whether a relay delivered.
+- **The mismatch is multi-observer.** BLACR is single-service-provider: scorer and score-consumer
+  are the same party. Ours are different parties — client A observes, client B selects — so scores
+  must aggregate across mutually distrusting observers. BLACR does not do this.
+- **DBLACR decentralizes the wrong axis.** Its "decentralized" is a blockchain used as a public
+  append-only ledger for the blacklist — it distributes *storage*, not *scoring*, so it does not
+  supply multi-observer trust either.
+- **Both are pre-quantum** — DBLACR instantiates from RSA, classical DL, and pairings. Under our
+  PQ commitment a lattice re-instantiation is work of the same order as HYP-352, so "adopt DBLACR"
+  is not a shortcut.
+- **Cost and revocation conflict.** BLACR authentication is linear in the reputation-list size; the
+  "express lane" optimization removes that cost but **disables unblacklisting**, since deleting
+  entries invalidates express-lane proofs. For a directory that must revoke (row 5) that trade runs
+  the wrong way.
+
+**Net effect on §15.** The missing primitive is **narrower than the table claims**. Row 3 is
+substantially answered; the residue is *multi-observer score aggregation without a TTP and without
+deanonymizing the scored relay* — which is as much a distributed-systems problem as a cryptographic
+one, and is the same problem Tor solves with a small set of semi-trusted bandwidth authorities.
+That is a design fork (accept measurement authorities vs. build multi-observer aggregation), not a
+research wall. Rows 1, 4, and 5 remain as stated.
+
 ---
 
 | Version | Author | Notes |
