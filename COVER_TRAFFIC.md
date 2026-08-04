@@ -343,12 +343,15 @@ converging. The enumeration below is the exhaustive pass (rule #14: the pattern 
 | 1 | Trigger predicate | strict — `seal_data_ready` requires refresh-current | lax — `has_circuit` accepts stale | **patchable** |
 | 2 | Destination eligibility | any peer | `cover_cooperation` ∧ `is_fresh` ∧ advertises this carrier (`dyad_ledger/mod.rs:326`) | **STRUCTURAL** |
 | 3 | Same-slot (handshake, DATA) pairing | independent | independent | fixed, gate r2 |
-| 4 | Intent carried on the handshake | the queued packet's own (may be Critical/Elevated) — and in production `Critical` **fans out across both registered carriers** | always `Standard`, one carrier | **STRUCTURAL** — reclassified from "patchable" by gate r7; see HYP-518 |
+| 4 | Intent carried on the handshake | the queued packet's own (may be Critical/Elevated); in production `Critical` **fans out across both carriers** | always `Standard`, one carrier | **partly patchable** — `spawn_establish` already forwards `intent`, so sampling it is one line (HYP-518). Matching the full distribution is not cheap; removing the certainty is. |
 | 5 | Build rate | uncapped — a queued real must never wait on a cover budget | ≤ 1 per 60 s | **STRUCTURAL** |
-| 6 | Follow-up traffic | DATA to that destination on a later slot | nothing follows to the build target | **STRUCTURAL** |
-| 7 | Retry cadence after a failed build | requeue + retry | refund + retry | unverified |
+| 6 | Follow-up traffic | DATA to that destination on a later slot, P≈1 | target addressed only by an independent uniform draw, P≈k/N | **patchable** — reclassified from STRUCTURAL: one `Option<DyadId>` pending-follow-up consumed by the next `send_cover`, zero extra bandwidth. **Strongest surviving classifier** — it classifies a SPECIFIC handshake, not a rate. |
+| 7 | Retry after a failed build | retries the **same destination** — a run of handshakes to one peer | redraws the target uniformly each time | **CONFIRMED mismatch** (was "unverified"). Two handshakes to one destination inside a 60 s window ⇒ real, with certainty. Patchable: sticky target on retry. |
 | 8 | `CircuitPurpose` | `Standard` | `Standard` | matches |
 | 9 | **Handshakes per slot** | real build + cover fill could emit **two** | one | **patchable** — found by gate r3, NOT by this enumeration |
+| 10 | **Cover-build opportunity vs. real-queue occupancy** | — | a cover build is reachable **only on a slot where the real queue is EMPTY** | **P1, patchable** — real traffic suppresses the cover that would mask it |
+| 11 | Build rate while cover is **suspended** | continues, unthrottled | **exactly zero** — no `CoverBuild::Allowed` site is reachable | **P2** — and this is the DEFAULT cellular regime (§1, §2.3), not an edge case |
+| 12 | Budget-exhausted steady state | — | one handshake per 60 s and **zero cover cells** | **P2** — a lone unaccompanied build event, in the one regime contracted to emit nothing |
 
 **#4 was misclassified too.** It was written as "patchable — give cover the same intent distribution",
 which is wrong in production: `Critical` fans out across BOTH carriers while cover emits through one,
@@ -357,6 +360,21 @@ either downgrading real Critical setup (delays urgent sends for every user, and 
 fix) or manufacturing cover fan-out on a second carrier (bandwidth on every dyad, permanently).
 Neither is cheap, so #4 joins the structural set. Tracked as HYP-518, and it closes the same way the
 others do — HYP-319/331 making real builds rare enough that no handshake is emitted at all.
+
+### The enumeration failed its own test, twice over
+
+**#10 is the one that matters, and it inverts the whole change.** A cover build is reachable only from
+`SlotOutcome::SendCover`, which `on_slot` returns only when the real queue is empty. So over any window
+in which the dyad has continuous real traffic it emits **zero** cover handshakes, and every handshake is
+real with probability 1 — the pre-change correlation, restored exactly in the high-traffic regime the
+mechanism exists to protect. **Real traffic suppresses the cover that would mask it.** Cheaply fixed
+(evaluate the build hook once per slot in `drive_one_slot`, regardless of outcome), but until that fix
+no version of §4.5 delivers anything in the regime that counts.
+
+**Seven Codex gate rounds found none of #10, #11 or #12.** Two Claude refute legs found all three, plus
+that #6 and #7 were misclassified and #4 mis-costed. `gate-plan.sh` prescribed Codex-lead **plus a
+Claude depth leg** precisely so that no one family's blindspot decides — and the Claude leg was skipped
+for all seven rounds. That omission, not the code, is why this table was wrong for a day.
 
 **This enumeration was not exhaustive when written, and #9 is the proof.** It was added after gate
 round 3 found it: the real path's `NoReadyCircuit` arm spawns a build and *then* fills the slot with
