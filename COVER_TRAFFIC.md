@@ -348,6 +348,14 @@ converging. The enumeration below is the exhaustive pass (rule #14: the pattern 
 | 6 | Follow-up traffic | DATA to that destination on a later slot | nothing follows to the build target | **STRUCTURAL** |
 | 7 | Retry cadence after a failed build | requeue + retry | refund + retry | unverified |
 | 8 | `CircuitPurpose` | `Standard` | `Standard` | matches |
+| 9 | **Handshakes per slot** | real build + cover fill could emit **two** | one | **patchable** — found by gate r3, NOT by this enumeration |
+
+**This enumeration was not exhaustive when written, and #9 is the proof.** It was added after gate
+round 3 found it: the real path's `NoReadyCircuit` arm spawns a build and *then* fills the slot with
+cover, so once the cover fill could also build, a real slot emitted two handshakes where a cover slot
+emits one. A per-slot COUNT is an observable, and the pass that claimed to enumerate every observable
+missed it. Treat this table as the best current list, not a closed one: **anything that differs
+between the two paths belongs here, including properties of the slot rather than of the handshake.**
 
 **§4.5's rate cap alone CANNOT deliver the invariant, and #5 shows why by construction.** Cover builds
 are capped at 1/60 s while real builds are deliberately uncapped, so **any handshake in excess of the
