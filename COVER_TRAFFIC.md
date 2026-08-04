@@ -343,12 +343,20 @@ converging. The enumeration below is the exhaustive pass (rule #14: the pattern 
 | 1 | Trigger predicate | strict — `seal_data_ready` requires refresh-current | lax — `has_circuit` accepts stale | **patchable** |
 | 2 | Destination eligibility | any peer | `cover_cooperation` ∧ `is_fresh` ∧ advertises this carrier (`dyad_ledger/mod.rs:326`) | **STRUCTURAL** |
 | 3 | Same-slot (handshake, DATA) pairing | independent | independent | fixed, gate r2 |
-| 4 | Intent carried on the handshake | the queued packet's own (may be Critical/Elevated) | always `Standard` | **patchable** |
+| 4 | Intent carried on the handshake | the queued packet's own (may be Critical/Elevated) — and in production `Critical` **fans out across both registered carriers** | always `Standard`, one carrier | **STRUCTURAL** — reclassified from "patchable" by gate r7; see HYP-518 |
 | 5 | Build rate | uncapped — a queued real must never wait on a cover budget | ≤ 1 per 60 s | **STRUCTURAL** |
 | 6 | Follow-up traffic | DATA to that destination on a later slot | nothing follows to the build target | **STRUCTURAL** |
 | 7 | Retry cadence after a failed build | requeue + retry | refund + retry | unverified |
 | 8 | `CircuitPurpose` | `Standard` | `Standard` | matches |
 | 9 | **Handshakes per slot** | real build + cover fill could emit **two** | one | **patchable** — found by gate r3, NOT by this enumeration |
+
+**#4 was misclassified too.** It was written as "patchable — give cover the same intent distribution",
+which is wrong in production: `Critical` fans out across BOTH carriers while cover emits through one,
+so an observer reads carrier pattern and handshake count, not just an intent field. Matching it means
+either downgrading real Critical setup (delays urgent sends for every user, and regresses a prior gate
+fix) or manufacturing cover fan-out on a second carrier (bandwidth on every dyad, permanently).
+Neither is cheap, so #4 joins the structural set. Tracked as HYP-518, and it closes the same way the
+others do — HYP-319/331 making real builds rare enough that no handshake is emitted at all.
 
 **This enumeration was not exhaustive when written, and #9 is the proof.** It was added after gate
 round 3 found it: the real path's `NoReadyCircuit` arm spawns a build and *then* fills the slot with
