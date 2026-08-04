@@ -328,6 +328,47 @@ Receivers process each inbound cell, attempt AEAD verification, drop on failure.
 
 Aggregate: at 1 cell/sec from each of N peers, a node processes N cells/sec. For a dyad with 100 known peers all sending Standard-rate cover: 100 cells/sec → ~100 microseconds of CPU per second = 0.01% CPU. Negligible.
 
+### §4.5a The build-path indistinguishability enumeration (2026-08-04)
+
+**Normative invariant.** An observer must not be able to tell which path produced a circuit
+handshake. Every predicate, destination draw, intent, rate, and follow-up either MATCHES across the
+cover-driven and real-driven paths or it is a defect.
+
+This section exists because two gate rounds on HYP-493 each found a *different instance* of the same
+defect — a difference between the two paths — and patching instances was producing rounds without
+converging. The enumeration below is the exhaustive pass (rule #14: the pattern is the bug).
+
+| # | Observable | Real path | Cover path | Status |
+|---|---|---|---|---|
+| 1 | Trigger predicate | strict — `seal_data_ready` requires refresh-current | lax — `has_circuit` accepts stale | **patchable** |
+| 2 | Destination eligibility | any peer | `cover_cooperation` ∧ `is_fresh` ∧ advertises this carrier (`dyad_ledger/mod.rs:326`) | **STRUCTURAL** |
+| 3 | Same-slot (handshake, DATA) pairing | independent | independent | fixed, gate r2 |
+| 4 | Intent carried on the handshake | the queued packet's own (may be Critical/Elevated) | always `Standard` | **patchable** |
+| 5 | Build rate | uncapped — a queued real must never wait on a cover budget | ≤ 1 per 60 s | **STRUCTURAL** |
+| 6 | Follow-up traffic | DATA to that destination on a later slot | nothing follows to the build target | **STRUCTURAL** |
+| 7 | Retry cadence after a failed build | requeue + retry | refund + retry | unverified |
+| 8 | `CircuitPurpose` | `Standard` | `Standard` | matches |
+
+**§4.5's rate cap alone CANNOT deliver the invariant, and #5 shows why by construction.** Cover builds
+are capped at 1/60 s while real builds are deliberately uncapped, so **any handshake in excess of the
+cover rate is provably real**. The cap that exists to stop build events fingerprinting real activity
+is itself a fingerprint. #6 is the same shape over a longer window: a handshake later followed by DATA
+to that destination is real, which the r2 same-slot decoupling does not touch. #2 is a hard floor —
+cover literally cannot address a peer that has not opted into cover cooperation, so a handshake to
+such a peer is unambiguous.
+
+**What closes it.** Not a better cap — **rarity**. If circuits to likely destinations are pre-built at
+the cover cadence, a real send almost always finds one ready and triggers no build at all; the
+residual real builds then become rare enough for the cover rate to mask. That is the **pre-built
+idle-circuit pool (HYP-319 / HYP-331)**, and this enumeration is the argument that it is *load-bearing
+for the §4.5 property*, not an optimization.
+
+**Consequence for scope.** §4.5 is a COMPONENT of build-event unlinkability, not the property. A
+change implementing §4.5 alone must not claim the property — closing 2 of 5 distinguishers while
+leaving 3 is the §19.1 failure mode (a partial defense that reads as progress). Items 1, 4 and 7 are
+in scope for the §4.5 work; items 2, 5 and 6 are tracked against HYP-319/331 and must be stated as
+open wherever the §4.5 guarantee is described.
+
 ### §4.5 Per-recipient circuit reuse
 
 The cover destination is sampled from the dyad's existing peer table. Each cover packet uses an existing circuit (if one exists) or triggers circuit construction. To avoid making circuit-build events themselves a fingerprint, cover-driven circuit construction is rate-limited (max 1 new circuit per 60s; if budget exceeded, the cover packet picks a different destination from peers with existing circuits).
