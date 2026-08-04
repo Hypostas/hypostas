@@ -72,6 +72,29 @@ N.** That is the parameter §6.2.2's claim actually depends on, and the spec nev
 The existence of HYP-357/359 is itself evidence the concern is real and was already recognised at the
 mechanism layer; what did not happen is propagating that recognition back into §6.2.2's claim.
 
+### §4.1 Correction — what the dither actually defends, and a known hole (added after premise-check)
+
+`premise-check.sh` flagged that `COVER_BUDGET_FORECAST_WIRE_DESIGN.md` (on `origin/main`, binding
+canon) discusses `EnergyClass`, `cover_traffic` and `dithered_rate_ms` and that this design never cited
+it. It was right, and reading it corrects two things above.
+
+**1. The dither's up-flip is a specific defense, not generic blurring.** It *"manufactures the false
+co-active floor against the **intersection attack**"* (`cover_traffic.rs:370-372`). §4 as first written
+described dithering as perturbing the rate so class is not perfectly readable — true but under-stated.
+The up-flip half exists so an idle dyad *appears* co-active; that is what enlarges the set, and it is
+the half that can be suppressed independently.
+
+**2. There is a known, tested hole exactly in the property this design is about.** At
+`fraction_consumed ≥ 0.70` the budget ceiling is `Ambient`, so `dithered_rate_ms` clamps the up-flip:
+the intersection-attack defense is **fully removed for an idle dyad in [70%, 80%) consumed**. This is
+disclosed and pinned by `dither_up_flip_fully_suppressed_at_70pct_consumed`. §5's simulation must model
+it rather than rediscover it — the anonymity set has a documented hole keyed on budget consumption, and
+therefore on carrier and usage, not just on class.
+
+**Method note.** This is the second time in two days that a decision record I had not read already
+contained the answer. Here the mechanism caught it *before* a gate was spent, which is precisely what
+rule #33 was written for.
+
 ## §5 The work
 
 This is a spec-correctness and measurement issue, not a build:
@@ -100,11 +123,24 @@ battery and metered bandwidth may be spent to enlarge someone else's anonymity s
 and values question, not an engineering one, and per the standing rule it goes to Josh rather than
 being resolved here.
 
+**Correction: this question is not new, and Josh has already answered a version of it.**
+`COVER_BUDGET_FORECAST_WIRE_DESIGN.md` frames it as the **up-flip decoupling tradeoff** —
+*"at ≥70% consumed, cap the committed class for cost BUT keep the idle-dyad protective RR-dither
+up-flip firing (bandwidth-vs-intersection-defense), currently resolved for bandwidth (fully suppressed
+at ≥70%)"* — and records it as a *remaining, optional, non-blocking* decision with the decoupling
+explicitly available as a follow-up.
+
+So the correct framing is **not** "here is an open sovereignty question." It is: *the tradeoff was
+decided for bandwidth at the ≥70% boundary; does the network-wide anonymity-set analysis in §3 change
+that answer?* That is a smaller, better-posed question, and it should be asked with §5's measurement in
+hand rather than in the abstract.
+
 ## §7 Open questions carried from HYP-523
 
 - [ ] Restated §6.2.2 claim, with the ε-dependence explicit — §5 item 1
 - [ ] Effective anonymity set under the live class distribution + shipped ε — §5 item 2, `gpa-sim`
-- [ ] The ε trade — §6, needs Josh
+- [ ] The ε trade — §6. **Re-posed:** not an open question but a re-examination of the up-flip
+      decoupling already decided for bandwidth at ≥70%. Ask it with §5's numbers, not in the abstract.
 - [ ] Adversary tier: §6.2.2 as written implies a global passive observer who can compare rates across
       links, i.e. THREAT_MODEL Tier 2+. State it explicitly; a single-link observer never sees the
       partition at all.
