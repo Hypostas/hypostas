@@ -1,6 +1,50 @@
 # NETWORK_WIDE_COVER_DESIGN.md — what §6.2.2's anonymity set actually is
 
-**Status:** DESIGN, pre-gate. Written 2026-08-04 for HYP-523.
+**Status:** ⛔ **REFUTED at the root by the cross-vendor DESIGN-review, 2026-08-04.** Do not act on §5.
+Kept for the record and for the three findings that outlived it. Written 2026-08-04 for HYP-523.
+
+> ## ⛔ The verdict below is WRONG, in both directions at once
+>
+> Three legs (Codex generic, Codex reasoning-hygiene, Claude depth) returned 5 + 6 + 14 findings.
+> The central claim — *"§6.2.2 is emergent, there is nothing to build"* — is false, and the
+> corrected claim in §3 is also false, in the opposite direction.
+>
+> **1. There IS a mechanism, and the spec names it.** `COVER_TRAFFIC.md:547` §7.1 states the shipped
+> baseline outright: *"Phase 1 baseline (this spec): each dyad's own cover defends against same-link
+> observation (Tier 1). **Anonymity set effectively 1**."* §6.2.2's property needs a vantage point
+> where two dyads' streams merge, and `CIRCUIT_LIFECYCLE.md:86` §3 is *"single-hop (Phase 1, N=1)"* —
+> there is no such vantage point today. The construction is named in three places this design never
+> cited: `COVER_TRAFFIC.md:537-541` §7 (cover-sink addressing + multi-carrier fanout), `:553` §7.2
+> cover-relayed cover, and `RELAY_LAYER` §6 relay padding (which `relay_padding.rs:1-3` confirms is
+> **off by default**).
+>
+> **2. §1's inference rests on misreading one clause.** THREAT_MODEL:249's *"No relay coordination
+> required"* means relays need not **coordinate** (unlike Loopix's per-hop batching). It does not say
+> no relay is **required**. I read a negation of coordination as a negation of the mechanism.
+>
+> **3. So today's set is 1, not the rate-class cohort.** §3 is too weak, while §4's ε framing is too
+> strong (see below). Both errors trace to the same omission §14 of the review names: an anonymity set
+> is undefined without a (vantage point, target event) pair, and this document fixes neither.
+>
+> **What survives, verified:** §2's six `file:line` citations all resolve exactly; §4.1's ≥70% hole is
+> accurate and correctly attributed; the directional claim that §6.2.2's precondition is violated is
+> true. And three findings the review surfaced are now tracked in their own right — **HYP-526**
+> (`GPA_ANALYSIS.md` does not exist), **HYP-527** (shipped γ=1/5 exceeds its own ε budget 2× in one
+> epoch), and the §6.2.4-vs-§11.2 rate contradiction inside THREAT_MODEL itself.
+>
+> **Additional P1s against this document, for the record:** ε cannot move Elevated/Critical at all
+> (`emitted_class` only flips `Ambient↔Standard`, `Critical` exempt), so §4's ε framing is irrelevant
+> to the class §3.1 calls most sensitive; `gpa-sim` models a **binary** class bit, not a distribution,
+> so §5 item 2 cannot be run as written; and the design omits the **cover-OFF** population entirely
+> (cellular at 20–50% battery, background suspension) where every emitted packet is real — which
+> `COVER_TRAFFIC.md §4.5a` row 11, **which I wrote the day before**, calls the *default cellular
+> regime*.
+>
+> **The honest restatement**, from the review: *Phase 1 ships anonymity set 1 by design (single-hop,
+> no mixing vantage); §6.2.2's property is gated on multi-hop + relay padding + cover-relayed cover,
+> all tracked elsewhere; the rate-class partition, the carrier partition and the cover-OFF population
+> are what will bound the set once a vantage point exists; and the shipped γ=1/5 does not meet the
+> stated Tier-3 ε budget for any E ≥ 1.*
 **Verdict up front:** §6.2.2 is **not a build item**, and its stated anonymity-set size is **wrong**.
 The work is to restate the claim correctly and measure the parameter it actually depends on.
 
