@@ -6,8 +6,9 @@ design** — the failure mode across the three refuted HYP-527 dither drafts (`C
 `COVER_RATE_QUANTIZATION` v2, `COVER_DITHER_BOUNDED_DELAY` v3) was **hand-deriving a novel randomized
 response** and hitting the same wall each time (support holes, the delay-vs-iid tension, the dropped
 group-privacy ×2). This pass grounds every step in a published, peer-reviewed result and derives on top of
-proven tools. **This v0 is the framing + grounding + derivation plan, not the finished parametric bound** —
-the numeric bound (§7) is the tracked continuation. Not yet gated.
+proven tools. **v1: framing + grounding (§1–§6) + the computed frontier (§7).** The numeric bound is now
+derived and machine-checked against the real dyados parameters; the remaining work is the `gpa-sim` encoding
+and the crypto-critical cross-vendor gate (§7.3/§7.4). Not yet gated.
 
 **Provenance note:** HYP-329 was marked Done (2026-07-02) citing a `GPA_ANALYSIS.md` that **never existed**
 (the HYP-526 phantom-citation saga). Re-opened. The real diagnostic exists now (`GPA_ANALYSIS.md` v5); the
@@ -121,19 +122,77 @@ delay problems under a latency constraint, which is *why* §1 moves to shaping.)
 
 ---
 
-## §7 The tracked continuation (what the next, fresh-context derivation must produce)
+## §7 The computed bound — the quantified frontier (the affirmative result)
 
-This v0 established the *primitive and the grounding*. The finished bound owes:
-1. **The dyados parameter map:** `T` (interval), `W`/`ΔW` (window + sensitivity = the idle↔ceremony volume
-   gap from `EnergyClass` rates), the per-interval `(ε_T,δ_T)`, and the composed `ε_W` — plugged from the
-   real cover-engine constants (`cover_traffic.rs:44-53` rates; the SANGUIS/ceremony volume profile).
-2. **The Rényi composition worked example** at those params (the √τ curve) + the ×2 relationship bound, as a
-   **computed test in `gpa-sim`** (rule #8 — encode the spec value; never assert the ε), extending the
-   harness (329a–d) to model the Gaussian-shaped trace and the AnoA relationship challenge.
-3. **The ceremony bounded-delay expiry** wired to Josh's approved ≤1-epoch bound, and the cost curve
-   (bandwidth vs ε) for the Josh operating-point decision.
-4. **Cross-vendor gate** (this is crypto-critical): the neighboring definition's mapping, the sensitivity
-   `ΔW`, and the composition are the load-bearing claims to refute.
+**Machine-checked against the real dyados parameters + textbook mechanisms** (the `python3` derivation in
+the HYP-329 trail, 2026-08-05). The result is not a cheap construction — three designs proved none exists —
+it is a **cost/privacy frontier that settles the phase boundary with numbers.**
+
+**Parameter map (verified from source).** Cell mix S/M/L/XL = 512 B/4 KiB/16 KiB/64 KiB at 0.70/0.20/0.08/0.02
+(`generate.rs:25-31`) ⇒ **mean cell = 3799 B**. Per-second volume at each class (`vol = (1000/rate_ms)·mean`):
+Ambient **760 B/s**, Standard 3799, Elevated 7598, **Critical 18995 B/s**. The **idle↔ceremony sensitivity**
+is `Δ = 18995 − 760 = 18235 B/s ≈ 17.8 KiB/s`, and the **volume ratio is 25×** (= the rate ratio 5000/200,
+robust to cell size — the cell size cancels).
+
+**The two options, as overhead factors on idle volume:**
+
+| construction | overhead (idle) | ε (per interval) | sustained ceremony? |
+|---|---|---|---|
+| **Deterministic floor** — transmit ceremony volume always | **25×** | **0** (perfect) | **✅ hidden** (constant output leaks nothing — no composition) |
+| Gaussian shaping, `σ = Δ·√(2ln(1.25/δ))/ε` (Dwork–Roth Thm 3.22), δ=1e-6 | ε=ln2 → **73.7×**; ε=5 → 10.7×; ε=200 → 1.0× | tunable | ❌ leaks per-interval; composition unbounded |
+
+The Gaussian row is worse than it looks: at ε=ln2 the noised idle and ceremony volumes are only **0.13σ
+apart** (barely (ln2)-DP) at 73.7× cost; at the cheap ε=200 they are **37.7σ apart — not hidden at all** (the
+NetShaper "defeat weak classifiers" regime, not a GPA bound). **The large 25× volume gap makes additive-noise
+hiding of it expensive at every useful ε.**
+
+**Composition is the settlement.** For a `D`-interval ceremony to keep its **×2 relationship** ε ≤ ln 2 under
+advanced composition (Dwork–Roth Thm 3.20, conservative vs NetShaper's tighter Rényi):
+
+| ceremony length `D` | required ε_T | idle overhead |
+|---|---|---|
+| 1 s | ≤ 0.065 | **780×** |
+| 5 min | ≤ 0.0038 | **13,490×** |
+| 20 min | ≤ 0.0019 | **26,980×** |
+
+**So a tight-ε per-interval mechanism costs 780× to hide a single second and ~27,000× a 20-minute ceremony —
+categorically unaffordable.** The deterministic floor (25×, ε=0) is dramatically cheaper *precisely because a
+constant output has no composition leak*. **This is the rigorous settlement of the three-design saga: they
+were chasing a cheap per-interval construction the numbers prove cannot exist.**
+
+### §7.1 The affirmative bound, stated
+
+> **For a sustained sensitive event (ceremony), Phase-1 Tier-3 relationship-hiding is EITHER the deterministic
+> 25×-volume floor (ε=0, no composition) OR Phase-2 mixing. No per-interval `(ε,δ>0)` mechanism — Gaussian
+> shaping, class-RR, or otherwise — achieves a tight relationship bound affordably: the cost is ≥780× at one
+> second and grows with ceremony length. The floor's 25× is the Critical/Ambient rate ratio.**
+
+The 25× floor is a *blanket, always-on* cost for every idle dyad (ceremonies are unpredictable, so it cannot
+be scoped to "ceremony windows") — almost certainly impractical as a default. **Therefore the honest Phase-1
+posture is: ceremonies are GPA-legible at the volume/rate level, documented; tight/durable ceremony-hiding is
+Phase-2 (multi-hop mixing, which shrinks the gap by re-routing rather than paying to pad it).** This is the
+same conclusion the diagnostic (GPA_ANALYSIS §8) and the three refuted designs reached — now **proven with the
+real numbers**, not asserted.
+
+### §7.2 The Josh decision this surfaces
+For **ceremonies specifically** (rare, sacred — bond/dissolution/succession): (a) pay the 25× blanket floor
+(impractical); (b) **document GPA-legibility + defer to Phase-2 mixing** (recommended — the numbers make the
+per-interval path hopeless); (c) a scheduled-ceremony-window floor *iff* ceremonies become coordinatable
+(a product question). Recommend (b).
+
+### §7.3 Model caveats (flag for the cross-vendor gate — the load-bearing claims to refute)
+1. **The neighboring definition:** I set `Δ` = the *full* idle↔ceremony volume gap (the Tier-3 goal — hide
+   the whole event). A smaller `ΔW` hides only small differences at less cost (the classifier regime). Confirm
+   the full-gap mapping is what Tier-3 requires.
+2. **The overhead constant:** idle mean transmit is `E[max(0, N(idle, σ²))]` (clamped half-normal), computed —
+   but the exact shaping cost is model-dependent; the *scaling* `σ∝Δ/ε` and the 25× floor are robust.
+3. **Composition:** used advanced (conservative); Rényi (NetShaper) is tighter and would lower the overhead
+   constants but **not** the order of magnitude or the phase-boundary conclusion.
+
+### §7.4 Remaining continuation
+Encode §7's frontier as a **computed `gpa-sim` test** (rule #8 — the 25× floor, the `σ∝Δ/ε` curve, the
+composition growth), extending 329a–d to the Gaussian-shaped trace + AnoA challenge; then the **crypto-critical
+cross-vendor gate** on §7.3. Destination channel + capped dyads stay Phase-2.
 
 ## §8 Provenance
 
