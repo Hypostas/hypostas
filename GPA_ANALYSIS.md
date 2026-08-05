@@ -1,7 +1,7 @@
 # GPA_ANALYSIS.md — the Tier-3 anonymity analysis
 
 **Status:** DESIGN v4 — **DIAGNOSTIC-scoped; the affirmative Tier-3 bound is DEFERRED to formal work
-(HYP-329/HYP-330), not stated here.** 2026-08-05, for **HYP-526**.
+(HYP-329), not stated here.** 2026-08-05, for **HYP-526**.
 
 > ## ⛔ Why the affirmative bound is deferred, not drafted again
 >
@@ -16,14 +16,14 @@
 > names ("method narrows the gap with a stronger model, it does not close it"). The **diagnostic** value
 > below is sound and captured; the **affirmative bound** — the composed identity guarantee, its exact
 > constant, and the full channel set — is routed to a formal/cryptographer pass (**HYP-329** formal
-> analysis / **HYP-330** audit). §5 states the *mechanism and the formal requirements*, not a bound.
+> analysis). §5 states the *mechanism and the formal requirements*, not a bound.
 >
 > The four-draft history and the ten verdicts are in git (`scripts/factory/verdicts/hypostas-*`).
 
 > **What this document is.** A **diagnostic** analysis (what a GPA observes, and how the shipped
 > mechanism departs from its model) plus an **in-model** statement of the dither's guarantee and its
 > limits. It is **not** a formal proof: two residual items are genuine formal/empirical work, precisely
-> specified in §10 and routed to HYP-329 (formal analysis) / HYP-330 (audit) / HYP-171 (measure `q`).
+> specified in §10 and routed to HYP-329 (formal analysis) / HYP-171 (measure `q`).
 > **Code lives in `dyados` @ `013b4d8a`** — verify citations there.
 
 ---
@@ -218,7 +218,7 @@ bound; the diagnostic above stands, the *proof* is routed:**
    advantage* (not just the `e^{2ε_W}` likelihood-ratio form), with the worst-case-`q` value and the
    channel set it covers. The reviews established the in-model *form*; four drafts also showed this author
    accrues precision errors in it (the factor-2 propagation, the ε-vs-advantage conflation, the γ=½ edge) —
-   which is the signal to route it, not draft it. → **HYP-329** (formal GPA analysis) / **HYP-330** (audit).
+   which is the signal to route it, not draft it. → **HYP-329** (formal GPA analysis).
 2. **A specified four-class RR construction** for the §5(b) / §7#2 fix (output matrix + recomputed ε),
    replacing "symmetrize the ladder." → part of **HYP-527**.
 3. **Measure `q`** (and the joint activity correlation §4.1) → **HYP-171**.
@@ -227,5 +227,5 @@ bound; the diagnostic above stands, the *proof* is routed:**
    rotation blunts it, or confirm it is a Phase-2 (multi-hop) item. → **HYP-329**, new sub-item.
 
 This document is **diagnostic and canon** once v4's review is reconciled; the **affirmative bound is
-explicitly not in it** — it is items 1 and 4, owned by HYP-329/HYP-330. A design analysis with its open
+explicitly not in it** — it is items 1 and 4, owned by HYP-329. A design analysis with its open
 questions named, not a self-certified proof.
