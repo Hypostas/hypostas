@@ -1,6 +1,54 @@
 # COVER_DITHER_BOUNDED_DELAY_DESIGN.md — bounded-delay symmetric RR on the ceremony bit
 
-**Status:** DESIGN v3, **pre-review**, 2026-08-05, for **HYP-527** (closes **HYP-526**). Supersedes the two
+**Status:** ⛔ **REFUTED by the cross-vendor DESIGN-review, 2026-08-05** (Codex generic 3/2 P1, reasoning-hygiene
+3/1 P1, Claude depth 3 P1). **Do not build. This is the terminal of the design iteration — three drafts, three
+refutations, and v3 re-entered v1's exact trilemma.** The sensitive-event construction is routed to formal work
+(HYP-329); Phase-1 ships only the correctness fixes that survived every review. For **HYP-527** (closes **HYP-526**).
+Supersedes the two
+
+> ## ⛔ Why v3 is REFUTED — and why the design iteration STOPS here (route, don't redraft)
+>
+> **The decisive observation (Claude):** P1 #1 and P1 #3 both trace to **the same trilemma v1 named** — a mechanism
+> cannot be secret-independent ∧ bounded-delay ∧ symmetric at once. v3 picked the unbounded-latency corner and
+> *mislabeled* it bounded. The falling finding count (7→7→3) was not convergence; it was the same wall from three
+> angles. A v4 would re-enter it again.
+>
+> **P1 — the "bounded delay" is geometric and unbounded, and deleting `has_pending_real_volume` (`:449`) is WHAT
+> unbounds it.** That secret-conditioned suppression *was* the current delay bound; removing it to be
+> "secret-independent" is exactly what makes the delay a Geometric(1−γ) with P(≥2 epochs)=γ=0.41 — a
+> **high-probability** violation of Josh's ≤30 s, not a tail. Bounding it back (cap consecutive down-flips) makes
+> "two non-Critical in a row" impossible for a ceremony but possible while idle ⇒ ε=∞. Both horns are bad.
+>
+> **P1 — the binary {Critical, not-Critical} RR is ASSUMED, not derived.** The down-flip *target rate* is left
+> unspecified; for the natural "one rung down," an idle dyad never emits that rate ⇒ ε=∞ in that direction. This is
+> precisely **GPA_ANALYSIS §5(b) OPEN item 2 — "a specified four-class RR construction (output matrix + recomputed
+> ε)" — which was already routed to HYP-527/HYP-329, and which every design I wrote SKIPPED and replaced with a
+> binary formula I cannot derive.** That skip is the tell: the artifact HYP-527 actually needs is the formal
+> construction, not a dither draft.
+>
+> **P1 — the capped guarantee is unsound against the code.** The budget cap clamps the **committed class**
+> (`cover_traffic.rs:525,768`), not just cover, so a capped ceremony emits at ≤Elevated and `P(Critical|capped
+> ceremony)=0` — the Critical down-flip **never engages** and protects by exactly zero. §3's "graceful for capped"
+> rests on a mechanism state that never occurs; the real capped leak (Elevated ε=∞) is v2's T2, intact.
+>
+> **Plus:** the 9.9× up-cover drives dyads into the ≥50 % cap that disables up-cover (v2's self-defeat, recurring);
+> the budget is double-spent (ceremony bit + activity bit each claim the full ln2); the §5 guard encodes the
+> *binary* ε so it cannot catch the ε=∞ hole; the win holds only for D≤W (~4 min at W=8) against an unmeasured
+> ceremony duration (v2's base-rate failure class).
+>
+> **What SURVIVED (bank it — it is the SPEC for HYP-329, produced by a design process that produced no design):**
+> the **axiom inversion** (ceremonies are cryptographic commitments, more delay-tolerant than live consults — a
+> sound premise); the two **impossibility theorems** (T1 symmetric ⟹ the 24× floor; T2 rate-manipulation cannot
+> hide a capped dyad); the **factor-2 machine-check** discipline (finally correct: γ=√2−1 at W=1); the
+> **hard-vs-soft ceiling split** and the **no-held/no-self destination** availability handling (real correctness
+> fixes); and the **exhaustive support-hole list** any construction must avoid (down-flip target, cover-OFF,
+> committed-class cap, cross-channel composition, duration). Every citation resolved (rule #33 clean).
+>
+> **THE TERMINAL:** the affirmative Phase-1 sensitive-event dither (the 4-class output matrix + a proven ε + a
+> delay rule compatible with that ε) is **HYP-329** formal work — proven un-self-producible across v1/v2/v3 + the
+> factor-2 slipping four times. **Phase-1 ships the correctness fixes only** (hard-vs-soft ceiling, availability,
+> mid-epoch latch, factor-2-restored activity dither) + THREAT_MODEL honesty that sensitive-event rate-hiding is
+> substantially Phase-2. That is the "implement before closing" Josh asked for, minus the broken privacy claim.
 refuted designs — v1 (`COVER_DITHER_SYMMETRIC_DESIGN.md`, 4-class RR, infeasible budget) and v2
 (`COVER_RATE_QUANTIZATION_DESIGN.md`, coarsening, buys ~0 for the sensitive events). This is the construction
 the v2 review itself named. **Decision on record (Josh, 2026-08-05):** a **bounded delay ≤ 1 dither epoch
