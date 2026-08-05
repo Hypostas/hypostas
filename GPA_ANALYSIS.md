@@ -1,221 +1,235 @@
 # GPA_ANALYSIS.md — the Tier-3 anonymity analysis
 
-**Status:** ⛔ **REFUTED v1 by the full-leg cross-vendor DESIGN-review, 2026-08-05** (Codex generic 6 · Codex reasoning-hygiene 4 · Claude depth 8). The section structure and the sound core survive into a v2 rewrite; the *conclusions* were wrong, one of them reassuringly so. **Do not cite this as resolving HYP-526.**
+**Status:** DESIGN v2, pre-gate, 2026-08-05, for **HYP-526**. v1 was written and **refuted at the
+conclusions by a full-leg cross-vendor review** (Codex generic 6 · reasoning-hygiene 4 · Claude depth
+8); its sound core (§3 metric, §4.1 formula, §5 RR-bound form, §7 model↔runtime gap) is carried
+forward, its four wrong conclusions are fixed here. v1 is in git history; the review verdicts are in
+`scripts/factory/verdicts/hypostas-d8a681e9*`.
 
-> ## ⛔ What the review found — and the starker truth it revealed
+> ⚠️ **STILL PRE-GATE.** A security bound is canon only after v2 passes its own full-leg review and
+> every citation resolves. Until then the numbers are claims. The **honest headline is not
+> reassuring** and is the point of the document: *Phase 1 has no working Tier-3 relationship-anonymity
+> defense* (§8).
 >
-> **The core is sound and independently confirmed.** §3's `score(d)` matches `adversary.rs` line-for-line, §4.1's `1+(N−2)q^E` matches `measure.rs`, the §5 RR-bound *form* is right, and **§7 Finding #2 (the shipped dither has ε=∞ on a reachable subset — Critical/Elevated exempt, secret-conditioned down-flip, escalation-lock) is TRUE and corroborated.** That reconciliation — locating HYP-527 in its foundation — holds.
->
-> **But the conclusions were wrong, and the gate caught a comforting security claim that is false:**
-> 1. **Scale reversed (§6).** I wrote the intersection attack "only bites at a population that does not yet exist." Re-derived: `1+(N−2)q^E` near-identifies at N=5/E=3 → **1.05**, and at N=1000/E=8 → **1.02**. It de-anonymises at *every* realistic scale with moderate E, and is *worst* at small N — exactly Klinos founding scale. The truth is the opposite of what I wrote. [3 legs]
-> 2. **The default cellular regime is cover-OFF, and the analysis silently excludes it (§2/§4.2/§8).** `THREAT_MODEL.md:633-634`: cellular at 20–50% battery → "cover suspended, real messages only." On those links every emitted packet is real and the whole DP machinery is inapplicable — the leak is *worse*, not subsumed. "Tier 1 fully defended" over-claims. [3 legs, and it is §4.5a row 11, which I wrote]
-> 3. **§5 "verified independent" is false.** `dither_fires` is a PRF of one seed with the epoch in HKDF *info*, not independent draws. The guarantee is **computational** DP, not the information-theoretic `(ε,0)`-DP the RR bound and basic composition assume — against a document that itself invokes an unbounded 50-year adversary. I asserted independence I never verified. [Claude leg, verified]
-> 4. **§7 Finding #3 is backwards.** I claimed the 30 s-vs-1 s epoch mismatch "over-credits the dither ~30×." `coactivity_trace` flips once per abstract epoch and never reads `epoch_ms`; inflating E lowers anonymity, i.e. the direction is *conservative*. My own correction was wrong. [Claude leg, verified against code]
-> 5. Lesser: §4.1 quotes `log₂ E[|S|]` (a Jensen upper bound) as the anonymity where the code carefully uses `E[log₂|S|]`; §4.2 dismisses the class-*transition* onset leak the harness itself measures (`sim.rs onset_localization`); "at N=2 the set is 2" is wrong (it is 1); "any useful γ" over-reaches (γ∈[⅓,½) clears E=1).
->
-> **The arc-level result, stated plainly:** writing the missing root honestly proves **Phase 1 has no working Tier-3 relationship-anonymity defense.** The intersection attack de-anonymises at any scale; the dither meant to blunt it does not achieve its bound (HYP-527); multi-hop mixing — the real defense — is Phase 2+ (HYP-522). This is the opposite of a reassuring conclusion, and it is the most important thing HYP-526 surfaced. It strengthens the dependency tree: **HYP-522 is not a Phase-2 nicety, it is the only real Tier-3 defense.**
->
-> v2 must: keep §3/§4.1/§5-form/§7#2; fix the scale direction; bring the cover-OFF regime in scope; relabel the DP guarantee computational; correct finding #3; use `E[log₂|S|]`; model the onset leak. **A fresh-context task — a corrected security bound is exactly what a deep context and a single model must not rush.**
-
----
-
-**Superseded v1 header:** DESIGN / pre-gate, written 2026-08-05 for **HYP-526**. This document was cited ~15× by
-shipped code and `gpa-sim` and **did not exist** until now (verified: no copy anywhere in the
-workspace, no git history in any repo). It is therefore a *from-scratch derivation*, not a recovery.
-
-> ⚠️ **NOT YET GATED.** A security/anonymity bound written by one model on a long context is exactly
-> what rule #1 and the cross-vendor sign-off rule forbid self-certifying. Every citation below is
-> "resolved" only after this passes the full-leg cross-vendor DESIGN-review. Until then, treat the
-> **numbers as claims, not guarantees**, and the model↔runtime gap in §7 as the load-bearing result.
-
-This document's section numbers are fixed by the citations that already point at them
-(`gpa-sim/src/measure.rs`, `protocol-core/src/cover_content.rs`, `vita-carriers/src/cover_traffic.rs`):
-§3 = Serjantov–Danezis entropy, §4.1 = the per-epoch class-rate leak + intersection, §5 = the DP
-budget + composition, §7 = findings (finding #1 = exact-class emission). They are contracts, not
-choices.
+> **The document was cited ~15× and did not exist** until v1 (verified: never in any repo, branch,
+> stash, or on disk — a from-scratch derivation, not a recovery). Section numbers are fixed by the
+> citations that point at them (`gpa-sim/src/{measure,adversary,sim}.rs`, `cover_content.rs`,
+> `cover_traffic.rs`): §3 = Serjantov–Danezis entropy, §4.1 = class-rate leak + intersection, §5 = the
+> DP treatment, §7 = findings. They are contracts, not choices.
 
 ---
 
 ## §1 The adversary
 
-**Tier 3 — Global Passive Adversary (GPA)**, per `THREAT_MODEL.md` §4.3: sees *all* network links
-simultaneously, cannot decrypt content, but correlates timing and volume across the entire visible
-network, with records that persist indefinitely (store-now-analyse-later). `THREAT_MODEL.md` §6.3
-line 296 already states the Phase-1 posture in prose; this document is its quantitative backing.
+**Tier 3 — Global Passive Adversary (GPA)** (`THREAT_MODEL.md` §4.3): sees *all* links, cannot decrypt,
+correlates timing/volume across the whole network, **records persist indefinitely** — an *unbounded,
+50-year, store-now-analyse-later* adversary (§4.3 lines 84-85). That "unbounded compute" clause is
+load-bearing and is why §5 must be careful about *computational* vs *information-theoretic* guarantees.
 
-**What Phase 1 claims, and does not.** `THREAT_MODEL.md` §5 (matrix) line 209: Phase 1 ships *"Tier 1
-fully + Tier 2 partial + **chassis for Tier 3/4**."* It does **not** claim full Tier-3 relationship
-anonymity — that needs a mixing vantage point (multi-hop + relay padding), which is Phase 2+
-(`COVER_TRAFFIC.md` §7.1: *"Phase 1 baseline… anonymity set effectively 1"*; `CIRCUIT_LIFECYCLE.md`
-§3: single-hop, N=1). This analysis therefore bounds **what the GPA learns from the cover-traffic
-schedule alone**, which is the one Tier-3-relevant surface Phase 1 actually exposes.
+**What Phase 1 claims** (`THREAT_MODEL.md` §5 matrix, line 209): *"Tier 1 fully + Tier 2 partial +
+**chassis for Tier 3/4**."* It does **not** claim Tier-3 relationship anonymity — that needs a mixing
+vantage point (multi-hop + relay padding), which is Phase 2+ (`COVER_TRAFFIC.md` §7.1 *"anonymity set
+effectively 1"*; `CIRCUIT_LIFECYCLE.md` §3 single-hop N=1). This document bounds **what a GPA learns
+from the cover-traffic schedule**, and states plainly where that leaves relationship anonymity.
 
-## §2 The observable
+## §2 The observable — and where it does not exist
 
-A GPA sees, per dyad per carrier per slot, a fixed-size ciphertext cell on a constant-rate grid.
-Content, destination, and real-vs-cover are hidden (SEALED_ENVELOPE + constant-rate fill). **One thing
-is not hidden: the grid rate itself**, which equals the dyad's `EnergyClass` (`cover_traffic.rs`
-`rate_ms`: Ambient 5 s / Standard 1 s / Elevated 500 ms / Critical 200 ms). §6.3 admits this:
-*"the streams reveal… what energy class it's in."*
+When cover is **on**, a GPA sees per dyad, per carrier, per slot: a fixed-size ciphertext cell on a
+constant-rate grid. Hidden: content, destination, real-vs-cover. **Not hidden, and the subject of this
+analysis:**
 
-The GPA's per-epoch observation of dyad *d* is therefore its **emitted class** `E_d ∈ {A,S,E,C}` — or,
-in the binary model the simulator and the dither actually operate on, the **active bit** `b_d ∈ {0,1}`
-(idle vs active), re-drawn once per **30 s dither epoch** (`cover_content.rs:211`,
-`cover_traffic.rs:70`; the class is constant within an epoch).
+1. **The grid rate = `EnergyClass`** (`cover_traffic.rs rate_ms`: A 5 s / S 1 s / E 500 ms / C 200 ms).
+   `THREAT_MODEL.md` §6.3 line 296 admits it: *"the streams reveal… what energy class it's in."*
+2. **The size-class of each cell.** Cells are one of four sizes; cover samples a *fixed* distribution
+   (`generate.rs` `COVER_SIZE_{S,M,L,XL}_WEIGHT` = 0.70/0.20/0.08/0.02) while a real cell's size
+   follows its payload. So the **size distribution** is a second observable — v1 wrongly dismissed it.
+3. **Class *transitions*.** An Ambient→Standard onset, localizable to the 30 s debounce, reveals *when*
+   a conversation began — orthogonal to *who* the partner is. The harness measures it directly
+   (`sim.rs onset_localization`, `adversary.rs burst_observable`). v1 wrongly called it subsumed.
+
+**⚠️ The dominant mobile regime has NO cover.** `THREAT_MODEL.md` §12.5 (line 633): cellular at
+**20–50 % battery → "Cover suspended, real messages only"**; < 20 % → queued. On those links the entire
+apparatus of §3–§7 **does not apply** — every emitted packet is real, and the GPA reads conversation
+timing and volume directly (this is `COVER_TRAFFIC.md` §4.5a row 11, the *default cellular regime*).
+**Any Tier-3 claim below is conditioned on cover being on; a mid-battery phone on cellular is outside
+it, and strictly worse off.** This regime is the largest single gap and is not closed by any parameter.
+
+The per-epoch observation of an idle-vs-active bit `b_d ∈ {0,1}` is re-decided **once per 30 s dither
+epoch** (`cover_content.rs:211`, `cover_traffic.rs:70`; class constant within an epoch).
 
 ## §3 The anonymity metric (Serjantov–Danezis)
 
-Anonymity is measured by the **effective anonymity-set size** `2^H`, where `H` is the Shannon entropy
-of the GPA's posterior over *who the target's partner is* (Serjantov–Danezis, PET 2002). This is what
-`gpa-sim/src/adversary.rs` `posterior_partner_entropy` computes: over the `E` epochs in which the
-**target** is active, each candidate *d* accrues a log-likelihood-ratio
+Anonymity = **effective anonymity-set size `2^H`**, `H` = Shannon entropy of the GPA's posterior over
+*who the target's partner is* (Serjantov–Danezis, PET 2002). This is what `adversary.rs`
+`posterior_partner_entropy` computes: over the `E` epochs the **target** is active, candidate *d* scores
 
 ```
-score(d) = k_d · ln(a / q')  +  (E − k_d) · ln((1−a) / (1−q'))
+score(d) = k_d·ln(a/q′) + (E−k_d)·ln((1−a)/(1−q′))
 ```
 
-where `k_d` = epochs *d* was observed active among the target's `E` active epochs, `a = 1−γ`
-(P[observed active | true partner]), and `q' = q(1−γ) + (1−q)γ` (P[observed active | non-partner],
-`q` = background co-activity). `H` is the entropy of the softmax of these scores. Two limits fix the
-metric (both asserted in code):
+with `k_d` = *d*'s observed-active count among those `E` epochs, `a = 1−γ`, `q′ = q(1−γ)+(1−q)γ`, `q` =
+background co-activity; `H` = entropy of the softmax. Limits (both in code): **γ=0** → all mass on the
+all-`E` intersection, `H = log₂|S_∩|`; **γ→½** → `H → log₂(N−1)` (the bit is uninformative).
 
-- **γ = 0** (no dither): the idle-slot log-LR → −∞, all posterior mass collapses onto candidates
-  active in *every* target-active epoch, and `H = log₂|intersection set|` — the pure intersection
-  attack (§4.1).
-- **γ → ½**: the LRs flatten, `H → log₂(N−1)` — full anonymity, the class bit carries no information.
+**This is the right currency for relationship anonymity**, and §5 explains why the DP budget is *not*.
 
-The dither's job is to move `H` from the first limit toward the second. §5 bounds how far a given γ can
-go; §7 states why the *shipped* mechanism does not achieve it.
+## §4 The leaks
 
-## §4 The two leaks
+### §4.1 The intersection attack (finding #1's consequence)
 
-### §4.1 The class-rate leak and the intersection attack
-
-**Finding #1 (the leak the whole analysis is about):** with no dither the class is emitted *exactly*,
-so the GPA reads `b_d` for every dyad every epoch with zero error. Over the target's `E` active epochs
-it intersects: a non-partner survives (appears active in all `E`) only by background coincidence,
-probability `q^E`. The expected surviving set is
+With no noise the class is emitted exactly, so the GPA intersects the target's `E` active epochs. A
+non-partner survives all `E` by coincidence with probability `q^E` **(assuming per-epoch activity is
+i.i.d.; real human activity is bursty/session-correlated, so the true joint may differ and `q^E` is a
+model, not a proven bound — a v2 caveat).** The **expected** surviving set is
 
 ```
-|S_∩|  =  1 + (N−2)·q^E                    (measure.rs analytical_partner_count)
+E[|S_∩|] = 1 + (N−2)·q^E             (measure.rs analytical_partner_count)
 ```
 
-— the true partner (active in every shared epoch by definition) plus each of the other `N−2` dyads
-with probability `q^E`. As `E` grows the set collapses toward 1: **the partner is de-anonymised by
-repeated co-activity**, which is the canonical intersection/statistical-disclosure attack. This is the
-concrete Phase-1 Tier-3 exposure, and it is *bounded below by 1* — it never reaches 0 (the GPA cannot
-be *certain*), but it converges to near-certainty for a talkative pair.
+**This is an *upper bound* on anonymity, not the anonymity.** By Jensen `log₂ E[|S|] ≥ E[log₂|S|]`, and
+a safety floor needs `E[log₂|S|]` — which is exactly why `measure.rs` gates on
+`measured_partner_entropy_bits` (`E[log₂|S|]`), not on `log₂` of the mean (regression test
+`measure.rs:304-342`). v1 quoted the upper bound as the anonymity; v2 does not.
 
-### §4.2 The existence/volume leak (out of scope here, named for completeness)
+**The attack de-anonymises at every realistic scale**, and is *worst* at small `N` (re-derived,
+`q=0.25`):
 
-Constant-rate fill (§6.3) already flattens per-epoch volume, so the residual is only the class-rate of
-§4.1. Volume *within* a class is padded to fixed-size cells. No separate bound is needed; the leak is
-subsumed by §4.1's class observable.
+| N | E | E[\|S_∩\|] | reading |
+|---|---|---|---|
+| 2 | any | **1** | one candidate exists; the relationship is structurally determined (set = 1, **not 2**) |
+| 5 | 3 | **1.05** | near-identified — and N=5 is founding scale |
+| 50 | 8 | **1.001** | identified |
+| 1000 | 8 | **1.02** | identified |
 
-## §5 The differential-privacy budget
+The set is bounded **below by 1**, and a realized set of **exactly 1 is certainty** (only the
+*expectation* stays above 1). So "the GPA can never be certain" (a v1 claim) is false. **Small
+populations give *less* relationship anonymity, not immunity** — the exact reversal of v1's §6, and it
+lands hardest on the Klinos founding pair.
 
-Model the per-epoch defence as a **randomized response (RR)** on the binary active bit: emit the true
-bit with probability `1−γ`, flip it with probability `γ ≤ ½`. This is `(ε_epoch, 0)`-differentially
-private in the bit, with
+### §4.2 Volume and onset
+
+The size-class distribution (§2.2) and the conversation-onset timing (§2.3) are **separate** Tier-3
+leaks, each modelled by the harness. Constant *cadence* does not flatten *size distribution* or hide a
+*transition*. They are not bounded here; they are named as open Tier-3 surface (v1 wrongly declared no
+bound needed).
+
+## §5 The differential-privacy treatment — and why it is the wrong target
+
+Model one epoch's defence as a **randomized response** on the active bit: emit truth w.p. `1−γ`, flip
+w.p. `γ ≤ ½`. The per-epoch guarantee is
 
 ```
-ε_epoch = ln((1−γ)/γ)                       (measure.rs epsilon_epoch; standard RR bound)
+ε_epoch = ln((1−γ)/γ)                (measure.rs epsilon_epoch)
 ```
 
-*(Derivation: the output-distribution likelihood ratio between the two input bits is at most
-`(1−γ)/γ`; `ε` is its log. γ→0 ⇒ ε→∞ (exact class, finding #1); γ=½ ⇒ ε=0 (uninformative).)*
+— the log of the max output-likelihood-ratio between the two input bits; standard RR (Warner 1965 /
+Dwork–Roth). γ→0 ⇒ ε→∞ (finding #1); γ=½ ⇒ ε=0.
 
-Over a dyad's active lifetime of `E` epochs, **basic sequential composition** gives
+**This is a *computational*, not information-theoretic, guarantee (v2 correction).** The flip is
+`dither_fires = HKDF-Expand(seed_key, "dither"‖epoch)` (`cover_content.rs:217-238`): **one** per-dyad
+`seed_key`, with the epoch in the HKDF *info*, not a fresh independent draw per epoch. The bits are a
+deterministic PRF of `(seed, epoch)`. So:
 
-```
-ε_total = E · ε_epoch(γ)                    (measure.rs epsilon_total)
-```
+- The RR bound and composition hold **only computationally**, under the HKDF-PRF assumption. v1's
+  *"verified independent"* was false — nothing verifies independence, and there is no such test.
+- Against the **unbounded** GPA of §1, a 256-bit seed is enumerable in the limit ⇒ every flip
+  de-noised ⇒ `ε` information-theoretically **→ ∞**. Practically infeasible (2²⁵⁶), and the seed
+  **rotates every 24 h** (`cover_content.rs:47-51,94`), bounding seed-compromise blast radius to one
+  day — but a security document invoking a 50-year adversary must state the assumption, not assume it.
 
-(each epoch re-draws the RR from an independent seed — `dither_fires = HKDF(seed‖"dither"‖epoch)`,
-verified independent across epochs, so basic composition applies; advanced composition
-`≈ √(2E·ln(1/δ'))·ε_epoch` is tighter for large `E` but the budget is stated conservatively in basic
-terms).
+**The "lifetime ε_total ≤ ln 2" budget is the wrong target, and unachievable as stated (v2's central
+correction).** Two independent reasons:
 
-**The budget:** `TIER3_EPSILON_BUDGET = ln 2` — at most one bit of lifetime linkage advantage. *(An
-`(ln 2, 0)`-DP channel bounds the partner-vs-non-partner likelihood ratio at 2, i.e. the GPA's
-posterior odds move by at most one bit over the whole lifetime.)*
+1. **Unbounded composition.** Basic composition is `ε_total = E·ε_epoch`, linear in `E`; "active epochs
+   over a lifetime" is unbounded, so for any fixed `γ<½`, `ε_total → ∞`. No `γ<½` meets a *lifetime*
+   `ln 2`. The seed's daily rotation does **not** rescue this: rotation re-keys the *noise*, but the
+   *secret* — the partner identity — is the **same person every day**, so the identity leak
+   accumulates across the whole relationship regardless of how often the seed rotates. DP-composition
+   of a per-epoch class-bit mechanism simply is not the same quantity as lifetime relationship
+   anonymity.
+2. **Wrong currency.** ε bounds a per-epoch *likelihood ratio* on the *class bit*. Relationship
+   anonymity is the entropy §3 of the *identity* posterior. Collapsing `ln 2 = "one bit of advantage"`
+   treats a likelihood-ratio bound as an entropy/set-size claim; they are different measures and the
+   document must not bridge them silently (v1 did).
 
-**⚠️ A structural problem with the budget itself, not the parameter (this is a §7 finding, stated
-here because it lives in §5's math):** basic composition is *linear in E*, and `E` — "active epochs
-over a lifetime" — is **unbounded**. For any fixed γ < ½, `ε_total = E·ln((1−γ)/γ) → ∞` as the dyad
-keeps talking. **No γ < ½ satisfies a *lifetime* `ln 2` budget.** At a 30 s epoch, one hour of activity
-is 120 epochs; the budget is already spent within the first epoch at any useful γ. So "ε_total ≤ ln 2
-over a lifetime" is **not an achievable framing** as written — it is achievable only per bounded
-window, and the window must be named. This is HYP-527's second finding, and it is a property of the
-*budget statement*, independent of which γ ships.
+**The honest role of the dither:** it converts §4.1's hard intersection into §3's soft posterior —
+*raising* `H`, i.e. *slowing* the de-anonymisation — but it does **not** hold anonymity at any fixed
+level as `E` grows, and it carries **no** lifetime `(ε,0)`-DP guarantee. The right way to state its
+value is the §3 entropy it buys per relationship-lifetime at a given `γ`, measured by `gpa-sim`, not a
+`ln 2` budget. **HYP-527's "shipped γ blows the ln 2 budget" is therefore a symptom of a mis-posed
+target as much as a mistuned parameter; the target itself needs restating (a v2 finding beyond
+HYP-527).**
 
-## §6 Concrete parameters
+## §6 Concrete scale
 
-The founding scale (Klinos founding practice + early adopters, `THREAT_MODEL.md` §10 / HYP-171):
-`N` small (the pair, N=2, up to a few hundred early dyads), `q` = background co-activity ≈ 0.25
-(`gpa-sim` `Config::default`), `E` = however many epochs the pair is co-active. At `N=2` the anonymity
-set is **2 trivially** and the intersection attack is vacuous (there is no third candidate to exclude);
-§4.1's collapse matters only once `N` is large enough for `(N−2)q^E` to be the operative term. This is
-the arithmetic behind the dependency tree's "network-wide anonymity set is Phase 2+, gated on scale
-(HYP-171/HYP-523)": **the intersection bound is real but only bites at a population that does not yet
-exist.** Until then, Phase 1's honest Tier-3 claim is the §5 per-window DP statement, not a set size.
+Founding scale (Klinos + early adopters, `THREAT_MODEL.md` §10 / HYP-171): `N` small, `q ≈ 0.25`
+(`gpa-sim` default — *provisional, HYP-171 still tracks empirical validation; not a measured constant*).
+§4.1's table shows the intersection attack **already near-identifies at N=5, E=3**. So the correct
+statement is the opposite of v1's: **the attack is most dangerous at founding scale**, precisely where
+the network launches. There is no scale at which Phase 1's cover schedule alone provides relationship
+anonymity against a persistent GPA.
 
 ## §7 Findings
 
-**Finding #1 — the exact-class leak.** Without dither, `γ_eff = 0 ⇒ ε_epoch = ∞`: the GPA reads every
-dyad's class every epoch and mounts §4.1's intersection attack. This is why HYP-357/359 shipped the
-dither at all. ✔ consistent with `gpa-sim`.
+**#1 — the exact-class leak.** γ=0 ⇒ ε=∞; the GPA reads every class every epoch and mounts §4.1. Why
+HYP-357/359 shipped the dither. ✔.
 
-**Finding #2 — the shipped dither does NOT achieve the §5 bound (HYP-527).** §5's `ε_epoch = ln((1−γ)/γ)`
-holds for a **symmetric binary RR**. The runtime is not one. `emitted_class`
-(`vita-carriers/src/cover_traffic.rs:435-451`) is a 4-state ladder in which:
+**#2 — the shipped dither does not achieve even the per-epoch RR bound (HYP-527).** `emitted_class`
+(`cover_traffic.rs:435-451`) is a 4-state asymmetric ladder, verified by its own tests
+(`cover_traffic/tests.rs:606-631`): `Critical` is exempt and nothing up-flips to `Elevated`
+(γ_eff=0 ⇒ **ε=∞** on the most sensitive classes); the down-flip is **suppressed by the secret**
+(`has_pending_real_volume`); the up-flip is locked for 120 epochs under `escalation_locked` /
+`cover_suspended`. So the RR bound holds only on `Ambient↔Standard`, with no queued real and no lock;
+on the reachable complement ε=∞. `gpa-sim`'s symmetric-binary model is an **upper bound on protection**,
+not a model of the runtime. **Fixing this is a mechanism redesign** (symmetric, secret-independent flip
+across the ladder — or a different, honest guarantee), not a γ retune.
 
-1. **`Critical` is exempt** (`Critical ⇒ Critical`), and nothing ever up-flips *to* `Elevated`. For the
-   Critical/Elevated labels `γ_eff = 0 ⇒ ε = ∞`. The classes THREAT_MODEL calls most sensitive get
-   **no DP protection at all**.
-2. **The down-flip is suppressed when real traffic is queued** (`_ if has_pending_real_volume ⇒
-   current`) — a flip vetoed *by the secret*, which makes the channel data-dependent and its ε
-   unbounded, not `(ln 4, 0)`-DP.
-3. **The up-flip is suppressed** under `cover_suspended` / `escalation_locked` for
-   `ENERGY_CLASS_STEP_DOWN_LOCK_MS = 3.6e6` — 120 consecutive exact-class epochs.
-
-(The suppression/lock/ceiling semantics here are the decided ones in canon `COVER_BUDGET_FORECAST_WIRE_DESIGN.md` — read for HYP-527; its ≥70%-consumed up-flip clamp is a fourth exact-class regime on top of these three.)
-
-So the shipped mechanism realises the §5 bound **only on the `Ambient↔Standard` pair, only when no
-real traffic is queued and no lock is engaged.** On the reachable complement, `ε = ∞`. The `gpa-sim`
-model (a symmetric binary RR, `sim.rs`) is therefore an *upper bound on the protection*, not a model
-of the runtime — it over-credits the dither. **Fixing HYP-527 is a mechanism redesign (make the flip
-symmetric and secret-independent, or state a different guarantee), not a γ retune.**
-
-**Finding #3 — the epoch-unit mismatch.** The RR is drawn once per 30 s dither epoch, but `gpa-sim`'s
-`Config::epoch_ms` defaults to the 1 s Standard slot and flips every slot, over-crediting the dither's
-noise by ~30×. Any calibration must denominate `E` in 30 s dither epochs. (HYP-527.)
+**#3 — the epoch-unit note, corrected (v1 had it backwards).** The RR is drawn once per 30 s dither
+epoch (`cover_content.rs:210`). `gpa-sim`'s `coactivity_trace` also flips **once per abstract epoch**
+and does **not** read `epoch_ms` (verified `sim.rs:45-87`) — v1's "flips every 1 s slot, over-credits
+30×" was wrong about the code. And the *safety direction* is the reverse of v1's claim: denominating a
+lifetime in finer units inflates `E`, which *lowers* modelled anonymity and *raises* the γ that
+`min_gamma_for_tier3` demands — **conservative**, not an over-credit. Holding one flip constant across a
+30 s epoch also *defeats* adversary averaging that a per-slot flip would permit, so reality is if
+anything stronger than a per-slot model. This is a calibration/interpretation note, not a leak.
 
 ## §8 What Phase 1 can honestly claim
 
-- **Tier 1 (same-link observer): fully defended.** Constant-rate fixed-size cover makes a single link's
-  stream activity-invariant. This is proven by construction and is the §6.3 line-296 guarantee.
-- **Tier 3 (GPA): partially, and only as a per-window DP statement on the `Ambient↔Standard` bit** —
-  and even that is not currently met (Finding #2). The intersection bound §4.1 is real but bites only
-  at a population scale that does not yet exist (§6).
-- **The network-wide anonymity set of `COVER_TRAFFIC` §6.2.2 is Phase 2+**, gated on a mixing vantage
-  point (HYP-523) and on scale (HYP-171). Its stated "1-in-N" size is wrong for the reasons in
-  `NETWORK_WIDE_COVER_DESIGN.md` (partitioned by class before the count).
+- **Tier 1 (same-link observer): defended *when cover is on*.** Constant-rate fixed-size cover makes a
+  single link activity-invariant (§6.3 line 296). **Caveat:** in the cover-OFF cellular regime (§2) even
+  this does not hold — every packet is real.
+- **Tier 3 (GPA) relationship anonymity: NOT defended.** The intersection attack (§4.1) de-anonymises a
+  co-active pair at any scale; the dither only *slows* it and carries no lifetime guarantee (§5); the
+  most sensitive classes get no dither protection at all (§7#2); and volume/onset (§4.2) are unmodelled
+  surface. The real Tier-3 defense is a **mixing vantage point** — multi-hop routing so the GPA cannot
+  read a per-dyad activity bit at all — which is **Phase 2+ (HYP-522)**.
+- **The network-wide "1-in-N" set** of `COVER_TRAFFIC.md` §6.2.2 is Phase 2+ and, as stated, wrong
+  (partitioned by class before the count — `NETWORK_WIDE_COVER_DESIGN.md`).
 
-## §9 Consequences for the citing code (the ACs of HYP-526)
+**Arc-level consequence:** HYP-522 (a real send emits no observable circuit build → the idle-circuit
+pool → multi-hop mixing) is not a Phase-2 nicety. **It is the only mechanism that provides Tier-3
+relationship anonymity at all.** The cover-traffic schedule is a Tier-1 defense with a Tier-3 chassis,
+exactly as `THREAT_MODEL.md` §5 line 209 says — this document is the quantitative proof of that line,
+and a correction to anywhere the arc assumed more.
 
-- `measure.rs` `TIER3_EPSILON_BUDGET`/`epsilon_epoch`/`epsilon_total`, `cover_content.rs:211/232`,
-  `cover_traffic.rs:70`, `sim.rs:3/58`, `adversary.rs:43`, `lib.rs` — every "§N" now resolves to a real
-  section above. **But the code's implicit claim that the shipped γ *achieves* the budget is false
-  (Finding #2); those doc-comments should be amended to cite §7, not just §5.** Tracked in HYP-527.
-- `spec-guard` should stop reporting `GPA_ANALYSIS.md` as missing once this lands on `main`.
+## §9 Consequences for the citing code (HYP-526 ACs)
+
+Every `§N` in `measure.rs`, `adversary.rs`, `sim.rs`, `cover_content.rs`, `cover_traffic.rs` now points
+at a real section. **Two doc-comment corrections are owed** (tracked, not silently resolved): the code
+implies the shipped γ *achieves* the budget (false, §7#2 / HYP-527), and `measure.rs`'s "lifetime DP
+budget" framing is the mis-posed target of §5 — those comments should cite §5/§7, and the "budget"
+should be restated as a per-window, computational, class-bit-local statement. `spec-guard` stops
+reporting `GPA_ANALYSIS.md` once v2 lands, but **HYP-526 closes only after v2 passes its full-leg
+review** — this line does not itself resolve the citations.
 
 ## §10 Provenance
 
-**Derived, not recovered** — the document never existed. **Verified against code this session:** every
-formula in §3/§4.1/§5 matches the cited `gpa-sim` function; the §7 runtime gap is read from
-`emitted_class` and its own tests (`cover_traffic/tests.rs:606-631`). **Assembled from standard
-results, not novel:** Serjantov–Danezis entropy (PET 2002), randomized-response DP (Warner 1965 /
-Dwork–Roth), basic sequential composition; and `COVER_BUDGET_FORECAST_WIRE_DESIGN.md` (canon, read for HYP-527) for the escalation-lock / up-flip-clamp semantics cited in §7. **NOT independently verified:** the `ln 2 = "one bit"`
-framing and the advanced-composition remark are stated as the code states them and are for the gate to
-confirm or refute. This is a design draft; it is canon only after cross-vendor DESIGN-review.
+**Derived, not recovered.** **Verified against code this session:** §3 vs `adversary.rs`, §4.1 vs
+`measure.rs`, §7#2 vs `emitted_class` + its tests, §7#3 vs `sim.rs coactivity_trace`, §5 seed handling
+vs `cover_content.rs dither_fires`, §2 size-class vs `generate.rs`, §2 onset vs `sim.rs onset_localization`,
+the cover-OFF table vs `THREAT_MODEL.md:633`. **Standard results, not novel:** Serjantov–Danezis (PET
+2002), randomized-response DP (Warner 1965), sequential composition (Dwork–Roth). **NOT independently
+verified, for the gate:** the `q^E` i.i.d. model vs bursty human activity (§4.1); the exact
+computational-DP reduction and the enumerable-seed limit (§5); whether "restate the target" or "redesign
+the mechanism" is the right resolution of §5+§7#2. This is a design draft; canon only after cross-vendor
+review.
