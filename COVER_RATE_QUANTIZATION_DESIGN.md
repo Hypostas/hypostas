@@ -1,6 +1,51 @@
 # COVER_RATE_QUANTIZATION_DESIGN.md — the observable-rate policy that hides *which* sensitive event
 
-**Status:** DESIGN v2, **pre-review**, 2026-08-05, for **HYP-527** (closes **HYP-526**). Supersedes the
+**Status:** ⛔ **REFUTED by the cross-vendor DESIGN-review, 2026-08-05** (Codex generic 7/3 P1, Codex
+reasoning-hygiene 4, Claude depth 2 P1 + the constructive alternative). **Do not build.** The coarsening is
+the wrong primary mechanism — but the review *converged* the design and named the likely-correct one (v3
+below). Kept for the record. For **HYP-527** (closes **HYP-526**). Supersedes the
+
+> ## ⛔ Why v2 is REFUTED — and the v3 direction the review handed us
+>
+> **P1 — the coarsening buys ~zero for the *most sensitive* events, and is self-defeating (Claude).** Three
+> compounding shrink factors: (1) **capped dyads don't collapse** (T2) and capped is common under full-cover
+> economics + mobile battery; (2) the base rate isn't just unmeasured, it is **structurally implausible for the
+> sensitive population** — a dyad doing a *dissolution / succession* has no reason to be generating dense
+> Elevated consult/bio-stream traffic at that moment, so there is **no ambient Elevated cover exactly when it
+> matters**, and `P(high|idle)=0` makes the ceremony fully visible as "in a high event"; (3) the 2.5× Elevated
+> premium **accelerates budget consumption toward the ≥50% cap that disables coarsening** — the precondition
+> that makes it useful is the one that fastest destroys it. Plus it hides only the *rate* tell; **duration,
+> onset, and the §2.2 size/volume channel re-separate** a ceremony from a consult at the same 200 ms grid.
+>
+> **P1 — §4 does NOT fix the activity channel (Codex-generic + Claude).** "Observable ≥ true class removes the
+> secret-conditioning" holds only for the *coarsened* classes (Elevated/Critical). **Standard is untouched**, so
+> the `Standard→Ambient` down-flip is still in the v1 trilemma: delete the queue-gate → real Standard traffic
+> waits 5 s a third of the time; keep it → ε=∞. v2 relabeled the trilemma, dissolved it for the high classes,
+> and left it live for Ambient↔Standard without noticing.
+>
+> **P1/P2 — the group-privacy factor of 2, dropped a THIRD time.** γ=1/3 gives per-epoch ε=ln2 but
+> **relationship-level ε = 2·ln2 = ln4** (partner hypotheses move two trajectories); W=1 needs γ≥0.414. The §5
+> guard would bake `/W` not `/2W` — certifying 2× budget. This is the exact error GPA_ANALYSIS's preamble says
+> killed v3/v4, reused here.
+>
+> **P2 — the availability "fix" reintroduces the destination tell** (holding a last destination = a recurring
+> endpoint, the §2.4 partner signature — v1's self-cell mistake recostumed); **the ceiling-latch breaks
+> hard-control enforcement** (a battery/budget emergency can't take effect for 30 s).
+>
+> **THE v3 DIRECTION (Claude P2-5 — the review's constructive gift): bounded-delay symmetric RR, and the
+> "never delay a ceremony" axiom is BACKWARDS.** Ceremonies (bond / dissolution / succession) are *cryptographic
+> state commitments* — the **least** latency-sensitive high events; a bounded delay (≤ one dither epoch) is
+> tolerable. It is the **live** Elevated traffic (consult, bio-stream) that is latency-sensitive — yet v2 forbids
+> delaying ceremonies and *speeds up* Elevated. Invert it: let true-Critical emit a lower rate for a γ fraction
+> of epochs (ceremony packets wait ≤ bound), so `P(not-Critical|Critical)=γ>0` — **symmetric** ε on the Critical
+> bit at ~`24γ×` idle cover (≈8× for ε=ln2, well under the 24× T1 floor), which protects **idle-vs-ceremony**
+> (the actual sensitive question), works with no ambient Elevated cover, and degrades gracefully on capped
+> dyads. This plausibly **dominates** coarsening. T1 is therefore true only in the zero-delay world.
+>
+> **What SURVIVED (real progress):** §1 channel separation; §3's no-odometer for the rate channel; the mid-epoch
+> latch fix; the §5 rule-#32 *mechanism* (only its constant is wrong); T1/T2 as honest boundaries; all
+> arithmetic + citations resolve (one loose file label, P3). **v3 hinges on one Josh decision: is a bounded
+> ceremony delay acceptable?** If yes → bounded-delay symmetric RR. If no → HYP-527 is substantially Phase-2.
 **refuted** v1 (`COVER_DITHER_SYMMETRIC_DESIGN.md`, `hypostas@792c3fc` — a 4-class upward RR that could not
 meet its own budget at any valid parameter and reopened ε=∞ for capped dyads). This v2 is a *different
 construction* built from what the review's arithmetic actually permits. **Every number here is computed
