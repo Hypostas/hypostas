@@ -1,10 +1,24 @@
 # GPA_ANALYSIS.md — the Tier-3 anonymity analysis
 
-**Status:** DESIGN v4, pre-gate, 2026-08-05, for **HYP-526**. The converged statement after four full-leg
-cross-vendor reviews (v1 reversed the conclusions, v2 over-asserted them, v3 over-*credited* the
-mechanism; v4 states the affirmative claim in-model with its exact limits). Sound core stable across all
-four. v1–v3 and the nine review verdicts are in git history
-(`scripts/factory/verdicts/hypostas-{d8a681e9,1833782a,21ea0da0}*`, workspace root — not this repo).
+**Status:** DESIGN v4 — **DIAGNOSTIC-scoped; the affirmative Tier-3 bound is DEFERRED to formal work
+(HYP-329/HYP-330), not stated here.** 2026-08-05, for **HYP-526**.
+
+> ## ⛔ Why the affirmative bound is deferred, not drafted again
+>
+> Four drafts, ten cross-vendor review legs. v1 reversed the conclusions, v2 over-asserted, v3
+> over-credited, v4's confirmation leg then found a **P1 observable channel this analysis omitted in all
+> four drafts** (destination frequency — §2, below) and **self-inconsistent arithmetic in the affirmative
+> §5** (the group-privacy factor of 2 was introduced but not propagated: γ=1/5 spends **4·ε_target** in
+> one epoch, not the 2· the text stated), plus known precision gaps (`ε` vs advantage: group privacy
+> bounds the *likelihood ratio* by `e^{2ε_W}`, not an "advantage by ≈2ε_W"; the "decays" claim is false
+> at the degenerate γ=½ where ε=0). **This is the evidence that the affirmative Tier-3 security bound is
+> beyond what this author can soundly self-certify** — precisely the escalation the OPERATING_MANUAL
+> names ("method narrows the gap with a stronger model, it does not close it"). The **diagnostic** value
+> below is sound and captured; the **affirmative bound** — the composed identity guarantee, its exact
+> constant, and the full channel set — is routed to a formal/cryptographer pass (**HYP-329** formal
+> analysis / **HYP-330** audit). §5 states the *mechanism and the formal requirements*, not a bound.
+>
+> The four-draft history and the ten verdicts are in git (`scripts/factory/verdicts/hypostas-*`).
 
 > **What this document is.** A **diagnostic** analysis (what a GPA observes, and how the shipped
 > mechanism departs from its model) plus an **in-model** statement of the dither's guarantee and its
@@ -17,9 +31,9 @@ four. v1–v3 and the nine review verdicts are in git history
 ## §1 The adversary
 
 **Tier 3 — GPA** (`THREAT_MODEL.md` §4.3): sees all links, cannot decrypt, correlates timing/volume
-network-wide, records persist 50 years. **Computationally bounded** — the model grants indefinite
-*storage* and a 50-year *capability window*, not unbounded *computation*; every Phase-1 guarantee (AEAD,
-ratchet, dither) is computational.
+network-wide, **records persist indefinitely**. **Computationally bounded** — the model grants indefinite
+*storage* and a 50-year *capability-growth window* (the harvest-now/decrypt-later horizon), not unbounded
+*computation*; every Phase-1 guarantee (AEAD, ratchet, dither) is computational.
 
 **Phase 1 claims** (`THREAT_MODEL.md` §5 line 209) *"Tier 1 fully + Tier 2 partial + chassis for Tier
 3/4"* — not durable Tier-3 relationship anonymity (that needs a mixing vantage point, Phase 2+;
@@ -27,15 +41,32 @@ ratchet, dither) is computational.
 
 ## §2 The observable
 
-Cover **on**: per dyad/carrier/slot a fixed-size cell on a constant-rate grid; content, destination,
-real-vs-cover hidden. Three residual observables:
+Cover **on**: per dyad/carrier/slot a fixed-size cell on a constant-rate grid; content and real-vs-cover
+hidden — **destination is NOT hidden at single-hop** (see #4). Four residual observables:
 
 1. **Grid rate = `EnergyClass`** (`cover_traffic.rs rate_ms`: 5 s/1 s/500 ms/200 ms). `THREAT_MODEL.md`
-   §6.3 line 296 admits it. The main subject.
+   §6.3 line 296 admits it. The main subject of §3–§5.
 2. **Size-class, matched by design** (`generate.rs:22`, weights chosen *"so cover matches the real size
    distribution"*): residual leak = only real traffic's *deviation* from the fixed mix.
 3. **Class transitions** (onset localizable to the 30 s debounce): *when* a conversation began. Modelled
    by the harness (`sim.rs onset_localization`); not bounded here.
+4. **Destination frequency — the direct relationship channel at N=1** (surfaced by v4's confirmation leg,
+   omitted in v1–v4; then **verified at the call site**, rule #33). At single-hop (`CIRCUIT_LIFECYCLE.md`
+   §3) the next-hop endpoint *is* the destination, and a GPA sees it. Cover **establishes a circuit to a
+   randomly-sampled destination** (`generate.rs:92` `candidates.choose(rng)`; `driver.rs:582-599`
+   `spawn_establish → establish_with_intent(&dest,…)`), while real traffic keeps the actual partner
+   (`driver.rs:456` `seal_data_ready(&pkt.destination,…)`). So the GPA sees a dyad's circuits fan out to
+   {real partner — **recurring**} ∪ {cover peers — **scattered, freshly random per slot**}: destination-
+   frequency links the pair **independently of `EnergyClass`**, and §3–§5's activity-channel bound does
+   **not** cover it. This is a Tier-3 surface **multi-hop closes** (the GPA then sees only the first hop),
+   reinforcing §8's Phase-2 conclusion. Its exact bound — and whether routing-identity rotation (HYP-166)
+   raises the cover baseline enough to blunt it — is formal work (§10).
+
+**Availability caveat — the grid is constant-rate only while a cover cell is *available*.**
+`CoverPacketSource::generate` returns `None` when it has **no cover candidates** (`generate.rs:92`, the
+`?` on `choose`), emitting nothing and leaving an **observable gap**. "A cell per slot" is a Tier-1
+invariant only when candidates exist; candidate-starvation gaps — and the cover-OFF regime below — are
+themselves observable and break the constant-rate claim exactly where it is load-bearing.
 
 **Cover OFF, and adversarial composition.** `THREAT_MODEL.md` §12.5 line 633: cellular 20–50 % battery →
 *"Cover suspended, real messages only."* A phone interleaves WiFi (cover) and mid-battery cellular (no
@@ -89,16 +120,23 @@ finding a prior draft got wrong):
 
 1. **Channel, not identity, directly.** LDP composes over a window of `W` active epochs to `ε_W = W·ε_epoch`
    on the activity *trajectory* (`measure.rs epsilon_total`; privacy odometer, Rogers et al.).
-2. **Identity via group privacy, factor ≈2.** Changing the hypothesis "partner is `d`" → "partner is `e`"
-   changes **two** dyads' trajectories, so by group privacy the partner-identity distinguishing advantage
-   over the window is bounded by **≈ `2·ε_W`**, not `ε_W` — and **only for the activity-count channel**
-   the §3 posterior uses. Size (§2.2) and onset (§2.3) are outside this bound.
+2. **Identity via group privacy — the *form*, exact constant deferred.** Changing the hypothesis "partner
+   is `d`" → "partner is `e`" changes **two** dyads' trajectories, so group privacy bounds the **likelihood
+   ratio** between the two partner-hypotheses over the window by `e^{2·ε_W}` (the factor 2 is the group
+   size — exact, not "≥2"). This bounds the *likelihood ratio*, **not** a "distinguishing advantage
+   ≈2·ε_W": the advantage-as-statistical-distance is a different quantity (at equal priors the
+   total-variation advantage is `tanh(ε_W)`), and stating it precisely is the **HYP-329** formal item
+   (§10). The bound covers **only the activity-count channel** §3's posterior uses; size (§2.2), onset
+   (§2.3) and **destination (§2.4)** are outside it.
 3. **Per-window, NOT lifetime.** The partner identity is **time-invariant** (daily seed rotation,
    `cover_content.rs:94`, re-keys the *noise* but not the *secret*), so an unrestricted adversary
    accumulates advantage on the *same* hypothesis across every window — the odometer **never resets** for
    a fixed secret. `ε_W` therefore bounds **per-conversation linkage**, and the §3 relationship anonymity
-   **decays toward identification as windows accumulate.** *This is the rigorous reason durable Tier-3
-   anonymity needs a Phase-2 mixing vantage point, not a better dither.*
+   **decays toward identification as windows accumulate** — *for any operating `γ<½`* (`ε_epoch>0`). At the
+   degenerate `γ=½` the class bit carries no activity information, `ε_epoch=0`, and there is no decay — but
+   the ladder's latency/energy tiering it exists to serve is also destroyed, so `γ=½` is not an operating
+   point. *This is the rigorous reason durable Tier-3 anonymity needs a Phase-2 mixing vantage point, not a
+   better dither.*
 4. **The harness shows help, not the bound.** `measure.rs:366` asserts ε_total↓ and posterior entropy↑
    are each monotone in the shared knob γ — evidence the dither *helps*, **not** a proof of the form
    `advantage ≤ 2ε_W` (co-monotonicity through a common cause). The ">2 bits at γ=0.4" figure is in the
@@ -146,7 +184,8 @@ not read `epoch_ms`; denominating a window in finer units inflates `W`, *lowerin
   activity-invariant" is false even with cover on; it is false outright in the cover-OFF regime (§2).
 - **Tier 3 (GPA): a per-window, activity-channel, computational bound that *decays* across windows,
   currently below spec.** In-model the dither buys real per-conversation linkage protection (§5); it is
-  **mistuned** (HYP-527: γ=1/5 ⇒ ε_epoch=ln 4, spends `2·ε_target` in ≈one epoch) and **mis-implemented**
+  **mistuned** (HYP-527: γ=1/5 ⇒ ε_epoch=ln 4, so with the §5(2) group-privacy factor `2·ε_epoch=ln 16=
+  4·ε_target` after ≈one epoch) and **mis-implemented**
   (§7#2 ⇒ ε=∞ on sensitive classes and under mid-epoch mutation). Both fixable per §5.
 - **Durable / lifetime Tier-3 relationship anonymity: Phase 2+.** The odometer argument (§5(3)) is the
   rigorous reason: no per-epoch class-noise can hold a *lifetime* bound on a *fixed* identity. It needs a
@@ -173,13 +212,20 @@ table, the §7#2 ladder + `scheduler.rs:248` lock + the 120-epoch arithmetic, th
 2002), RR-DP (Warner 1965), sequential composition / privacy odometer (Dwork–Roth; Rogers et al.), LDP
 hypothesis testing (Kairouz–Oh–Viswanath), group privacy + computational DP (Dwork–Roth; Mironov et al.).
 
-**Residual OPEN items — genuine formal/empirical work, not another draft:**
-1. **A formal proof of §5's composed identity bound**, with the exact group-privacy constant (≥2) and the
-   worst-case-`q` LR — the review established the *form* in-model but not a tight, proven constant. → **HYP-329**
-   (formal GPA analysis) / **HYP-330** (external audit).
+**Residual OPEN items — genuine formal/empirical work, not another draft. This is the whole affirmative
+bound; the diagnostic above stands, the *proof* is routed:**
+1. **The affirmative identity bound itself** — §5's composed guarantee stated as a *distinguishing
+   advantage* (not just the `e^{2ε_W}` likelihood-ratio form), with the worst-case-`q` value and the
+   channel set it covers. The reviews established the in-model *form*; four drafts also showed this author
+   accrues precision errors in it (the factor-2 propagation, the ε-vs-advantage conflation, the γ=½ edge) —
+   which is the signal to route it, not draft it. → **HYP-329** (formal GPA analysis) / **HYP-330** (audit).
 2. **A specified four-class RR construction** for the §5(b) / §7#2 fix (output matrix + recomputed ε),
    replacing "symmetrize the ladder." → part of **HYP-527**.
 3. **Measure `q`** (and the joint activity correlation §4.1) → **HYP-171**.
+4. **Bound the destination-frequency channel (§2.4)** — the per-slot random-destination cover vs. the
+   recurring real endpoint at N=1; quantify the frequency leak and whether HYP-166 routing-identity
+   rotation blunts it, or confirm it is a Phase-2 (multi-hop) item. → **HYP-329**, new sub-item.
 
-Canon only after v4's cross-vendor review passes and item 1's form is confirmed. This is a design
-analysis with its open questions named — not a self-certified proof.
+This document is **diagnostic and canon** once v4's review is reconciled; the **affirmative bound is
+explicitly not in it** — it is items 1 and 4, owned by HYP-329/HYP-330. A design analysis with its open
+questions named, not a self-certified proof.
