@@ -1,10 +1,51 @@
 # COVER_DITHER_SYMMETRIC_DESIGN.md — the 4-class cover dither that closes the ε=∞ ceremony leak
 
-**Status:** DESIGN v1, **pre-review**, 2026-08-05, for **HYP-527** (closes **HYP-526**). Decision on record
-(Josh, 2026-08-05): **full cover for all classes** — ceremonies/dissolutions get real cover, the sovereignty
-cost is accepted. This document proposes the construction, states the one tension that decision runs into,
-and routes the formal bound to HYP-329. **Not yet gated.** Next step per FACTORY.md: cross-vendor
-DESIGN-review (Claude lenses + Codex, `gate-plan.sh` lean) before any build.
+**Status:** ⛔ **REFUTED by the cross-vendor DESIGN-review, 2026-08-05** (3 legs: Codex generic 7 findings/4 P1,
+Codex reasoning-hygiene 1 P2, Claude depth 3 P1). **Do not build.** The upward-RR construction is the wrong
+point on the real tradeoff curve. Kept for the record + the reframe below. For **HYP-527** (which closes
+**HYP-526**). Decision on record (Josh, 2026-08-05): full cover for all classes — the sovereignty (bandwidth)
+cost is accepted; that decision stands, only the *mechanism* is refuted.
+
+> ## ⛔ Why this is REFUTED — three P1, cross-vendor agreement, and the reframe
+>
+> **1. The budget is unsatisfiable at any valid parameter (Codex-generic + Claude, independently derived).**
+> The §3.1 Ambient row `(1−3γ_up, γ_up, γ_up, γ_up)` needs `γ_up ≤ 1/3` to be a valid distribution, so
+> `ε_up = ln(1/γ_up) ≥ ln 3 = 1.10`. The budget is `ln 2 = 0.69` per epoch (W=1). **ln3 > ln2 at the loosest
+> legal γ_up** — the construction cannot meet its own §5 check before composition even begins; the §8-chosen
+> γ_up=0.05 spends `ln20 = 3.0` = 4.3× budget per epoch, and a 40-epoch ceremony spends 63–173× budget. The
+> "per-window" guarantee is vacuous (achievable W < 1 epoch). This is the same wall GPA_ANALYSIS §5(3) already
+> proved; "per-window" did not escape it, and §8's numbers were never checked against §5's constraint.
+>
+> **2. The affordability cap re-opens ε=∞ on ceremonies for the *common* capped cohort (Codex-generic +
+> Claude).** `effective_cover_ceiling` caps out of Critical at **≥50% budget consumed** (`cover_traffic.rs:196-205`)
+> and device-caps LoRa/DHT to Ambient. A capped dyad therefore has `P(observe Critical | idle)=0`, while a real
+> ceremony stays Critical unconditionally (`emitted_class:448` ignores the ceiling) ⇒ `P(Critical | ceremony)=1`
+> ⇒ **ε=∞, the exact tell this design set out to kill**, for the cohort full-cover economics makes large. My
+> §4.2 "document a cohort" badly undersold it — combined with the GPA_ANALYSIS §2.4 destination channel, it is
+> event + partner *identification*, not a cohort partition.
+>
+> **3. The §2 trilemma is mis-stated — bandwidth is the omitted axis (Claude).** "Latency ⟂ symmetric-ε ⟂
+> no-secret-conditioning, pick two" is false as an absolute: **raising the observable cover floor** (collapse
+> the visible grid rate so it does not reveal the class) achieves all three at a **bandwidth** cost — the fourth
+> axis `EnergyClass` exists to manage. Since the accepted decision is "pay the bandwidth," the honest design is
+> **not** a one-sided RR dither that fails its budget; it is a **map of the bandwidth ↔ symmetric-ε curve**, on
+> which the upward-RR is a dominated point. (Caveat: a floor at Critical costs ~40× idle always; the real work
+> is finding the right observable-rate *quantization*, not asserting a trilemma.)
+>
+> **Plus:** the ε=∞ "whole-matrix" mislabel (all 3 legs — the max over all (o,c,c′) is ∞, not ln(1/γ_up); it is
+> the one-sided max only); the §7 advantage test is vacuous (advantage ≤1 always ≤ e^{ε_up}≥3 — the ε-vs-advantage
+> confusion again); the §6.4 self-addressed fallback is *distinguishable* (contradicts my own §2.4 destination
+> finding); §8 cost under-reported ~55% (37·γ_up, not 24·γ_up); epoch-latching underspecified.
+>
+> **What SURVIVED (the review was fair):** all `file:line` citations resolve (rule #33 clean, files byte-identical
+> to main); the construction *does* correctly kill the *upward* ε=∞ (nothing-flips-to-high); the queue-occupancy
+> secret-conditioning *is* genuinely removable (the down-flip deletion is sound); `ln(1/γ_up)` *is* the right
+> one-sided bound (only mislabeled); the durable=Phase-2 deferral is honest.
+>
+> **THE REFRAME for v2 (HYP-527 stays open):** HYP-527 is not "tune the dither." It is *"design the Phase-1
+> observable-rate policy that trades bandwidth for **symmetric** class-rate ε."* Map the curve (raise-the-floor /
+> coarse rate-quantization / probabilistic floor) and pick a point; the destination channel (§2.4) and durable
+> hiding remain Phase-2. The affirmative bound stays routed to HYP-329.
 
 **Code grounded in `dyados@<pin-at-build>`** — every `file:line` below resolved on the `main` read of
 2026-08-05; re-verify at build. Companion: `GPA_ANALYSIS.md` (diagnostic; the budget provenance).
