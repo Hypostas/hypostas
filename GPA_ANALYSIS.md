@@ -1,6 +1,60 @@
 # GPA_ANALYSIS.md — the Tier-3 anonymity analysis
 
-**Status:** DESIGN v2, pre-gate, 2026-08-05, for **HYP-526**. v1 was written and **refuted at the
+**Status:** ⛔ **v2 OVER-CORRECTED — refined by the full-leg review, 2026-08-05.** v1 reversed the
+conclusions (reassuring-false); v2 fixed the direction but over-asserted them (alarming-absolute); the
+review (Codex 6 + Codex 4 + Claude 8) converged on the precise, conditional truth below. The **sound
+core survives all three drafts** (§3 metric, §4.1 formula, §7#2 ladder gap, §7#3 epoch fix, §5 TYPE
+correction). v3 is a **surgical "condition, don't assert" pass**, specified here.
+
+> ## ⛔ v2's over-reaches, and the v3 statement each becomes (all verified against code)
+>
+> 1. **§5 "the ε≤ln2 budget is the WRONG TARGET" is itself an over-correction.** The target is
+>    **mis-scoped (needs a *window*), not ill-posed.** Local-DP on the class bit *does* bound the
+>    identity advantage (standard LDP→hypothesis-test composition), and the harness proves it:
+>    `measure.rs:366` `dithering_drops_epsilon_and_raises_anonymity` asserts ε↓ and posterior-entropy↑
+>    **in lockstep** — the exact bridge v2 said "must not be [made]." **v3:** state a **bounded-window
+>    `(ε_W, δ)`-LDP budget**, γ tuned to `W`; keep §3 entropy as the average-case companion; reconcile
+>    with §9 (which already said "per-window"). **This makes HYP-527 a bounded, tunable fix, not a
+>    mechanism-philosophy rethink.**
+> 2. **The de-anonymisation headline is conditional on the unmeasured `q`.** Re-derived: N=5/E=3 → 1.05
+>    at q=0.25 but **3.19 at q=0.9**, and N=50/E=8 → 21.7 at q=0.9 (anonymous). `q` is unmeasured
+>    (HYP-171). **v3:** condition §6/§8 on the low-q regime; the assumption-robust claim is *"cover does
+>    not close the class-trajectory leak; long conversations shrink the set."*
+> 3. **§8 "no working Tier-3 defense" over-claims vs the body.** The dither *raises* H (harness:
+>    **>2 bits at γ=0.4** over baseline) — a **bounded-window** defense that **decays** over a
+>    relationship lifetime, not "none." **v3:** *"no **durable** Tier-3 defense; the dither buys
+>    bounded-window anonymity that decays toward identification; durable anonymity needs the Phase-2
+>    mixing vantage point."*
+> 4. **§5's "enumerable 256-bit seed ⇒ ε→∞" is a category error.** `THREAT_MODEL` grants 50-year
+>    *records*, not unbounded *computation*; that adversary breaks the AEAD too, so the dither is not
+>    distinctively broken. **v3:** keep the plain TYPE correction (computational DP, Mironov CDP);
+>    delete the unbounded-adversary flourish and the non-sequitur rotation "reassurance."
+> 5. **"HYP-522 is the only mechanism" over-claims.** A GPA sees every hop; multi-hop alone does not
+>    stop end-to-end timing correlation. Tier-3 needs **multi-hop + relay padding + cover-relayed
+>    cover** (`NETWORK_WIDE_COVER_DESIGN.md`, `PRIVACY_DEPENDENCY_TREE.md`). **v3:** HYP-522 is the
+>    *necessary foundation*, not the whole defense.
+> 6. **§7#2 sub-clause miscites the lock.** `emitted_class` reads `(fires, has_pending_real_volume,
+>    ceiling)` only — **not** `escalation_locked`/`cover_suspended`; the lock acts *via* `ceiling`, and
+>    no scheduler call site was cited (rule #33 check-1). **v3:** cite the scheduler `ceiling` site or
+>    soften. The rest of §7#2 (Critical exempt, nothing to Elevated, secret-suppressed down-flip) is
+>    **fully supported** and is the document's strongest result.
+> 7. **Lesser:** size-class weights are matched-by-design (`generate.rs:22-23`) so partly mitigated;
+>    cover-OFF regimes *compose adversarially* with cover-ON (worse, not "does not apply"), and
+>    "dominant mobile regime" is unsupported prevalence; `E[log₂|S|]` is still a mean not a worst-case
+>    floor; "verified against code" is unauditable from `hypostas` (code is in the `dyados` sibling —
+>    v3 must pin its SHA); the `verdicts/` path citation and a few ±2-line code cites need a tightening
+>    pass.
+>
+> **The forward path this produced (the reason it is progress, not circling):** the missing root is
+> now understood well enough to **fix HYP-527** — (a) state the window `W` and tune γ to it,
+> (b) symmetrize the class ladder so the per-epoch bound holds on all classes. Phase 1's Tier-3 story
+> is a **decaying bounded-window defense that is currently mistuned (HYP-527: γ too small for the
+> window) and mis-implemented (ladder asymmetry ⇒ ε=∞ on the sensitive classes)** — both fixable —
+> while **durable** lifetime anonymity remains Phase-2 (HYP-522 + relay padding + cover-relayed cover).
+
+---
+
+**Superseded v2 header:** DESIGN v2, pre-gate, 2026-08-05, for **HYP-526**. v1 was written and **refuted at the
 conclusions by a full-leg cross-vendor review** (Codex generic 6 · reasoning-hygiene 4 · Claude depth
 8); its sound core (§3 metric, §4.1 formula, §5 RR-bound form, §7 model↔runtime gap) is carried
 forward, its four wrong conclusions are fixed here. v1 is in git history; the review verdicts are in
