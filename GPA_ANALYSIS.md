@@ -1,6 +1,25 @@
 # GPA_ANALYSIS.md — the Tier-3 anonymity analysis
 
-**Status:** DESIGN / pre-gate, written 2026-08-05 for **HYP-526**. This document was cited ~15× by
+**Status:** ⛔ **REFUTED v1 by the full-leg cross-vendor DESIGN-review, 2026-08-05** (Codex generic 6 · Codex reasoning-hygiene 4 · Claude depth 8). The section structure and the sound core survive into a v2 rewrite; the *conclusions* were wrong, one of them reassuringly so. **Do not cite this as resolving HYP-526.**
+
+> ## ⛔ What the review found — and the starker truth it revealed
+>
+> **The core is sound and independently confirmed.** §3's `score(d)` matches `adversary.rs` line-for-line, §4.1's `1+(N−2)q^E` matches `measure.rs`, the §5 RR-bound *form* is right, and **§7 Finding #2 (the shipped dither has ε=∞ on a reachable subset — Critical/Elevated exempt, secret-conditioned down-flip, escalation-lock) is TRUE and corroborated.** That reconciliation — locating HYP-527 in its foundation — holds.
+>
+> **But the conclusions were wrong, and the gate caught a comforting security claim that is false:**
+> 1. **Scale reversed (§6).** I wrote the intersection attack "only bites at a population that does not yet exist." Re-derived: `1+(N−2)q^E` near-identifies at N=5/E=3 → **1.05**, and at N=1000/E=8 → **1.02**. It de-anonymises at *every* realistic scale with moderate E, and is *worst* at small N — exactly Klinos founding scale. The truth is the opposite of what I wrote. [3 legs]
+> 2. **The default cellular regime is cover-OFF, and the analysis silently excludes it (§2/§4.2/§8).** `THREAT_MODEL.md:633-634`: cellular at 20–50% battery → "cover suspended, real messages only." On those links every emitted packet is real and the whole DP machinery is inapplicable — the leak is *worse*, not subsumed. "Tier 1 fully defended" over-claims. [3 legs, and it is §4.5a row 11, which I wrote]
+> 3. **§5 "verified independent" is false.** `dither_fires` is a PRF of one seed with the epoch in HKDF *info*, not independent draws. The guarantee is **computational** DP, not the information-theoretic `(ε,0)`-DP the RR bound and basic composition assume — against a document that itself invokes an unbounded 50-year adversary. I asserted independence I never verified. [Claude leg, verified]
+> 4. **§7 Finding #3 is backwards.** I claimed the 30 s-vs-1 s epoch mismatch "over-credits the dither ~30×." `coactivity_trace` flips once per abstract epoch and never reads `epoch_ms`; inflating E lowers anonymity, i.e. the direction is *conservative*. My own correction was wrong. [Claude leg, verified against code]
+> 5. Lesser: §4.1 quotes `log₂ E[|S|]` (a Jensen upper bound) as the anonymity where the code carefully uses `E[log₂|S|]`; §4.2 dismisses the class-*transition* onset leak the harness itself measures (`sim.rs onset_localization`); "at N=2 the set is 2" is wrong (it is 1); "any useful γ" over-reaches (γ∈[⅓,½) clears E=1).
+>
+> **The arc-level result, stated plainly:** writing the missing root honestly proves **Phase 1 has no working Tier-3 relationship-anonymity defense.** The intersection attack de-anonymises at any scale; the dither meant to blunt it does not achieve its bound (HYP-527); multi-hop mixing — the real defense — is Phase 2+ (HYP-522). This is the opposite of a reassuring conclusion, and it is the most important thing HYP-526 surfaced. It strengthens the dependency tree: **HYP-522 is not a Phase-2 nicety, it is the only real Tier-3 defense.**
+>
+> v2 must: keep §3/§4.1/§5-form/§7#2; fix the scale direction; bring the cover-OFF regime in scope; relabel the DP guarantee computational; correct finding #3; use `E[log₂|S|]`; model the onset leak. **A fresh-context task — a corrected security bound is exactly what a deep context and a single model must not rush.**
+
+---
+
+**Superseded v1 header:** DESIGN / pre-gate, written 2026-08-05 for **HYP-526**. This document was cited ~15× by
 shipped code and `gpa-sim` and **did not exist** until now (verified: no copy anywhere in the
 workspace, no git history in any repo). It is therefore a *from-scratch derivation*, not a recovery.
 
