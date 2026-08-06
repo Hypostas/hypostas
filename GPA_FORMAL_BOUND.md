@@ -152,31 +152,47 @@ exactly 25×** (= the rate ratio 5000/200, cell size cancels — this is the flo
 sensitivities matter: the idle↔ceremony **mean gap** `Δ_mean = 18235 B/s ≈ 17.8 KiB/s` (the *amortized*
 figure — a lower bound only) and the **worst-case per-interval L1 sensitivity** `Δ_wc = 5×64 KiB = 327680 B/s
 = 320 KiB/s` (an all-XL Critical second vs idle-silent). **A strict `(ε,δ)` bound must use `Δ_wc`** — DP is
-worst-case over neighbors, and XL cells (prob 0.02 ≫ δ=2⁻⁴⁰) cannot be tail-dropped. `Δ_wc / Δ_mean = 18.0×`.
+worst-case over neighbors, and a single XL cell (prob 0.02 ≫ δ=2⁻⁴⁰; the all-XL second is 0.02⁵≈3·10⁻⁹,
+still ≫ δ) cannot be tail-dropped. `Δ_wc / Δ_mean = 18.0×`.
 
 **The frontier — the two options, as overhead factors on idle volume:**
 
 | construction | overhead (idle) | ε | sustained ceremony? |
 |---|---|---|---|
-| **Deterministic floor** — transmit ceremony volume always | **25×** | **0** (perfect) | **✅** — a constant output has *zero* composition leak, so it holds for any duration |
+| **Deterministic rate/class floor** — emit at Critical *rate* always (hides the class channel, not byte-volume) | **25×** | **0** (perfect) | **✅** — constant *rate* is activity-independent, zero composition leak, holds for any duration |
 | **Gaussian shaping**, strict `(ε,δ)` (worst-case `Δ_wc`, zCDP, ×2 group, ε≤ln 2, δ=2⁻⁴⁰) | **2,631×** (1 s) · **45,557×** (5 min) · **91,114×** (20 min) | ln 2 | ❌ leaks per-interval; cost grows as **√D** with ceremony length |
 
 *(The mean-model figures 147× / 2,536× / 5,071× are the same computation with `Δ_mean` — an under-noised
 **lower bound**, reported only for scale; they are not a valid `(ε,δ)` cost.)*
 
-**Why the Gaussian path cannot win, with a *lower* bound (not just our upper bound).** For a *sustained*
-`D`-interval ceremony under **per-interval adjacency** (the GPA may test onset/offset/any pattern, so the
-worst neighboring difference is `(Δ,…,Δ)`), the trace has **L2 sensitivity `√D·Δ`** — so the noise must scale
-as `√D`. And this is **fundamental for any mechanism that must preserve each interval's utility** (i.e. can't
-constant-over-pad): hiding `D` counting-like queries each of sensitivity `Δ` provably requires `Ω(√D·Δ/ε)`
-noise (**Hardt–Talwar / fingerprinting lower bound**). The **deterministic floor is the one per-interval
-mechanism that escapes `√D`** — but only by *abandoning utility*: it transmits ceremony volume **always**,
-making idle and ceremony byte-identical (ε=0, constant output, zero composition). So `√D` is the frontier for
-the **shaping** path and the floor is the cheaper **non-shaping** answer. **This settles the three-design
-saga: they were chasing a cheap per-interval *shaping* construction that the DP lower bound forbids — the only
-escape is the floor's brute constant-padding, at 25×.**
+*(The `(ε,δ)` guarantee is in the noise scale `σ = Δ_wc·√(D/ρ)`; the overhead factor is an **idealized
+order-of-magnitude cost proxy** `E[max(0,N(idle,σ))]/idle` — a real shaper is upward-only (`max(real,target)`),
+so this reports the cost *scale*, not a certified implementable-mechanism cost. The scale is the decision-
+relevant fact.)*
 
-### §7.1 The affirmative bound, stated (corrected: this hides VOLUME, not the relationship)
+**Why the byte-volume *shaping* path is expensive — an upper bound + an asymptotic lower bound.** For a
+*sustained* `D`-interval ceremony under **per-interval adjacency** (the GPA may test onset/offset/any pattern,
+so the worst neighboring difference is `(Δ,…,Δ)`), the trace has **L2 sensitivity `√D·Δ`** — so the noise must
+scale as `√D`. This is **fundamental for any mechanism that must preserve each interval's utility** (can't
+constant-over-pad): hiding `D` counting-like queries each of sensitivity `Δ` provably requires `Ω(√D·Δ/ε)`
+noise (**Hardt–Talwar / fingerprinting lower bound**). Two caveats keep this honest (Codex r3): (i) the
+priced construction (2,631×+) is an **upper** bound on the best shaping cost, and Hardt–Talwar is
+**asymptotic** — it forbids *escaping √D growth*, not a tight constant below the floor at `D=1`; so shaping is
+**strongly indicated** to lose, not proven to. (ii) A constant/data-independent mechanism escapes `√D` by
+*abandoning utility* — for byte-volume that means **constant-size padding** (e.g. all-XL every cell, far more
+than 25×), and for the class/tempo channel it is the **25× rate floor**. So `√D` bounds the shaping path;
+the cheap `ε=0` answers are the non-shaping floors, each on its own channel. **This settles the three-design
+saga: they chased a cheap per-interval *shaping* construction the DP lower bound makes implausible.**
+
+### §7.1 The affirmative bound, stated (three channels — class/tempo, byte-volume, relationship)
+
+**Do not conflate the channels.** The 25× *rate* floor and the Gaussian *byte-volume* frontier address
+**different** leaks and are not competing constructions: (1) **class/tempo** — the emission *rate* reveals
+the energy class (the §2 leak) — hidden by the 25× deterministic rate floor (ε=0); (2) **byte-volume** —
+per-cell sizes vary and real vs cover size *distributions* differ — hidden only expensively (constant-size
+padding, or the Gaussian frontier below); (3) **relationship/destination** — Phase-2 mixing. The blockquote
+below states the byte-volume + relationship result.
+
 
 > **The class-rate/volume channel — "is this dyad in a high-tempo (ceremony) event?" — can be hidden for a
 > sustained event only by the deterministic 25× floor (ε=0, no composition, constant-padding) or by Phase-2
@@ -220,7 +236,7 @@ a bandwidth/sovereignty call, but its value is limited without the Phase-2 desti
    distinguishing bound is the **advantage form**: for an `(ε_W, δ)`-DP relationship-linkage budget, the
    equal-prior total-variation distinguishing advantage is `tanh(ε_W/2) + 2δ/(e^{ε_W}+1)` (the privacy-region
    extremum — `tanh` is the pure-ε term, `2δ/(e^ε+1)` the δ correction). **At `ε_W = ln 2`, δ=0 this is exactly
-   `1/3`**; at Tier-3 δ=2⁻⁴⁰ the correction is ≈3·10⁻¹³ — encoded + tested in `gpa-sim`
+   `1/3`**; at Tier-3 δ=2⁻⁴⁰ the correction `2δ/(e^{ln2}+1)=2δ/3 ≈ 6·10⁻¹³` — encoded + tested in `gpa-sim`
    (`formal_bound::distinguishing_advantage_tv`, which now takes δ and fails closed on a negative/NaN budget).
 
 ### §7.4 Continuation — the harness encoding is DONE

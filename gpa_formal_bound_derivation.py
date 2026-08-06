@@ -16,9 +16,15 @@ Grounding (cited in the doc):
   traces ⇒ joint L2 sensitivity sqrt(2D)·Δ ⇒ ρ_rel = D·Δ²/σ² (exactly 2× the per-dyad ρ; this is the
   tight joint sensitivity, NOT generic group privacy Dwork-Roth Thm 2.2, which would be looser).
 - SENSITIVITY: a *strict* (ε,δ) bound must use the WORST-CASE per-interval sensitivity — an all-XL Critical
-  second (5·65536 B) vs an idle-silent second — because XL outcomes have probability 0.02 ≫ δ=2⁻⁴⁰ and so
-  cannot be tail-dropped. The mean-model Δ (the amortized volume gap) UNDER-noises and is only a LOWER
-  BOUND on the true cost; it is reported for scale, labeled as such.
+  second (5·65536 B) vs an idle-silent second — because even a single XL cell (prob 0.02 ≫ δ=2⁻⁴⁰; the
+  all-XL second is 0.02^5≈3e-9, still ≫ δ) cannot be tail-dropped. The mean-model Δ (the amortized volume
+  gap) UNDER-noises and is only a LOWER BOUND on the true cost; it is reported for scale, labeled as such.
+- COST is a proxy: composed_overhead() returns E[max(0,N(idle,σ))]/idle — an idealized order-of-magnitude
+  cost of a Gaussian-noised shaper. A real shaper is upward-only (max(real,target)), so this reports the cost
+  SCALE (the decision-relevant fact), not a certified implementable-mechanism cost. The (ε,δ) content is σ.
+- CHANNELS: the 25× "floor" is the class/tempo RATE floor (hides that rate reveals the energy class — the §2
+  leak). It does NOT hide the byte-VOLUME channel (per-cell sizes vary; real vs cover size distributions
+  differ); that needs constant-size padding or the Gaussian frontier below. Different channels, not rivals.
 - Lower bound (why a per-interval UTILITY-PRESERVING mechanism cannot beat √D): hiding D counting-like
   queries of sensitivity Δ requires Ω(sqrt(D)·Δ/ε) noise — Hardt-Talwar / fingerprinting. This bounds
   mechanisms that must preserve each interval's volume (can't constant-over-pad). It does NOT bound the
@@ -41,7 +47,7 @@ IDLE, CER = VOL["Ambient"], VOL["Critical"]
 DELTA_MEAN = CER - IDLE                                   # amortized idle<->ceremony volume gap (mean model)
 # Worst-case per-interval sensitivity for a STRICT (ε,δ) bound: all-XL Critical second vs idle-silent.
 DELTA_WC = (1000.0 / RATES_MS["Critical"]) * SIZES[3][0]  # 5 cells/s · 64 KiB = 327680 B/s
-FLOOR = CER / IDLE                                        # deterministic ε=0 floor = rate ratio
+FLOOR = CER / IDLE                                        # deterministic ε=0 RATE/class floor = rate ratio
 
 def npdf(x): return exp(-x * x / 2) / sqrt(2 * pi)
 def ncdf(x): return 0.5 * (1 + erf(x / sqrt(2)))
@@ -64,13 +70,14 @@ if __name__ == "__main__":
     print(f"mean cell = {MEAN_CELL:.2f} B; idle {IDLE:.2f} B/s, ceremony {CER:.2f} B/s")
     print(f"mean-model Δ = {DELTA_MEAN:.1f} B/s ({DELTA_MEAN/1024:.2f} KiB/s)  [amortized gap — LOWER bound only]")
     print(f"worst-case Δ = {DELTA_WC:.1f} B/s ({DELTA_WC/1024:.2f} KiB/s)  [strict (ε,δ) sensitivity, {DELTA_WC/DELTA_MEAN:.1f}× mean]")
-    print(f"DETERMINISTIC FLOOR = {FLOOR:.1f}x (ε=0, constant output, no composition, holds for any duration)")
+    print(f"RATE/CLASS FLOOR = {FLOOR:.1f}x (ε=0, constant rate hides the class channel; NOT the byte-volume channel)")
     print(f"\nSTRICT (ε,δ) relationship frontier (zCDP, ×2 group, worst-case Δ, ε≤ln2, δ={DELTA_TM:.1e}):")
     for D, lab in [(1, "1s"), (300, "5min"), (1200, "20min")]:
         print(f"  D={D:>4} ({lab:5s}): {composed_overhead(D, DELTA_WC):>10.0f}x idle")
     print("amortized LOWER bound (mean-model Δ — under-noised, NOT a valid (ε,δ) cost):")
     for D, lab in [(1, "1s"), (300, "5min"), (1200, "20min")]:
         print(f"  D={D:>4} ({lab:5s}): {composed_overhead(D, DELTA_MEAN):>10.0f}x idle")
-    print("\nSETTLEMENT: a sustained ceremony is hidden at Tier-3 by the 25x deterministic floor (ε=0) or by")
-    print("Phase-2 mixing. The per-interval Gaussian SHAPING path costs thousands-to-~10^5× (strict, worst-case)")
-    print("and grows √D — categorically above the floor, so shaping is never the answer for a sustained event.")
+    print("\nSETTLEMENT: the class/tempo channel is hidden by the 25x RATE floor (ε=0); the relationship")
+    print("channel is Phase-2 mixing. The byte-volume SHAPING path costs thousands-to-~10^5× (strict, worst-case)")
+    print("and grows √D (this is an upper bound + an asymptotic √D lower bound), so shaping is strongly indicated")
+    print("to lose to the floor+Phase-2 — the numbers are a cost SCALE, not a certified implementable mechanism.")
