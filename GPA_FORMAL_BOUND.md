@@ -201,15 +201,18 @@ a bandwidth/sovereignty call, but its value is limited without the Phase-2 desti
    but any illustrative ε≥1 row needs the **analytic Gaussian** (Balle–Wang 2018). Group privacy is **Thm 2.2**
    (the ×2 is exact; the label, not the math). Laplace (δ=0) is the cheapest *single* interval (~17.8×) but
    composes linearly — worse for sustained; it does not escape `√D`.
-4. **ε vs advantage (HYP-329 item 1, still owed):** the frontier targets an ε-*budget* (legitimate); it does
-   **not** yet state the bound as a distinguishing *advantage* (equal-prior TV `= tanh(ε/2)`), which is the
-   HYP-329 deliverable — route it to the continuation, do not narrate ε as "advantage."
+4. **ε vs advantage (HYP-329 item 1) — DELIVERED.** The frontier targets an ε-*budget*; the corresponding
+   distinguishing bound is the **advantage form**: for a relationship-linkage budget `ε_W`, the equal-prior
+   total-variation distinguishing advantage is `tanh(ε_W/2)` (the pure-ε extremum; add `δ` for `(ε,δ)`). **At
+   `ε_W = ln 2` this is exactly `1/3`** — encoded + tested in `gpa-sim` (`formal_bound::distinguishing_advantage_tv`).
 
-### §7.4 Remaining continuation
-Promote `gpa_formal_bound_derivation.py` into a **`gpa-sim` test** (rule #8 — the 25× floor, the `√D` composed
-frontier, the fingerprinting lower bound as an assertion), extending 329a–d to the Gaussian-shaped trace + the
-AnoA relationship challenge; state the advantage-form bound (§7.3(4)); then re-gate. The **destination channel
-and capped dyads remain Phase-2** — and per §7.1 they are what Tier-3 relationship anonymity actually needs.
+### §7.4 Continuation — the harness encoding is DONE
+The frontier now lives in the harness, not just a script: `gpa-sim/src/formal_bound.rs` (dyados) encodes the
+25× floor, the Gaussian + zCDP sustained-event composition, the `√D` fingerprinting-lower-bound scaling, and
+the advantage form — with tests asserting the cross-vendor numbers (147×/2536×/5072×) within 3% (rule #8, so
+drift fails). Remaining: a **confirmatory re-gate** of this corrected v2 + the harness code, then merge. The
+**destination channel and capped dyads remain Phase-2** — and per §7.1 they are what Tier-3 relationship
+anonymity actually needs.
 
 ## §8 Provenance
 
