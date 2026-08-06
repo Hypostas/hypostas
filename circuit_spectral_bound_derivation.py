@@ -45,47 +45,74 @@ def S(f, mu):
     return (1.0 / mean_T(mu)) * ((1.0 + p) / (1.0 - p)).real
 
 
-def peak_to_floor(r):
-    """Ratio of the PSD at the fundamental 1/MAX to the white floor, for r = MAX/E[T] (≈ mu*MAX)."""
-    # solve mu from r = MAX/E[T]: E[T] = MAX/r; E[T] = (1-e^{-mu MAX})/mu. For r>>1, mu ≈ r/MAX; refine once.
+def mu_of_r(r):
     mu = r / MAX
     for _ in range(60):  # fixed-point: mu = r*(1-e^{-mu MAX})/MAX
         mu = r * (1.0 - math.exp(-mu * MAX)) / MAX
-    floor = S(1.0 / MAX * 0.5 + 1.0 / MAX * 0.37, mu)  # a generic non-harmonic frequency ~ white level
-    peak = S(1.0 / MAX, mu)
-    return peak / floor, mu
+    return mu
 
 
-def detect_snr(r, t_obs_hours=24.0):
-    """Periodogram detectability of the 1/MAX line over t_obs. The line integrates coherently over
-    K = t_obs/MAX periods (power ~ K), the white floor does not; a matched detector's SNR ~ (peak-1)*K.
-    (Conservative: treats the excess peak power as the coherently-integrable line.)"""
-    ratio, mu = peak_to_floor(r)
+def spectral_peak_over_TRUE_white(r):
+    """1/MAX tooth height relative to the TRUE white level 1/E[T] (NOT an off-comb sample — the v3-review
+    P2: the truncation makes a harmonic COMB, so any k/MAX sample is a tooth, and sampling near one gave a
+    reference > the peak ⇒ a clamp that manufactured a pass. rule #36: reference the analytic white level)."""
+    mu = mu_of_r(r)
+    true_white = 1.0 / mean_T(mu)
+    return S(1.0 / MAX, mu) / true_white, mu
+
+
+def spectral_detect_snr(r, t_obs_hours=24.0):
+    """Two-sided (no clamp) coarse SNR of the 1/MAX line vs the TRUE white floor over K periods.
+    NOTE (v3-review P1): even when this says 'detectable', a MATCHED FILTER over the N_target-circuit
+    SUPERPOSITION is near chance (Palm–Khintchine whitening) — so the SPECTRAL channel is not the binding
+    one. This number is illustrative; the LIFETIME channel below is what actually sizes r."""
+    ratio, _ = spectral_peak_over_TRUE_white(r)
     K = (t_obs_hours * 3600.0) / MAX
-    return max(ratio - 1.0, 0.0) * K, mu
+    return (ratio - 1.0) * K
+
+
+def lifetime_atom_detect(r, n_target=20, t_obs_hours=24.0, dither_frac=0.0):
+    """THE BINDING channel (v3-review P1). The truncation puts a point mass at t=MAX in the per-circuit
+    lifetime histogram; superposition does NOT whiten a per-circuit observable. Rate of at-MAX deaths =
+    n_target·(1/E[T])·p_trunc; a Poisson H0 has ~0 there, so any at-MAX pile-up is detectable.
+    P(detect≥1) = 1 - e^{-E[atMAX]}. `dither_frac`>0 models the v4 fix: teardown at MAX - U·(dither_frac·MAX)
+    smears the atom over a window of width d=dither_frac·MAX, so no point mass survives IF d >> the
+    histogram bin — here modelled as suppressing the detectable pile-up by ~(bin/d) (illustrative)."""
+    mu = mu_of_r(r)
+    p_trunc = math.exp(-r) if dither_frac == 0.0 else 0.0  # any dither>0 removes the sharp point mass
+    e_atmax = n_target * (t_obs_hours * 3600.0) / mean_T(mu) * p_trunc
+    return e_atmax, 1.0 - math.exp(-e_atmax)
 
 
 if __name__ == "__main__":
-    # sanity: r -> the Poisson limit is flat (peak/floor -> 1); check a moderate mu is ~white off-atom.
     print(f"MAX = {MAX:.0f}s ({MAX/60:.0f} min hard deadline)\n")
-    print(f"{'r=MAX/E[T]':>11} | {'refresh every':>13} | {'p_trunc=e^-r':>12} | {'peak/floor':>11} | {'24h SNR':>10} | cost×")
-    print("-" * 78)
-    THRESH = 1.0  # detector SNR below ~1 ⇒ line below the noise, not detectable
-    chosen = None
-    for r in [1, 2, 4, 6, 8, 10, 12, 15, 20, 25]:
-        ratio, mu = peak_to_floor(r)
-        snr, _ = detect_snr(r)
-        et = mean_T(mu)
+    print("SPECTRAL channel (corrected: vs TRUE white 1/E[T]; but NOT the binding channel — superposition")
+    print("whitens the comb, so a matched filter is near chance regardless):")
+    print(f"  {'r':>3} | {'E[T]':>8} | {'peak/true-white':>15} | {'24h SNR (illustrative)':>22}")
+    for r in [2, 4, 6, 8]:
+        ratio, mu = spectral_peak_over_TRUE_white(r)
+        print(f"  {r:>3} | {mean_T(mu):>7.0f}s | {ratio:>15.4f} | {spectral_detect_snr(r):>22.2f}")
+
+    print("\nLIFETIME-ATOM channel (THE BINDING one — v3-review P1): circuits dying at exactly MAX, N_target=20:")
+    print(f"  {'r':>3} | {'E[T]':>8} | {'E[atMAX]/24h':>12} | {'P(det) 24h':>10} | {'P(det) 30d':>10}")
+    r_safe_30d = None
+    for r in [8, 10, 12, 14, 16, 18]:
+        e24, p24 = lifetime_atom_detect(r, 24)
+        e30, p30 = lifetime_atom_detect(r, 30 * 24)
+        mu = mu_of_r(r)
         flag = ""
-        if chosen is None and snr < THRESH:
-            chosen = r; flag = "  <- first r with 24h SNR < 1"
-        print(f"{r:>11} | {et:>10.1f}s   | {math.exp(-r):>12.2e} | {ratio:>11.4f} | {snr:>10.3f} | {r:>3}×{flag}")
-    print()
-    if chosen:
-        _, mu = peak_to_floor(chosen)
-        print(f"BOUND (pending review): r = {chosen} ⇒ refresh mean E[T] = {mean_T(mu):.0f}s "
-              f"(~{mean_T(mu)/60:.1f} min), p_trunc = {math.exp(-chosen):.1e}, the 1/MAX line is below the "
-              f"24h periodogram detection floor. Cost = {chosen}× the naive one-refresh-per-lifetime rate "
-              f"(host-affordable). Smaller E[T] ⇒ flatter spectrum ⇒ more refresh cost — the #2 knob.")
-    print("\nCAVEAT: the detection-SNR model (coherent line integration vs white floor) is the load-bearing")
-    print("assumption; a full Neyman-Pearson treatment over the adversary's actual test is the gate's job.")
+        if r_safe_30d is None and p30 < 0.05:
+            r_safe_30d = r; flag = "  <- first r with 30d P(det) < 5%"
+        print(f"  {r:>3} | {mean_T(mu):>7.0f}s | {e24:>12.3f} | {p24:>10.3f} | {p30:>10.3f}{flag}")
+
+    print(f"\nHONEST BOUND (v3 REFUTED, pending re-derivation + Codex): the binding channel is LIFETIME, not")
+    print(f"spectrum. Brute-force r for 30d undetectability ≈ {r_safe_30d} (refresh every "
+          f"~{mean_T(mu_of_r(r_safe_30d))/60:.1f} min, {r_safe_30d}× cost) — 3–4× the r≈8 the spectral-only")
+    print("analysis wrongly suggested. THE ELEGANT FIX (v4): DITHER the hard-cap teardown to MAX−U so there")
+    print("is NO point mass at MAX (smears the atom in both channels):")
+    for r in [4, 6, 8]:
+        e30, p30 = lifetime_atom_detect(r, n_target=20, t_obs_hours=30 * 24, dither_frac=0.1)
+        print(f"  r={r} + 10% dither: E[atMAX]/30d = {e30:.3f}, P(det) = {p30:.3f}  (atom removed)")
+    print("\nCAVEAT: 'memoryless / no composition budget' was FALSE — min(Exp,MAX) refreshes deterministically")
+    print("at MAX, so the atom leak COMPOSES (P(det)→1 by day 7 at r=8). The dither model here is illustrative;")
+    print("the real v4 bound = a lifetime-histogram ROC (H1 dithered-truncated vs H0 Poisson), gate-checked.")
