@@ -168,7 +168,9 @@ still ≫ δ) cannot be tail-dropped. `Δ_wc / Δ_mean = 18.0×`.
 *(The `(ε,δ)` guarantee is in the noise scale `σ = Δ_wc·√(D/ρ)`; the overhead factor is an **idealized
 order-of-magnitude cost proxy** `E[max(0,N(idle,σ))]/idle` — a real shaper is upward-only (`max(real,target)`),
 so this reports the cost *scale*, not a certified implementable-mechanism cost. The scale is the decision-
-relevant fact.)*
+relevant fact. Accepted gate limitation (**HYP-530**): a naive Gaussian release is not `(ε,δ)`-implementable;
+a real padding-only shaper (NetShaper-style, buffered, DP target ≥ real) costs **≥** this proxy, so the
+settlement is unaffected. Precise implementable cost tracked in HYP-530.)*
 
 **Why the byte-volume *shaping* path is expensive — an upper bound + an asymptotic lower bound.** For a
 *sustained* `D`-interval ceremony under **per-interval adjacency** (the GPA may test onset/offset/any pattern,
