@@ -6,12 +6,14 @@ design** — the failure mode across the three refuted HYP-527 dither drafts (`C
 `COVER_RATE_QUANTIZATION` v2, `COVER_DITHER_BOUNDED_DELAY` v3) was **hand-deriving a novel randomized
 response** and hitting the same wall each time (support holes, the delay-vs-iid tension, the dropped
 group-privacy ×2). This pass grounds every step in a published, peer-reviewed result and derives on top of
-proven tools. **v2: framing + grounding (§1–§6) + the computed frontier (§7) — cross-vendor gated and
-corrected.** The frontier is machine-checked (`gpa_formal_bound_derivation.py`, committed) and was
-**independently reproduced by the gate's Claude depth leg**; v1's numbers were inflated ~5.3× (advanced-vs-
-Rényi composition) and are fixed. Gated 2026-08-05: the **conclusion survived** both Codex and the independent
-re-derivation; the residual §7.3/§7.4 items (worst-case sensitivity, composed-δ accountant, advantage-form
-bound, `gpa-sim` encoding) are the tracked continuation.
+proven tools. **v3: framing + grounding (§1–§6) + the computed frontier (§7) — cross-vendor gated twice and
+corrected.** The frontier is machine-checked (`gpa_formal_bound_derivation.py`, committed). v1's numbers were
+inflated ~5.3× (advanced-vs-Rényi composition) and were fixed in v2; **v3's round-2 gate (on the `gpa-sim`
+harness) then caught two more, both real:** the headline Gaussian cost must use the **worst-case** sensitivity
+(the strict `(ε,δ)` frontier is **2,631×–91,114×**, not the mean-model 147×–5,071× — that is only a lower
+bound), and the `√D` lower bound holds for *utility-preserving* mechanisms, not universally (the floor is the
+per-interval escape). The **conclusion survived every round** — the strict numbers are larger, strengthening
+it. Residual §7.3 items (composed-δ accountant) remain the tracked continuation; the `gpa-sim` encoding is DONE.
 
 **Provenance note:** HYP-329 was marked Done (2026-07-02) citing a `GPA_ANALYSIS.md` that **never existed**
 (the HYP-526 phantom-citation saga). Re-opened. The real diagnostic exists now (`GPA_ANALYSIS.md` v5); the
@@ -128,47 +130,59 @@ delay problems under a latency constraint, which is *why* §1 moves to shaping.)
 ## §7 The computed bound — the quantified frontier (the affirmative result)
 
 **Machine-checked and reproducible** — every number below is emitted by `gpa_formal_bound_derivation.py`
-(committed beside this doc; run it), and the composed frontier was **independently reproduced by the
-cross-vendor gate's Claude depth leg** (147×/2536×/5072×, matching to rounding). The result is not a cheap
-construction — three designs proved none exists — it is a **cost/privacy frontier that settles the phase
-boundary with numbers, with a matching lower bound.**
+(committed beside this doc; run it). The result is not a cheap construction — three designs proved none exists
+— it is a **cost/privacy frontier that settles the phase boundary with numbers, with a matching lower bound.**
 
-> **Gate reconciliation (2026-08-05).** The v1 of this section had real errors, all corrected here and
-> re-verified: it computed the composed frontier with **advanced composition while citing Rényi**, inflating
-> every number **~5.3×** (780×→**147×**, 26,980×→**5,072×**); it ran advanced composition at **D=1** (a single
-> interval — a category error); it lacked the **lower bound** that makes the impossibility rigorous; and it
-> conflated **volume-hiding with relationship-hiding** (§7.1). The *conclusion survived both Codex and the
-> independent Claude re-derivation* — only the numbers and the scope statement needed fixing.
+> **Gate reconciliation (2026-08-05 v2, 2026-08-06 v3).** The v1 of this section had real errors, all
+> corrected and re-verified: it computed the composed frontier with **advanced composition while citing
+> Rényi**, inflating every number **~5.3×**; ran advanced composition at **D=1** (a category error); lacked
+> the **lower bound**; and conflated **volume-hiding with relationship-hiding** (§7.1). **v3 (round-2 gate)**
+> fixed two more, both flagged cross-vendor on the harness code: (a) the headline Gaussian numbers used the
+> **mean** sensitivity, which under-noises — a valid `(ε,δ)` bound uses the **worst-case** sensitivity (18×
+> larger), so the strict frontier is **2,631× / 45,557× / 91,114×**, and the mean-model 147×/2,536×/5,071× is
+> only a *lower bound* on the cost; (b) the `√D` lower bound was over-stated as universal ("no per-interval
+> mechanism escapes") when the deterministic floor **is** a per-interval mechanism that escapes it — the bound
+> holds for *utility-preserving* mechanisms, and the floor escapes precisely by not preserving utility. The
+> *conclusion survived every round* — the strict numbers are larger, which only strengthens it.
 
 **Parameter map (verified exact by both gate legs).** Cell on-wire totals S/M/L/XL = 512/4096/16384/65536 B
 (`sealed_envelope` `CELL_TOTAL_*`) at 0.70/0.20/0.08/0.02 (`generate.rs:25-31`) ⇒ **mean cell = 3799 B**.
-Per-second volume `(1000/rate_ms)·mean`: Ambient **760 B/s** … **Critical 18995 B/s**. The idle↔ceremony
-**mean-model** sensitivity is `Δ = 18235 B/s ≈ 17.8 KiB/s`; the **volume ratio is exactly 25×** (= the rate
-ratio 5000/200, cell size cancels). *(Caveat, §7.3: `Δ` here is the mean/amortized sensitivity; a strict
-worst-case per-interval L1 sensitivity is larger — up to 5×64 KiB ≈ 320 KiB/s from an all-XL Critical second —
-which makes the numbers **worse**, never better.)*
+Per-second volume `(1000/rate_ms)·mean`: Ambient **760 B/s** … **Critical 18995 B/s**. The **volume ratio is
+exactly 25×** (= the rate ratio 5000/200, cell size cancels — this is the floor, and it is exact). Two
+sensitivities matter: the idle↔ceremony **mean gap** `Δ_mean = 18235 B/s ≈ 17.8 KiB/s` (the *amortized*
+figure — a lower bound only) and the **worst-case per-interval L1 sensitivity** `Δ_wc = 5×64 KiB = 327680 B/s
+= 320 KiB/s` (an all-XL Critical second vs idle-silent). **A strict `(ε,δ)` bound must use `Δ_wc`** — DP is
+worst-case over neighbors, and XL cells (prob 0.02 ≫ δ=2⁻⁴⁰) cannot be tail-dropped. `Δ_wc / Δ_mean = 18.0×`.
 
 **The frontier — the two options, as overhead factors on idle volume:**
 
 | construction | overhead (idle) | ε | sustained ceremony? |
 |---|---|---|---|
 | **Deterministic floor** — transmit ceremony volume always | **25×** | **0** (perfect) | **✅** — a constant output has *zero* composition leak, so it holds for any duration |
-| **Gaussian shaping** (zCDP composition, ×2 group, ε≤ln 2, δ=2⁻⁴⁰) | **147×** (1 s) · **2,536×** (5 min) · **5,072×** (20 min) | ln 2 | ❌ leaks per-interval; cost grows as **√D** with ceremony length |
+| **Gaussian shaping**, strict `(ε,δ)` (worst-case `Δ_wc`, zCDP, ×2 group, ε≤ln 2, δ=2⁻⁴⁰) | **2,631×** (1 s) · **45,557×** (5 min) · **91,114×** (20 min) | ln 2 | ❌ leaks per-interval; cost grows as **√D** with ceremony length |
+
+*(The mean-model figures 147× / 2,536× / 5,071× are the same computation with `Δ_mean` — an under-noised
+**lower bound**, reported only for scale; they are not a valid `(ε,δ)` cost.)*
 
 **Why the Gaussian path cannot win, with a *lower* bound (not just our upper bound).** For a *sustained*
-`D`-interval ceremony, the two hypotheses (idle-throughout vs Critical-throughout) differ by the vector
-`(Δ,…,Δ)` over `D` intervals, whose **L2 sensitivity is `√D·Δ`** — so the noise must scale as `√D`, not stay
-constant. And this is **fundamental**: hiding `D` counting-like queries each of sensitivity `Δ` provably
-requires `Ω(√D·Δ/ε)` noise (**Hardt–Talwar / fingerprinting lower bound**), so **no per-interval mechanism —
-Gaussian, Laplace, discrete, or otherwise — escapes the `√D` growth.** The deterministic floor is cheap
-*precisely because a constant output composes to zero*, which the `√D` bound does not touch. **This settles the
-three-design saga: they were chasing a cheap per-interval construction that a DP lower bound forbids.**
+`D`-interval ceremony under **per-interval adjacency** (the GPA may test onset/offset/any pattern, so the
+worst neighboring difference is `(Δ,…,Δ)`), the trace has **L2 sensitivity `√D·Δ`** — so the noise must scale
+as `√D`. And this is **fundamental for any mechanism that must preserve each interval's utility** (i.e. can't
+constant-over-pad): hiding `D` counting-like queries each of sensitivity `Δ` provably requires `Ω(√D·Δ/ε)`
+noise (**Hardt–Talwar / fingerprinting lower bound**). The **deterministic floor is the one per-interval
+mechanism that escapes `√D`** — but only by *abandoning utility*: it transmits ceremony volume **always**,
+making idle and ceremony byte-identical (ε=0, constant output, zero composition). So `√D` is the frontier for
+the **shaping** path and the floor is the cheaper **non-shaping** answer. **This settles the three-design
+saga: they were chasing a cheap per-interval *shaping* construction that the DP lower bound forbids — the only
+escape is the floor's brute constant-padding, at 25×.**
 
 ### §7.1 The affirmative bound, stated (corrected: this hides VOLUME, not the relationship)
 
 > **The class-rate/volume channel — "is this dyad in a high-tempo (ceremony) event?" — can be hidden for a
-> sustained event only by the deterministic 25× floor (ε=0, no composition) or by Phase-2 mixing; every
-> per-interval `(ε,δ≥0)` memoryless mechanism costs 147×–5,072× and is `√D`-lower-bounded (Hardt–Talwar).**
+> sustained event only by the deterministic 25× floor (ε=0, no composition, constant-padding) or by Phase-2
+> mixing; every per-interval `(ε,δ)` *shaping* mechanism (one that preserves per-interval utility) costs
+> 2,631×–91,114× (strict, worst-case sensitivity) and is `√D`-lower-bounded (Hardt–Talwar). The floor is the
+> sole per-interval escape from `√D`, bought by abandoning utility.**
 >
 > **This is NOT, by itself, Tier-3 *relationship* anonymity.** Relationship anonymity (AnoA §3) is *who-talks-
 > to-whom* — the **destination** channel (GPA_ANALYSIS §2.4), which volume shaping does **not** touch: if the
@@ -185,16 +199,17 @@ destination by re-routing).** Same conclusion as the diagnostic (GPA_ANALYSIS §
 designs — now with the numbers *and* a matching lower bound.
 
 ### §7.2 The decision this surfaces (for Josh)
-For **ceremonies** (rare, sacred): the numbers make the per-interval path hopeless (147× minimum, `√D`-bounded)
-and even the 25× volume floor does not give relationship anonymity. **Recommend: document ceremony
+For **ceremonies** (rare, sacred): the numbers make the per-interval *shaping* path hopeless (2,631× minimum
+at strict `(ε,δ)`, `√D`-bounded) and even the 25× volume floor does not give relationship anonymity. **Recommend: document ceremony
 GPA-legibility (volume + relationship) as a Phase-1 limit; route tight/durable ceremony anonymity to Phase-2
 mixing.** Whether to *also* ship the 25× volume floor (partial — hides the event tempo but not the partner) is
 a bandwidth/sovereignty call, but its value is limited without the Phase-2 destination-hiding.
 
 ### §7.3 Model caveats (still the load-bearing claims for any further gate)
-1. **Sensitivity model:** `Δ` is the mean/amortized gap; the strict worst-case per-interval L1 sensitivity is
-   larger (all-XL Critical second ≈ 320 KiB/s), which only worsens the frontier. State which the Tier-3 claim
-   requires (worst-case for a hard `(ε,δ)`; mean for amortized cost).
+1. **Sensitivity model (RESOLVED in v3):** the strict frontier now uses the **worst-case** `Δ_wc = 320 KiB/s`
+   (all-XL Critical vs idle-silent) — the correct choice for a hard `(ε,δ)`, since XL cells (prob 0.02 ≫ δ)
+   can't be tail-dropped. The mean gap `Δ_mean = 17.8 KiB/s` is retained only as a labeled amortized *lower
+   bound*. `Δ_wc/Δ_mean = 18.0×`; the harness pins both and asserts mean < strict.
 2. **δ = 2⁻⁴⁰** (THREAT_MODEL Tier-3), and the composed δ must be tracked as `D·δ_T + δ′` — the frontier fixes
    the ε-budget at ln 2 and δ at 2⁻⁴⁰; a full accountant statement of the composed `(ε,δ)` is owed.
 3. **Domain:** the classical Gaussian (Dwork–Roth Thm 3.22) is `ε<1`; the load-bearing ε=ln 2 row is in-domain,
@@ -202,17 +217,20 @@ a bandwidth/sovereignty call, but its value is limited without the Phase-2 desti
    (the ×2 is exact; the label, not the math). Laplace (δ=0) is the cheapest *single* interval (~17.8×) but
    composes linearly — worse for sustained; it does not escape `√D`.
 4. **ε vs advantage (HYP-329 item 1) — DELIVERED.** The frontier targets an ε-*budget*; the corresponding
-   distinguishing bound is the **advantage form**: for a relationship-linkage budget `ε_W`, the equal-prior
-   total-variation distinguishing advantage is `tanh(ε_W/2)` (the pure-ε extremum; add `δ` for `(ε,δ)`). **At
-   `ε_W = ln 2` this is exactly `1/3`** — encoded + tested in `gpa-sim` (`formal_bound::distinguishing_advantage_tv`).
+   distinguishing bound is the **advantage form**: for an `(ε_W, δ)`-DP relationship-linkage budget, the
+   equal-prior total-variation distinguishing advantage is `tanh(ε_W/2) + 2δ/(e^{ε_W}+1)` (the privacy-region
+   extremum — `tanh` is the pure-ε term, `2δ/(e^ε+1)` the δ correction). **At `ε_W = ln 2`, δ=0 this is exactly
+   `1/3`**; at Tier-3 δ=2⁻⁴⁰ the correction is ≈3·10⁻¹³ — encoded + tested in `gpa-sim`
+   (`formal_bound::distinguishing_advantage_tv`, which now takes δ and fails closed on a negative/NaN budget).
 
 ### §7.4 Continuation — the harness encoding is DONE
 The frontier now lives in the harness, not just a script: `gpa-sim/src/formal_bound.rs` (dyados) encodes the
-25× floor, the Gaussian + zCDP sustained-event composition, the `√D` fingerprinting-lower-bound scaling, and
-the advantage form — with tests asserting the cross-vendor numbers (147×/2536×/5072×) within 3% (rule #8, so
-drift fails). Remaining: a **confirmatory re-gate** of this corrected v2 + the harness code, then merge. The
-**destination channel and capped dyads remain Phase-2** — and per §7.1 they are what Tier-3 relationship
-anonymity actually needs.
+25× floor, the Gaussian + zCDP sustained-event composition (sensitivity passed explicitly, so the caller picks
+strict `Δ_wc` vs amortized `Δ_mean`), the `√D` scaling, and the advantage form — with tests pinning the strict
+frontier **2,631×/45,557×/91,114×** and the amortized lower bound **147×/2,536×/5,071×** within 1% (rule #8, so
+drift fails), and asserting mean < strict and strict ≫ 100× the floor. Everything fails closed on garbage
+privacy params. The **destination channel and capped dyads remain Phase-2** — and per §7.1 they are what Tier-3
+relationship anonymity actually needs.
 
 ## §8 Provenance
 
@@ -225,8 +243,9 @@ anonymity actually needs.
 - **Gaussian mechanism (Thm 3.22, ε<1) / group privacy (Thm 2.2) / advanced composition (Thm 3.20)** —
   Dwork–Roth, *The Algorithmic Foundations of DP*. **Analytic Gaussian (ε≥1)** — Balle–Wang, ICML 2018.
   **zCDP / Rényi-DP** — Bun–Steinke 2016 / Mironov 2017 (the √D composition + the ×2 group scaling).
-- **The `√D` lower bound** (why no per-interval mechanism escapes): **Hardt–Talwar** / the fingerprinting
-  lower bound — hiding `D` counting-like queries of sensitivity `Δ` requires `Ω(√D·Δ/ε)` noise.
+- **The `√D` lower bound** (why no *utility-preserving* per-interval shaping mechanism escapes it — the
+  deterministic floor does, by constant-padding): **Hardt–Talwar** / the fingerprinting lower bound — hiding
+  `D` counting-like queries of sensitivity `Δ` requires `Ω(√D·Δ/ε)` noise.
 - **k-ary RR** — Kairouz–Oh–Viswanath, *Extremal Mechanisms for Local DP*, JMLR 2016, `arxiv:1407.1338`.
 - **The §7 numbers** — `gpa_formal_bound_derivation.py` (committed beside this doc, reproducible);
   independently reproduced by the cross-vendor gate's Claude depth leg (2026-08-05).
