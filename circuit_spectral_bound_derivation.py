@@ -71,15 +71,15 @@ def spectral_detect_snr(r, t_obs_hours=24.0):
     return (ratio - 1.0) * K
 
 
-def lifetime_atom_detect(r, n_target=20, t_obs_hours=24.0, dither_frac=0.0):
-    """THE BINDING channel (v3-review P1). The truncation puts a point mass at t=MAX in the per-circuit
-    lifetime histogram; superposition does NOT whiten a per-circuit observable. Rate of at-MAX deaths =
-    n_target·(1/E[T])·p_trunc; a Poisson H0 has ~0 there, so any at-MAX pile-up is detectable.
-    P(detect≥1) = 1 - e^{-E[atMAX]}. `dither_frac`>0 models the v4 fix: teardown at MAX - U·(dither_frac·MAX)
-    smears the atom over a window of width d=dither_frac·MAX, so no point mass survives IF d >> the
-    histogram bin — here modelled as suppressing the detectable pile-up by ~(bin/d) (illustrative)."""
+def lifetime_atom_detect(r, n_target=20, t_obs_hours=24.0):
+    """THE (v3) NON-DITHERED lifetime point-mass channel. `T=min(Exp(μ),MAX)` puts a point mass at t=MAX;
+    superposition does NOT whiten a per-circuit observable. Rate of at-MAX deaths = n_target·p_trunc/E[T];
+    a Poisson H0 has ~0 there, so any at-MAX pile-up is detectable. P(detect≥1)=1-e^{-E[atMAX]}. This models
+    the v3 (undithered) spike ONLY. The v4 DITHER does NOT hard-zero this — it reshapes the spike into the
+    SHELF computed in __main__ (mass unchanged ≈e^{-r}); do NOT cite this fn as evidence the dither 'removes'
+    the atom (the v4-review #4 correction). No dither param: the dithered residual is the shelf, not this."""
     mu = mu_of_r(r)
-    p_trunc = math.exp(-r) if dither_frac == 0.0 else 0.0  # any dither>0 removes the sharp point mass
+    p_trunc = math.exp(-r)  # v3 undithered spike; dithered case = the shelf (see __main__), not a hard-zero
     e_atmax = n_target * (t_obs_hours * 3600.0) / mean_T(mu) * p_trunc
     return e_atmax, 1.0 - math.exp(-e_atmax)
 
@@ -97,8 +97,8 @@ if __name__ == "__main__":
     print(f"  {'r':>3} | {'E[T]':>8} | {'E[atMAX]/24h':>12} | {'P(det) 24h':>10} | {'P(det) 30d':>10}")
     r_safe_30d = None
     for r in [8, 10, 12, 14, 16, 18]:
-        e24, p24 = lifetime_atom_detect(r, 24)
-        e30, p30 = lifetime_atom_detect(r, 30 * 24)
+        e24, p24 = lifetime_atom_detect(r, t_obs_hours=24)        # N_target=20 (default), 24h window
+        e30, p30 = lifetime_atom_detect(r, t_obs_hours=30 * 24)   # N_target=20 (default), 30d window
         mu = mu_of_r(r)
         flag = ""
         if r_safe_30d is None and p30 < 0.05:
