@@ -105,14 +105,27 @@ if __name__ == "__main__":
             r_safe_30d = r; flag = "  <- first r with 30d P(det) < 5%"
         print(f"  {r:>3} | {mean_T(mu):>7.0f}s | {e24:>12.3f} | {p24:>10.3f} | {p30:>10.3f}{flag}")
 
-    print(f"\nHONEST BOUND (v3 REFUTED, pending re-derivation + Codex): the binding channel is LIFETIME, not")
-    print(f"spectrum. Brute-force r for 30d undetectability ≈ {r_safe_30d} (refresh every "
-          f"~{mean_T(mu_of_r(r_safe_30d))/60:.1f} min, {r_safe_30d}× cost) — 3–4× the r≈8 the spectral-only")
-    print("analysis wrongly suggested. THE ELEGANT FIX (v4): DITHER the hard-cap teardown to MAX−U so there")
-    print("is NO point mass at MAX (smears the atom in both channels):")
+    print("\nDITHERED-CAP shelf (v4 — teardown at min(Exp(μ), MAX−U), U~U[0,D]). CORRECTED per v4-review #4:")
+    print("dither does NOT remove the ~e^{−r} cap-hitter mass — it RESHAPES the sharp atom into a smooth SHELF")
+    print("on [MAX−D, MAX]. Density there: f(t) = (e^{−μt}/D)·[μ(MAX−t)+1]. Excess mass over pure-exp:")
+    print(f"  {'r':>3} | {'D=10%MAX':>9} | {'shelf mass':>11} | {'exp mass':>9} | {'excess×':>8}")
     for r in [4, 6, 8]:
-        e30, p30 = lifetime_atom_detect(r, n_target=20, t_obs_hours=30 * 24, dither_frac=0.1)
-        print(f"  r={r} + 10% dither: E[atMAX]/30d = {e30:.3f}, P(det) = {p30:.3f}  (atom removed)")
-    print("\nCAVEAT: 'memoryless / no composition budget' was FALSE — min(Exp,MAX) refreshes deterministically")
-    print("at MAX, so the atom leak COMPOSES (P(det)→1 by day 7 at r=8). The dither model here is illustrative;")
-    print("the real v4 bound = a lifetime-histogram ROC (H1 dithered-truncated vs H0 Poisson), gate-checked.")
+        mu = mu_of_r(r)
+        D = 0.10 * MAX
+        n = 20000
+        lo, hi = MAX - D, MAX
+        shelf = sum((math.exp(-mu * (lo + (i + 0.5) * (hi - lo) / n)) / D)
+                    * (mu * (MAX - (lo + (i + 0.5) * (hi - lo) / n)) + 1.0) * ((hi - lo) / n) for i in range(n))
+        expmass = math.exp(-mu * lo) - math.exp(-mu * hi)
+        print(f"  {r:>3} | {D:>7.0f}s | {shelf:>11.2e} | {expmass:>9.2e} | {shelf/expmass:>7.2f}×")
+
+    print("\nHONEST STATE (v4 REFUTED on the BOUND's framing, not the mechanism):")
+    print("- ACTIVITY: {count, transient, lifetime} ⊥ activity is STRUCTURAL (v4-review credited SOUND) — every")
+    print("  circuit is the identical code path, verified on idle vs max-active dyads. Not a tuned bound.")
+    print("- MEMBERSHIP residual = the cap-hitter mass ≈ e^{−r} (role-INDEPENDENT ⇒ membership, conceded by all")
+    print("  surveyed systems). The DITHER's only job is de-SHARPENING (point mass → shelf), NOT shrinking the")
+    print("  mass — an earlier version wrongly credited it with removal. Exact membership ROC (dithered vs")
+    print("  ideal-Poisson) is owed + Codex cross-vendor (HYP-533).")
+    print("- The dominant residual is NOT lifetime at all: it is R-dest-chain — a real conversation's successive")
+    print("  carriers re-address the same peer (P(repeat)=1 vs cover ≈1/K), an ACTIVITY (conversation-presence)")
+    print("  signal 522 must close via recipient-anonymous delivery (Myco/YPIR) or name as an activity residual.")
