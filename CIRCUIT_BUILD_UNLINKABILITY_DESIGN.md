@@ -1,111 +1,96 @@
 # CIRCUIT_BUILD_UNLINKABILITY_DESIGN.md — HYP-522
 
-**Status:** DESIGN **v1**, pre-review, 2026-08-06. Supersedes v0, which a cross-vendor DESIGN-review refuted with 4 P1s (design-first working as intended — caught on paper, not in a build graveyard). Grounded in `CIRCUIT_BUILD_UNLINKABILITY_RESEARCH.md` + Josh's decisions: **(a) full continuous setup-cover** and **(F3) protect suspension via an always-cover floor**. Implements `CIRCUIT_LIFECYCLE.md §19` + `THREAT_MODEL.md §6.2.3` as ONE mechanism. Prerequisite: **HYP-331**. Next: cross-vendor DESIGN-review (both legs, working Codex) → build 331 → 522.
+**Status:** DESIGN **v2**, pre-review, 2026-08-06. Supersedes v1 (DESIGN-review found 2 P1s: F2 deadline, #5 lifetime channel). Grounded in `CIRCUIT_BUILD_UNLINKABILITY_RESEARCH.md` + Josh's decisions across three rounds: **(a) full continuous cover**, **(F3) protect suspension via a floor**, **(deployment) the computer-host holds the population + a host-restart recovery feature**, **(F2) bounded-jitter refresh**. Implements `CIRCUIT_LIFECYCLE.md §19` + `THREAT_MODEL.md §6.2.3`. Prereq: **HYP-331**. Next: cross-vendor DESIGN-review (both legs; Codex-on-hypostas is broken — HYP-533 — so a working Codex path is a precondition for this review).
 
-## v0→v1 changelog (the review's 4 P1s + 2 P2s)
-- **F1 (P1) — the missed observable: circuit REFRESH.** v0 modeled only the initial build; refresh is also a handshake and its per-circuit-timer rate ∝ active-circuit count ∝ activity. **v1: refresh is process-driven** — it consumes a slot of the one setup-cover process, never fires its own timer (§2, §2b).
-- **F2 (P1) — deterministic ≠ memoryless.** v0's fixed-interval clock is separable and doesn't inherit Loopix. **v1: a Poisson process at rate `λ`** (§2).
-- **F3 (P1) — suspend corner.** v0 stopped cover on suspension ⇒ no slot to substitute into, in the default regime. **v1: `λ` has a positive floor `λ_min` that never stops** (§3b — Josh's always-cover choice).
-- **F4 (P1) — bound over-claimed + category-mismatched.** **v1: Loopix indistinguishability is stated CONDITIONAL on the cover-eligible sub-channel; non-eligible cold-starts are a stated residual; the PCP-φ leg is DROPPED (wrong model for substitution)** (§5).
-- **F5 (P2) — branch-3 self-contradiction.** **v1: the loop/drop warming is a genuine relay-completing build** (§7).
-- **F6 (P2) — destination draw.** **v1: pre-warm targets drawn from the slowly-updated long-term contact set on a data-independent schedule** (§2c), with the productivity/divergence residual stated (§6 R-7).
+## v1→v2 changelog (the 2 P1s + Josh's 2 decisions)
+- **#5 (P1) — circuit LIFETIME channel via Little's Law.** v1 shaped the build *rate* constant, which (L=λ·E[W]) hands the active-circuit count back through lifetime. **v2 re-scopes the invariant from "build EMISSION" to "circuit LIFECYCLE": hold a CONSTANT circuit population `N_target`** — real conversations occupy slots of it, cover fills the rest, and both build AND teardown flow through the constant-rate process, so concurrent-count = `N_target` and lifetime distribution ⊥ real/cover role (§1, §2).
+- **F2 (P1) — Poisson vs the hard refresh deadline.** **v2: bounded-jitter refresh** — a circuit is turned over at a uniform-random time in `[MAX_LIFETIME − W, MAX_LIFETIME]`, with a non-separability argument (the deadline anchor, the circuit's build time, is itself cover-hidden) — §2b. The false v1 §2b "no circuit passes MAX_LIFETIME" claim is retracted.
+- **Deployment (Josh):** the **always-on computer-host holds the `N_target` population + cover**; mobile = thin node. This makes `N_target` affordable and dissolves most of F3's battery tension (same move that dissolved HYP-380's mobile-only P1s). NEW: a **host-restart recovery** mechanism (§3b) — the host reboots, so it has its own downtime regime.
+- **P2s folded:** property test now asserts `concurrent_count ⊥ activity` + `lifetime ⊥ branch` (§9); `λ` gates on data-independent hardware state, never screen-"Active" (§3); wake/recovery latency is eaten, no rate-boost (§3b).
 
 ---
 
-## §1 The invariant (v1)
+## §1 The invariant (v2 — lifecycle, not just emission)
 
-> **The circuit-setup-handshake EMISSION PROCESS is a Poisson process with rate `λ(t)`, where `λ(t)` is a function of wall-clock time, configuration, and coarse energy-state ONLY — never of real activity, queue state, active-circuit count, energy *class*, intent, or destination. Every setup event the dyad emits — cold-start, refresh, pool pre-warm, loop — is one firing of this single process and CONSUMES a slot; nothing outside it emits a handshake, and real demand never adds or suppresses a slot.**
+> **The dyad's circuit population is a process whose CONCURRENT SIZE is held at a constant `N_target`, and whose per-circuit BUILD and TEARDOWN both fire on a constant-rate schedule that is a function of wall-clock time, configuration, and coarse host power-state ONLY — never of real activity, active-conversation count, energy class, intent, or destination. A real conversation OCCUPIES a slot of this fixed-size population (a cover circuit becomes its carrier); it never grows the population, never adds a build, and never changes any circuit's lifetime.**
 
-- **Energy-state vs energy-class:** `λ(t)` may step between a full rate `λ_full` and a suspension floor `λ_min > 0` as a function of *coarse device power state* (§3b) — a slow, data-independent signal. It is NEVER a function of the *energy class* of any conversation (which encodes activity). This is the precise distinction v0 violated (F3).
-- **Corollary (the 493 killer, negated on all axes):** the emission process is the sole handshake source. Refresh (F1), cold-start, pre-warm, and loop all draw from it; none has an independent timer. So the aggregate setup rate is `λ(t)`, provably independent of how many conversations the dyad holds.
+Two quantities the adversary can measure are pinned constant, killing both v0/v1 leaks and their Little's-Law dual:
+- **Concurrent circuit count** `L = N_target` (activity-independent) — closes #5 directly.
+- **Per-circuit lifetime** drawn from one distribution regardless of whether the circuit ever carried real traffic (`lifetime ⊥ branch`) — closes #5's lifetime-distribution channel. `E[W] = N_target/λ`, constant, so `L = λ·E[W]` reveals only `N_target`, a public provisioned constant (R-aggregate-N).
 
----
-
-## §2 The mechanism — one Poisson setup-cover process
-
-A per-dyad **SetupCoverProcess** fires on a Poisson clock of rate `λ(t)` (memoryless — F2). On each firing it services **exactly one** setup action, chosen by a fixed priority over pending demand, all producing a **byte- and timing-identical** relay-completing build (§7):
-
-1. **Refresh-due** — a live circuit within `REFRESH_HORIZON` of its max lifetime → rebuild it (the new circuit replaces the old under the existing 30 s overlap). *(This is F1's fix — see §2b.)*
-2. **Cold-start pending** — a destination the dyad needs and has no fresh circuit to → build it.
-3. **Pool below target** — < `IDLE_CIRCUIT_POOL_SIZE` warm circuits → pre-warm toward a §2c target.
-4. **Loop** — none of the above → a self-directed relay-completing build that is torn down after completion (§7), so the slot is never empty and the process rate is exactly `λ`.
-
-Because every firing emits exactly one identical build and the firing rate is `λ(t)` regardless of which branch is taken, the **setup-event rate is activity-independent**. A real send to an already-warm destination (common case, via the pool) emits **no handshake at all** — pure Loopix substitution.
-
-### §2b Refresh is process-driven (F1)
-Circuits do **not** each run a 600 s timer that emits a rebuild. Instead, branch 1 services the *most-imminent* refresh each firing. For every live circuit to be refreshed before its `CIRCUIT_MAX_LIFETIME_MS` (1 800 s), the process must offer refresh slots at least as fast as circuits age out:
-
-> **`λ_full ≥ N_max / CIRCUIT_MAX_LIFETIME_MS`**, where `N_max` is the provisioned max concurrent circuits per dyad.
-
-This is the cost F1 surfaced: `λ_full` is a **constant floor set by `N_max`, paid always (idle included)** — a real setup roughly every `1800/N_max` seconds. `N_max` is a cost↔functionality knob (more concurrent conversations ⇒ higher constant cover cost), HYP-171-calibrated; a dyad exceeding `N_max` live circuits is a stated cap, not a silent degrade. Refresh urgency is bounded: if refresh demand transiently exceeds `λ`, the *oldest* circuit is serviced first, so no circuit passes `CIRCUIT_MAX_LIFETIME_MS` as long as `λ_full` meets the bound above.
-
-### §2c Pre-warm target draw (F6)
-Pool pre-warm (branch 3) and loop (branch 4) targets are drawn from the dyad's **long-term contact set**, refreshed on a **data-independent schedule** (e.g. a slow epoch clock, NOT recent activity) — so the draw is not a function of `intent.write_pending` or recent sends (the §6.2.3 trap). **Residual (R-7):** an activity-independent draw is less productive than an activity-driven one, so it raises the cold-start fraction (R-1) and its aggregate histogram may diverge from the real-contact histogram under an adversary with partial graph knowledge. Stated, not closed; the long-term set narrows the divergence.
+**Corollary:** a real conversation may span several circuit lifetimes (its carrier ages out on the schedule and it hops to another slot — the refresh path), and a circuit outlives the conversation it carried (it reverts to cover until it ages out). Role (real/cover) is fluid; population size and lifetime law are fixed.
 
 ---
 
-## §3 The idle pool (HYP-331) — latency only, zero security credit
+## §2 The mechanism — a constant-population circuit process (host-side)
 
-Unchanged from v0 in principle: the pool buffers warm circuits so real sends usually emit nothing; it carries **no security credit** (the bound is in `λ`, not in pool occupancy). Filled only by the SetupCoverProcess (§2 branch 3), never off `intent.write_pending`. Interface: circuits rest in the driven `ChannelState::Warming` (HYP-331 must store+drive the 6-state `ChannelLifecycle`; a real send transitions `Warming → Active` with **no wire event** — verify in review, §10 Q4).
+The computer-host runs a **CircuitPopulationProcess** maintaining exactly `N_target` live circuits. Two constant-rate drivers, both memoryless-Poisson at the population level (F2 caveat in §2b):
+- **Teardown/turnover** at rate `λ` picks the circuit nearest its (jittered) max-lifetime and tears it down (`CMD_DESTROY`), immediately triggering…
+- **Build** of a replacement toward a §2c-drawn target, keeping the count at `N_target`.
 
-### §3b The always-cover floor `λ_min` (F3 — Josh's decision)
-`λ(t)` steps as a function of **coarse device power state** only:
-- **Active/charging/WiFi:** `λ = λ_full` (§2b).
-- **Battery-gated / cellular-suspended (the default regime):** `λ = λ_min > 0`, delivered over whichever carrier is available (the "always-cover carrier" generalized to a positive rate floor — this is what makes it work for cellular-only users: it is not a second carrier, it is a floor on the one you have).
+So builds and teardowns are a constant-rate turnover of a fixed-size population — `N_target/E[W]` per second, independent of activity. **Real conversation handling (Loopix substitution at the population level):**
+- A real send to a peer **already carried by a live circuit** (common case) rides it — **no build, no teardown, no population change.**
+- A real send to a **new** peer **repurposes an existing cover circuit's slot** (retargets/rebuilds within the fixed population budget on the next turnover slot) — it does **not** add a circuit. If every slot is a live real conversation (population saturated at `N_target`), that is the stated concurrency cap (R-cap); the send waits for a turnover slot (bounded) rather than growing the count.
+- When a conversation ends, its circuit **reverts to cover** and ages out on the normal schedule — no activity-correlated teardown.
 
-**The floor never reaches zero,** so there is always a slot for a suspension-era cold-start to substitute into; it waits ≤ ~`1/λ_min` (bounded, `WARM_LATENCY_BUDGET_MS`) and **never emits a lone handshake** (closes F3's #11 leak). `λ_min` trades suspension-era cold-start latency + a small always-on battery cost against coverage — HYP-171-calibrated. The power-state signal must be **coarse and data-independent** (it may not be modulated by conversation activity, or it re-introduces the F3/§1 leak). During the `λ_min` regime, refresh provisioning (§2b) is relaxed to `λ_min ≥ N_active/CIRCUIT_MAX_LIFETIME_MS` for the *reduced* set of circuits kept warm under suspension (excess circuits are allowed to expire and cold-start on wake — a stated latency, R-6).
+Because the population size, the build rate, the teardown rate, and the lifetime law are all constants, an observer sees an activity-independent circuit lifecycle.
+
+### §2b Bounded-jitter refresh (F2)
+A circuit built at `t_b` is torn-over at `t_b + MAX_LIFETIME − U`, `U ~ Uniform[0, W]` — a bounded random window guaranteeing the hard deadline (`MAX_LIFETIME`) is met while avoiding a deterministic (separable) refresh clock. **Non-separability argument (to verify in review):** to exploit the refresh timing an observer must anchor it to a specific circuit's `t_b`; but `t_b` was itself a cover-indistinguishable turnover event (the observer could not tell that circuit's build from any other in the population), so the observer has no anchor for the window. Aggregate refresh = population turnover = `N_target/E[W]`, the same constant stream as builds. The argument holds on the **same eligible sub-channel** as the main bound (§5): if builds are unlinkable to their own refreshes across destination/path, jitter is non-separable; a linking side-channel would puncture both. `W` trades deadline-slack vs jitter-entropy — HYP-171-tuned.
+
+### §2c Target draw
+Unchanged from v1: build/turnover targets drawn from the **long-term contact set**, refreshed on a data-independent schedule (never `intent.write_pending`). Residual R-7 (productivity vs histogram-divergence) stands.
 
 ---
 
-## §4 Observable-match table (all axes, incl. the F1 refresh row)
+## §3 Deployment — computer-host holds the population (Josh)
 
-| # | Axis | Observable | Disposition (v1) |
+The `N_target` population + the constant-rate process + cover all run on the **always-on computer-host** (the decided end-state; mobile = thin node). Consequences:
+- `N_target` can be **generous** (host has power/bandwidth/relay-slot budget), so #5's constant-population cost is affordable where v1 feared it (a phone couldn't hold it).
+- **F3 mostly dissolves:** the host does not battery-suspend, so `λ` runs at `λ_full` continuously; the phone sleeping does not stop cover (the host carries it). `λ_min` is retained only for the **phone→host leg** (§3c).
+- `λ` gates only on **genuinely data-independent host state** (AC power, thermal, never screen/"Active") — a host on wall power is simply always `λ_full`.
+
+### §3c The mobile surface (stated residual, not fully closed here)
+The phone→host leg and phone-initiated sends remain a surface: the phone must reach the host to originate a send, and that leg has its own observability. v2 treats it as a **stated residual** (R-mobile) — the host-side circuit population is unlinkable, but the phone→host hop is a separate problem (candidate: the phone maintains a single constant-rate covered channel to its host, so phone-originated activity is hidden in that one channel; specify in a follow-up). Flagged for the review + THREAT_MODEL.
+
+### §3b Host-restart recovery (Josh — the host's downtime regime)
+An "always-on" host still reboots (updates, power loss). On restart the live circuit population is gone (circuits are network state, not persisted). Recovery MUST NOT leak:
+- **Restart-deterministic process phase.** The constant-rate schedule resumes on a **seeded, restart-exact phase** (the HYP-40x discipline already used for the data-plane cover grid), so a restart is not a distinguishable cover-phase discontinuity.
+- **Rebuild at `λ`, never a burst.** The population refills at the normal constant rate `λ` (one build per turnover slot), NOT an N_target-wide burst — a burst would be a "host just restarted" rate spike AND would let the resuming real conversations show through the mix. The population climbs from 0 to `N_target` over ~`N_target/λ`.
+- **Stated recovery-window residual (R-recovery).** While the population is below `N_target`, there is less cover to hide behind and the concurrent-count is transiently below its constant — a bounded window of degraded guarantee, stated in THREAT_MODEL, not implied zero. During recovery, real sends that outrun the rebuild cold-start on the process (bounded latency), never outside it.
+- **Restart safety (engineering).** The process's persistent state (schedule seed, `N_target`, the long-term contact set, the turnover limiter) persists atomically so recovery resumes coherently (CLAUDE.md restart-safety standard).
+
+---
+
+## §4 Observable-match table (v2 — incl. #13 refresh, #14 lifetime, #15 recovery)
+
+| # | Axis | Observable | Disposition (v2) |
 |---|---|---|---|
-| 1 | handshake | trigger predicate | MATCH — every branch fires on the one Poisson clock |
-| 2 | handshake | destination eligibility | **STRUCTURAL** (R-2) — real cold-start to a non-cover-eligible peer can't be pre-warmed; bounds only the eligible sub-channel (§5) |
-| 3 | handshake | (handshake, DATA) pairing | MATCH — real DATA deferred to the constant data-plane cover, not slot-adjacent |
-| 4 | handshake | intent / carrier fan-out | MATCH — fixed fan-out independent of intent; closes HYP-518 (§7) |
-| 5 | handshake | build rate | MATCH — the invariant; `λ(t)` ⊥ activity |
-| 6 | handshake | follow-up | partial (R-2 #6) — DATA follow-up deferred to data-plane cover |
-| 7 | handshake | retry | MATCH — next firing re-draws by the same rule |
-| 8 | handshake | CircuitPurpose | MATCH — `Standard` both |
-| 9 | slot | handshakes per slot | MATCH — exactly one per firing |
-| 10 | slot | cover-vs-real-queue occupancy | MATCH — the invariant; unconditional per-firing evaluation |
-| 11 | sequence | rate while suspended | **MATCH (F3 fix)** — `λ_min > 0` persists; a suspended cold-start substitutes into a floor slot, never emits alone |
-| 12 | sequence | budget-exhausted steady state | MATCH — no separate budget; `λ(t)` is the only rate |
-| **13** | **sequence** | **REFRESH rate (F1)** | **MATCH (F1 fix)** — refresh is process-driven (§2b); aggregate setup rate is `λ(t)`, independent of active-circuit count |
+| 1–12 | — | (v1 build/slot/sequence rows) | MATCH / STRUCTURAL as v1 (#2 eligibility STRUCTURAL → §5) |
+| 13 | sequence | refresh rate | MATCH — refresh = population turnover at constant `λ`; bounded-jitter non-separable (§2b) |
+| **14** | **lifecycle** | **concurrent count + circuit lifetime** | **MATCH (#5 fix)** — `L=N_target` constant; lifetime ⊥ real/cover role (§1) |
+| **15** | **sequence** | **rate/count during host restart** | **MATCH (recovery)** — restart-exact phase + rebuild-at-λ; transient below-`N_target` window is the stated R-recovery |
+| — | mobile | phone→host leg | **STRUCTURAL residual (R-mobile, §3c)** — host population unlinkable; phone hop separate |
 
-**Acid test for review:** for every non-STRUCTURAL row, an adversary handed only that observable classifies at chance. #2 is the surviving structural residual → §6.
+**Acid test:** for every non-STRUCTURAL row an adversary handed only that observable classifies at chance — now including the concurrent-count and lifetime projections, not just the rate.
 
 ---
 
-## §5 The affirmative bound (v1 — corrected per F4)
+## §5 The affirmative bound (unchanged from v1 — F4 stays closed)
 
-**Loopix constant-rate/Poisson indistinguishability**, stated **conditional on the cover-eligible sub-channel**: for a setup to a destination the cover process *can* target (cover-eligible), "real cold-start" and "cover pre-warm/loop" are firings of the same `Pois(λ)` process ⇒ information-theoretically indistinguishable on the count/shape/rate channel, memoryless (no composition budget). This is the setup-channel analog of the GPA result, **on that sub-channel only.**
-
-**Non-eligible cold-starts are NOT bounded by this** — a handshake to a peer the cover process cannot address is `P(real)=1` on the destination dimension (R-2). This is a stated residual, not hidden inside the bound (v0's F4 error).
-
-**The PCP-φ leg is dropped** — PCP's `φ=λ_d/λ_u` is an *additive* model (dummies alongside real builds that reach the wire); our substitution mechanism has no independent `λ_u` to form the ratio. Any quantified residual bound must be re-derived in the *substitution* model; until then the residual (R-1, R-2, R-7) is stated qualitatively, never with a transplanted φ.
-
-**Deliverable parity with HYP-329:** the conditional bound + the residual set live in `THREAT_MODEL.md` + a `gpa-sim`-style harness (the property test §9), not prose.
+Loopix constant-rate/Poisson indistinguishability, **conditional on the cover-eligible sub-channel**, now extended to the lifecycle: real-vs-cover is indistinguishable on the count/shape/**rate/concurrent-count/lifetime** channel, memoryless (no composition budget). Non-eligible cold-starts remain a stated residual (R-2). The PCP-φ leg stays dropped (substitution has no `λ_u`). Channel restriction flagged sharply: the bound is against a count/shape/rate/**lifetime** observer; destination + fine timing remain in the residual set where the named multi-carrier/Tightrope adversary (research §6) operates.
 
 ---
 
-## §6 Residuals — stated in THREAT_MODEL, never implied zero
+## §6 Residuals — THREAT_MODEL, never implied zero
 
-- **R-1 first-contact cold-start** — `P=1` for a never-contacted peer; bounded only by `λ`, not pool size.
-- **R-2 structural** — #2 non-eligible destination (the bound's sub-channel condition), #6 DATA follow-up.
-- **R-membership** — no design hides that the dyad runs the system / that warming happens.
-- **R-timing** — the real-send-vs-cover timing channel (PCP open); the Poisson process makes it *believed* small, not proven.
-- **R-aggregate-N** — `λ_full` advertises an upper bound on provisioned circuits (`N_max`); resize only on a coarse data-independent schedule.
-- **R-6 suspension latency** — under `λ_min`, a cold-start waits ≤ ~`1/λ_min`, and circuits beyond the suspended warm-set expire and cold-start on wake.
-- **R-7 draw productivity** — the activity-independent pre-warm draw (§2c) is less productive (raises R-1) and may diverge from the real-contact histogram under partial graph knowledge.
+R-1 first-contact cold-start · R-2 non-eligible destination + DATA follow-up · R-membership · R-timing · **R-aggregate-N = `N_target` (now the advertised constant)** · **R-cap** (concurrency capped at `N_target`; a send beyond it waits) · **R-recovery** (bounded degraded window on host restart, §3b) · **R-mobile** (phone→host leg, §3c) · **R-jitter** (the `W` window's residual if the non-separability argument only partly holds) · R-7 draw productivity.
 
 ---
 
-## §7 Setup-fingerprint identity + branch-4 loop (F5)
+## §7 Setup + teardown fingerprint identity
 
-All setup handshakes — cold-start, refresh, pre-warm, **and loop** — MUST be a **genuine, relay-completing multi-cell telescoping build** (HANDSHAKE→REPLY, EXTEND→EXTENDED per hop to `MAX_HOPS_PER_CIRCUIT`), byte- and timing-identical, with a **fixed carrier fan-out independent of intent** (closes HYP-518). The branch-4 **loop** builds a real circuit and **tears it down after completion** (rather than being a cheap self-short-circuit) — so it is on-wire identical to a real build (resolving v0's F5 "identical but unusable" contradiction). Torn-down loops must respect `MAX_CIRCUITS_PER_NODE` (build → complete → immediate teardown, never accumulating). **Verify in review (§10 Q3):** does `sealed_envelope`/Sphinx give *sequence* identity across the full multi-cell build, or only per-cell identity?
+All builds (cold-start, turnover-refresh, cover) are byte+timing-identical relay-completing telescoping builds with fixed intent-independent carrier fan-out (closes HYP-518). **v2 adds:** teardown (`CMD_DESTROY`) must be identical across real-carrier and cover circuits, and issued on the constant-rate turnover schedule (not on conversation-end) — else teardown timing re-opens #14. Verify sequence identity (build + teardown) in review (§10 Q2).
 
 ---
 
@@ -113,30 +98,29 @@ All setup handshakes — cold-start, refresh, pre-warm, **and loop** — MUST be
 
 | Constant | Role | Class |
 |---|---|---|
-| `λ_full` | full-power setup-cover Poisson rate | **mechanism now; value HYP-171-tuned.** Floored by §2b: `≥ N_max/1800s` |
-| `λ_min` | suspension-regime rate floor (>0) | **new (F3);** value HYP-171-tuned; trades suspend latency vs battery |
-| `N_max` | provisioned max concurrent circuits/dyad | cost↔functionality knob; sets `λ_full` floor |
-| `IDLE_CIRCUIT_POOL_SIZE` | latency buffer (v0 placeholder = 2) | latency knob, NOT security |
-| `REFRESH_HORIZON` | how early branch-1 services a refresh before max-lifetime | mechanism; ≥ one `λ` inter-arrival |
-| `WARM_LATENCY_BUDGET_MS` | max a cold-start waits for a slot | bounds the substitution wait; ~`1/λ` |
+| `N_target` | constant concurrent circuit population (host) | **the #5 knob;** ≥ max concurrent conversations; HYP-171 + host-capacity tuned |
+| `λ` | population turnover (build=teardown) rate | mechanism; `= N_target/E[W]` |
+| `W` | bounded-jitter refresh window | **new (F2);** deadline-slack vs jitter-entropy |
+| `λ_min` | phone→host leg floor (mobile only) | retained for §3c |
+| recovery seed / phase | restart-exact process resume | HYP-40x discipline |
 
-**Build order: HYP-331 (store+drive lifecycle; pool producing `Warming`) → HYP-522 (SetupCoverProcess + invariant + bound).**
+**Build order: HYP-331 (store+drive lifecycle; the pool becomes the `N_target` population) → HYP-522.**
 
 ---
 
-## §9 Tests (rule #27 + the property leg — keyed correctly this time)
+## §9 Tests (rule #27 + the lifecycle property leg)
 
-- **Property test (F1-aware):** fails when the setup-event rate correlates with **active-circuit count** OR with real-send events, evaluated in **all regimes** (`λ_full` single-conversation, `λ_full` multi-conversation, `λ_min` suspended). v0's test keyed only on send-time correlation and would have missed the refresh leak — v1 asserts `rate ⊥ active_circuits` directly.
-- **Integration:** real send to a warm destination emits zero handshake cells (assert on the wire).
-- **Smoke:** the process fires at `λ_full` with zero real traffic (all loops), and at `λ_min` under a simulated suspend.
-- **Bound harness:** the conditional Loopix indistinguishability on the eligible sub-channel + the enumerated residuals (no transplanted φ).
+- **Property test:** fails when **any** of `{build-rate, teardown-rate, concurrent-count, circuit-lifetime-distribution}` correlates with activity (active-conversation count or send events), across regimes: single/multi-conversation at `λ_full`, saturated at `N_target`, and **during simulated host restart**. (v1 tested rate only.)
+- **Integration:** real send to a carried peer emits zero build/teardown; a real conversation ending does not trigger an activity-timed teardown.
+- **Smoke:** the process holds `N_target` with zero real traffic (all cover), turns over at `λ`, and recovers restart-exact from a killed process.
+- **Bound harness:** the conditional lifecycle-Loopix indistinguishability + the enumerated residuals.
 
 ---
 
 ## §10 Open questions for the next cross-vendor DESIGN-review
 
-1. **`λ_min` battery reality:** is a positive always-on setup-cover floor over cellular actually tolerable on a battery-gated phone, or does `λ_min` have to be so low that `1/λ_min` cold-start latency breaks `Critical` sends during suspension? The core tension of Josh's (F3) choice.
-2. **Refresh urgency vs Poisson:** can a memoryless `Pois(λ)` process guarantee every circuit refreshes before `CIRCUIT_MAX_LIFETIME_MS` (a hard deadline) without a deterministic escape hatch that reintroduces a separable tell (F2)? Or does deadline-driven refresh need a bounded-jitter window that must itself be proven non-separable?
-3. **Sequence-identity (F5/F7):** does the multi-cell telescoping build have byte+timing sequence identity across cold-start / refresh / loop, or is there a tell (RTT, hop count, teardown timing) between them?
-4. **331 interface (§3):** is `Warming → Active` truly wire-event-free, or is there a hidden establish on transition?
-5. **Non-eligible sub-channel (F4/R-2):** how large is the non-eligible cold-start fraction in practice, and does it dominate the bound (making the "conditional" bound cover a minority of real sends)?
+1. **Bounded-jitter non-separability (§2b) — the load-bearing new argument.** Is "the observer can't anchor the refresh because `t_b` is cover-hidden" actually airtight, or can the population schedule be reconstructed statistically over an 18–24h window from the aggregate turnover stream alone?
+2. **Teardown identity (§7).** Is `CMD_DESTROY` genuinely identical + constant-rate-scheduled across real-carrier and cover circuits, or does a real conversation's end leak through *when* its (now-cover) circuit is chosen for turnover?
+3. **`N_target` saturation (R-cap).** When real conversations saturate the population, the "wait for a turnover slot" latency — does it break `Critical`, and does the wait itself (a real conversation blocked pending a slot) leak?
+4. **R-mobile (§3c).** Is "one constant-rate covered phone→host channel" sufficient for the mobile leg, or does phone-origination leak regardless of the host-side population being clean?
+5. **R-recovery (§3b).** Over the ~`N_target/λ` rebuild window, how much does the guarantee degrade, and is a restart itself (the phase resumption) truly indistinguishable to an observer who was watching before the reboot?
